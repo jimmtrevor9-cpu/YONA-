@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { translateAuthError, updatePassword } from "@/features/auth/auth.service";
+import { supabase } from "@/integrations/supabase/client";
 import { APP_NAME } from "@/lib/config";
 
 export const Route = createFileRoute("/reset-password")({
@@ -36,6 +37,15 @@ function ResetPasswordPage() {
   useEffect(() => {
     const hash = window.location.hash;
     setRecovery(hash.includes("type=recovery") || hash.includes("access_token"));
+
+    // Le client Supabase consomme le jeton du lien (et vide l'URL) avant cet effet :
+    // on reconnaît donc aussi le lien via l'événement de récupération ou la session ouverte.
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "PASSWORD_RECOVERY" || session) setRecovery(true);
+    });
+    return () => subscription.unsubscribe();
   }, []);
 
   async function onSubmit(event: React.FormEvent) {

@@ -41,7 +41,17 @@ par les fichiers de `supabase/migrations/`, appliqués **dans l'ordre**
 Résultat attendu : 21 tables (toutes protégées par RLS), 21 fonctions, 66 règles
 d'accès, bucket `photos` privé avec 4 règles d'accès.
 
-## 4. Vérification réalisée (étape 0.2)
+## 4. Réglages de l'authentification (Supabase → Authentication)
+
+| Réglage | Valeur | Pourquoi |
+|---|---|---|
+| Email provider | activé | inscription / connexion par email |
+| Confirm email | **activé** | l'écran « Consultez votre boîte mail » s'affiche après l'inscription |
+| Minimum password length | **8** | aligné sur les formulaires de YONA |
+| Site URL | adresse du site (ex. `https://votre-domaine`) | liens des emails |
+| Redirect URLs | `https://votre-domaine/login`, `https://votre-domaine/reset-password` | confirmation et mot de passe oublié |
+
+## 5. Vérification réalisée (étape 0.2)
 
 Testé avec un Supabase local complet (`supabase start`) : l'application buildée
 avec uniquement ces variables se connecte au projet choisi, l'authentification
