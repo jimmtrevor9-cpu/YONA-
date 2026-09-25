@@ -25,10 +25,21 @@ variable `VITE_…` : tout ce qui commence par `VITE_` est visible dans le navig
 
 Lovable gère ces variables automatiquement lorsqu'une base est connectée au projet.
 
-## 3. Création des tables
+## 3. Création des tables (migrations)
 
-La procédure d'installation du schéma (migrations) sur une base vide sera
-finalisée et testée à l'étape 0.4 du plan.
+Toutes les tables, règles de sécurité, fonctions et le stockage `photos` sont créés
+par les fichiers de `supabase/migrations/`, appliqués **dans l'ordre**
+(vérifié à l'étape 0.4 sur une base Supabase vide) :
+
+- **Avec Lovable Cloud** : les migrations sont appliquées automatiquement.
+- **Avec la CLI Supabase** (autre projet) :
+  ```sh
+  npx supabase link --project-ref <ID_DU_PROJET>
+  npx supabase db push
+  ```
+
+Résultat attendu : 21 tables (toutes protégées par RLS), 21 fonctions, 66 règles
+d'accès, bucket `photos` privé avec 4 règles d'accès.
 
 ## 4. Vérification réalisée (étape 0.2)
 
