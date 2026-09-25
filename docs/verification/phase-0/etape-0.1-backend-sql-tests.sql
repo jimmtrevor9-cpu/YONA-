@@ -51,10 +51,10 @@ select public.touch_activity();
 select set_config('request.jwt.claim.sub','aaaaaaaa-0000-4000-8000-000000000001',true);
 select 'T15 get_presence(C) vu par A', public.get_presence('cccccccc-0000-4000-8000-000000000003');
 -- === Photos : limite 3 en gratuit ===
-insert into public.photos (user_id,storage_path) values (auth.uid(),'a/1.jpg'),(auth.uid(),'a/2.jpg'),(auth.uid(),'a/3.jpg');
+insert into public.photos (user_id,storage_path) values (auth.uid(),auth.uid()||'/1.jpg'),(auth.uid(),auth.uid()||'/2.jpg'),(auth.uid(),auth.uid()||'/3.jpg');
 select 'T16 statut photo forcé pending', string_agg(distinct status::text,',') from public.photos;
 -- T17 : 4e photo en gratuit (attendu : photo_limit_reached)
-savepoint p; insert into public.photos (user_id,storage_path) values (auth.uid(),'a/4.jpg'); rollback to savepoint p;
+savepoint p; insert into public.photos (user_id,storage_path) values (auth.uid(),auth.uid()||'/4.jpg'); rollback to savepoint p;
 -- === Protection colonnes ===
 update public.users set status='suspended', email='x@x' where id=auth.uid();
 select 'T18 A ne peut pas changer son statut/email', status||' / '||email from public.users where id=auth.uid();
