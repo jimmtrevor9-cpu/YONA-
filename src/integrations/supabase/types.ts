@@ -1038,12 +1038,14 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_active_account: { Args: { _user_id: string }; Returns: boolean }
       is_admin: { Args: never; Returns: boolean }
       is_blocked_between: { Args: { _a: string; _b: string }; Returns: boolean }
       is_conversation_participant: {
         Args: { _conversation_id: string; _user_id: string }
         Returns: boolean
       }
+      is_discoverable_profile: { Args: { _user_id: string }; Returns: boolean }
       is_premium: { Args: { _user_id: string }; Returns: boolean }
       record_profile_visit: {
         Args: { _visited_user_id: string }

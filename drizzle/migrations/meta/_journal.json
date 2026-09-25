@@ -29,6 +29,20 @@
       "when": 1789285251474,
       "tag": "0003_phase2_social_quotas_monetization",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790378358617,
+      "tag": "0004_phase0_rattrapage_schema",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790378358618,
+      "tag": "0005_phase0_corrections_rls",
+      "breakpoints": true
     }
   ]
 }
