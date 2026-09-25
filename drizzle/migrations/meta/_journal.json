@@ -43,6 +43,13 @@
       "when": 1790378358618,
       "tag": "0005_phase0_corrections_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790379226010,
+      "tag": "0006_phase1_inscription_prenom",
+      "breakpoints": true
     }
   ]
 }

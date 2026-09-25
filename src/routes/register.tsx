@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -27,7 +27,11 @@ export const Route = createFileRoute("/register")({
   component: RegisterPage,
 });
 
+/** Longueur maximale du prénom (contrainte profiles_first_name_length). */
+const FIRST_NAME_MAX_LENGTH = 60;
+
 function RegisterPage() {
+  const navigate = useNavigate();
   const [firstName, setFirstName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -36,6 +40,10 @@ function RegisterPage() {
 
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
+    if (!firstName.trim()) {
+      toast.error("Indiquez votre prénom.");
+      return;
+    }
     if (password.length < 8) {
       toast.error("Le mot de passe doit contenir au moins 8 caractères.");
       return;
@@ -56,6 +64,8 @@ function RegisterPage() {
       return;
     }
     toast.success("Compte créé.");
+    // Confirmation d'email désactivée : la session est ouverte, on complète le profil.
+    navigate({ to: "/onboarding", replace: true });
   }
 
   if (sent) {
@@ -97,6 +107,7 @@ function RegisterPage() {
           <Input
             id="firstName"
             required
+            maxLength={FIRST_NAME_MAX_LENGTH}
             value={firstName}
             onChange={(e) => setFirstName(e.target.value)}
             placeholder="Élise"
