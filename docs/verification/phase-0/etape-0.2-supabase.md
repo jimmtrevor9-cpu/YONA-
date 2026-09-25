@@ -1,45 +1,41 @@
 # Phase 0 — Étape 0.2 — Vérifier le projet Supabase connecté
 
-Date : 2026-09-25 · Statut : **NON VALIDÉE** (vérification en ligne en attente)
+Date : 2026-09-25 · Statut : **VALIDÉE**
 
-## Périmètre
+## Décision du propriétaire du projet
 
-Identifier le projet Supabase auquel le code est rattaché et vérifier qu'il est
-cohérent et joignable. Les variables d'environnement en détail (0.3), les
-migrations (0.4), l'authentification (0.5) et les RLS (0.6) sont hors périmètre.
+La base Supabase actuelle (`gzqgzdlqoyoomabghygj`, Lovable Cloud) ne contient aucun
+utilisateur et **sera remplacée plus tard par une autre base**. L'objectif de cette
+étape devient donc : vérifier que le projet est prêt à être branché sur
+n'importe quel projet Supabase, par simple configuration.
 
-## Projet identifié
-
-| Élément | Valeur |
-|---|---|
-| Hébergement | Lovable Cloud (Supabase managé) |
-| Identifiant du projet | `gzqgzdlqoyoomabghygj` |
-| URL d'API | `https://c--a6bb406e-c993-4676-bfc1-e5974d50c0d7-prod.lovable.cloud` (environnement `prod`) |
-| Type de clé côté client | Clé publique `sb_publishable_…` (nouveau format Supabase) |
-| Version PostgREST (types générés) | 14.5 |
-
-## Vérifications statiques (sans contacter le projet)
+## Vérifications statiques
 
 | Test | Résultat |
 |---|---|
-| `supabase/config.toml` = `SUPABASE_PROJECT_ID` du `.env` | ✅ |
-| Variables serveur et `VITE_*` pointent vers le même projet (ID, URL, clé) | ✅ |
-| Clé au format publishable, aucune clé secrète / service_role dans le `.env` | ✅ |
-| URL HTTPS Lovable Cloud de production | ✅ |
-| Format d'identifiant de projet Supabase valide | ✅ |
-| `types.ts` (généré depuis le projet connecté) : 21 tables, dont celles de la fondation Phase 2 (`ai_usage`, `conversation_user_usage`, `favorites`, `profile_visits`) | ✅ |
-| Un seul projet référencé dans tout le dépôt | ✅ |
+| Identifiant du projet cohérent (`config.toml` = `.env`, variables serveur = `VITE_*`) | ✅ |
+| Aucune clé secrète dans le `.env`, seulement la clé publique | ✅ |
+| Aucune adresse de projet écrite en dur dans le code source | ✅ (uniquement `config.toml` et `.env`) |
+| `types.ts` : 21 tables attendues (fondations Phases 1 et 2) | ✅ |
 
-## Vérifications en ligne — NON RÉALISÉES
+## Vérification en conditions réelles (Supabase local complet)
 
-Des requêtes en lecture seule vers le projet (santé de l'API d'authentification,
-refus d'accès anonyme aux tables, existence du bucket `photos`) ont été préparées
-mais **bloquées par les règles de permission de l'environnement de développement**
-(lecture de données de production). Elles n'ont pas été contournées.
+Supabase local lancé avec la CLI officielle (`supabase start`, v2.118.0) :
+PostgreSQL, authentification (GoTrue v2.197.0), REST, stockage. Aucune donnée réelle.
 
-### À vérifier manuellement dans Lovable (onglet Cloud)
+| Test | Résultat |
+|---|---|
+| API d'authentification joignable | ✅ HTTP 200 |
+| Inscription + connexion d'un compte de TEST local (`test-local-a@example.test`) | ✅ jeton obtenu |
+| Build de l'application avec les seules variables du projet local | ✅ build OK, aucune référence à l'ancien projet dans le bundle |
+| Fonction serveur `likeProfile` avec le vrai jeton du projet local | ✅ authentification acceptée, requête transmise à la base (réponse : table `profiles` absente — attendu, migrations non appliquées → étape 0.4) |
+| Fonction serveur avec un jeton falsifié (signature modifiée) | ✅ refusé : `Unauthorized: Invalid token` |
 
-1. Le projet `gzqgzdlqoyoomabghygj` est actif (pas en pause).
-2. Base de données → les 21 tables listées ci-dessus existent.
-3. Storage → le bucket `photos` existe et est **privé**.
-4. Users → l'authentification email/mot de passe est activée.
+## Base actuelle Lovable Cloud
+
+Les requêtes vers la base de production actuelle ont été bloquées par les
+permissions de l'environnement. Sans objet puisque cette base sera remplacée.
+
+## Livrable
+
+`docs/CONNECTER_UNE_BASE_SUPABASE.md` : guide pour brancher la future base.
