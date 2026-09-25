@@ -25,7 +25,7 @@ Date : 2026-09-25 · Statut : **VALIDÉE**
 | Clé publique présente dans le code navigateur (attendu) | ✅ |
 | Chromium, variables valides (Supabase local) : `/`, `/login`, `/register`, `/forgot-password` | ✅ pages affichées, aucune erreur liée aux variables |
 | Chromium : `/discover` non connecté | ✅ redirection vers `/login` |
-| Chromium, variables absentes : message explicite | ✅ `Missing Supabase environment variable(s): SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY` ; l'accueil reste affiché |
+| Chromium, variables absentes : message explicite | ✅ `Missing Supabase environment variable(s): SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY` dans la console |
 | `.env` créé à partir du nouveau `.env.example` : lu par le build | ✅ |
 
 ## Modification
@@ -40,3 +40,13 @@ secrets optionnels), avec l'avertissement sur le préfixe `VITE_`.
   autre hébergement. À garder en tête si le site quitte Lovable.
 - Polices Google et vidéo Vimeo non chargées dans l'environnement de test
   (restriction réseau de l'environnement, pas un défaut du projet).
+
+## Rectificatif (étape 1.1)
+
+Le rapport initial indiquait « l'accueil reste affiché » lorsque les variables
+manquent. C'est inexact : seul le titre de l'onglet avait été vérifié. En réalité,
+sans `VITE_SUPABASE_URL` / `VITE_SUPABASE_PUBLISHABLE_KEY`, **toutes les pages,
+accueil compris, affichent la page d'erreur** « Cette page ne s'est pas chargée »
+(le fournisseur d'authentification, présent sur toutes les pages, a besoin du
+client Supabase). Avec les variables renseignées (cas normal, fourni par Lovable
+Cloud), le problème n'existe pas.
