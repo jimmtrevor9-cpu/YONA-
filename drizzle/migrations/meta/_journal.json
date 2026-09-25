@@ -1,0 +1,34 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1789285137258,
+      "tag": "0000_phase1_foundations",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1789285152004,
+      "tag": "0001_phase1_function_grants",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789285166302,
+      "tag": "0002_phase1_photos_storage_policies",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1789285251474,
+      "tag": "0003_phase2_social_quotas_monetization",
+      "breakpoints": true
+    }
+  ]
+}

@@ -1,0 +1,172 @@
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
+
+import { AppHeader } from "@/components/AppHeader";
+import { BottomNav } from "@/components/BottomNav";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Textarea } from "@/components/ui/textarea";
+import { useAuth } from "@/features/auth/AuthProvider";
+import { computeAge, myProfileQuery } from "@/features/profiles/queries";
+import { supabase } from "@/integrations/supabase/client";
+import { APP_NAME } from "@/lib/config";
+
+export const Route = createFileRoute("/_authenticated/profile")({
+  head: () => ({
+    meta: [
+      { title: `Mon profil — ${APP_NAME}` },
+      { name: "description", content: "Complétez et mettez à jour votre profil." },
+      { property: "og:title", content: `Mon profil — ${APP_NAME}` },
+      { property: "og:description", content: "Complétez et mettez à jour votre profil." },
+    ],
+  }),
+  component: ProfilePage,
+});
+
+function ProfilePage() {
+  const { user } = useAuth();
+  const userId = user?.id ?? "";
+  const queryClient = useQueryClient();
+  const { data, isLoading } = useQuery({ ...myProfileQuery(userId), enabled: !!userId });
+
+  const [firstName, setFirstName] = useState("");
+  const [birthDate, setBirthDate] = useState("");
+  const [city, setCity] = useState("");
+  const [country, setCountry] = useState("");
+  const [profession, setProfession] = useState("");
+  const [bio, setBio] = useState("");
+
+  useEffect(() => {
+    if (!data) return;
+    setFirstName(data.first_name ?? "");
+    setBirthDate(data.birth_date ?? "");
+    setCity(data.city ?? "");
+    setCountry(data.country ?? "");
+    setProfession(data.profession ?? "");
+    setBio(data.bio ?? "");
+  }, [data]);
+
+  const save = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase
+        .from("profiles")
+        .update({
+          first_name: firstName.trim() || null,
+          birth_date: birthDate || null,
+          city: city.trim() || null,
+          country: country.trim() || null,
+          profession: profession.trim() || null,
+          bio: bio.trim() || null,
+        })
+        .eq("user_id", userId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Profil enregistré.");
+      void queryClient.invalidateQueries({ queryKey: ["profiles"] });
+    },
+    onError: () => toast.error("Enregistrement impossible. Réessayez."),
+  });
+
+  const age = computeAge(birthDate);
+
+  return (
+    <div className="min-h-screen bg-background pb-24">
+      <AppHeader title="Mon profil" />
+      <main className="mx-auto max-w-md space-y-5 px-5 py-6">
+        {isLoading ? (
+          <Skeleton className="h-80 w-full rounded-2xl" />
+        ) : (
+          <>
+            {data && !data.onboarding_completed_at ? (
+              <div className="panel-2 flex items-center justify-between gap-3 p-4">
+                <p className="text-xs text-muted-foreground">Votre profil n'est pas finalisé.</p>
+                <Button asChild size="sm" variant="secondary">
+                  <Link to="/onboarding">Continuer</Link>
+                </Button>
+              </div>
+            ) : null}
+
+            <form
+              className="panel gold-thread space-y-4 p-5"
+              onSubmit={(e) => {
+                e.preventDefault();
+                save.mutate();
+              }}
+            >
+              <p className="eyebrow">Informations</p>
+
+              <div className="space-y-2">
+                <Label htmlFor="firstName">Prénom</Label>
+                <Input
+                  id="firstName"
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="birthDate">Date de naissance</Label>
+                <Input
+                  id="birthDate"
+                  type="date"
+                  value={birthDate}
+                  onChange={(e) => setBirthDate(e.target.value)}
+                />
+                {age ? <p className="text-xs text-muted-foreground">{age} ans</p> : null}
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label htmlFor="city">Ville</Label>
+                  <Input id="city" value={city} onChange={(e) => setCity(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="country">Pays</Label>
+                  <Input
+                    id="country"
+                    value={country}
+                    onChange={(e) => setCountry(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="profession">Profession</Label>
+                <Input
+                  id="profession"
+                  value={profession}
+                  onChange={(e) => setProfession(e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="bio">Présentation</Label>
+                <Textarea
+                  id="bio"
+                  rows={5}
+                  value={bio}
+                  onChange={(e) => setBio(e.target.value)}
+                  placeholder="Parlez de votre foi, de votre quotidien, de ce que vous cherchez."
+                />
+              </div>
+
+              <Button type="submit" className="w-full" disabled={save.isPending}>
+                {save.isPending ? "Enregistrement…" : "Enregistrer"}
+              </Button>
+            </form>
+
+            <p className="text-center text-[11px] text-muted-foreground">
+              Photos, préférences avancées et abonnement Premium arrivent en Phase 2.
+            </p>
+          </>
+        )}
+      </main>
+      <BottomNav />
+    </div>
+  );
+}
