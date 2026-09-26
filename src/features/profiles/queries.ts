@@ -30,7 +30,9 @@ export const onboardingDataQuery = (userId: string) =>
           .maybeSingle(),
         supabase
           .from("christian_profiles")
-          .select("denomination, church_attendance, faith_importance, marriage_vision")
+          .select(
+            "denomination, church_attendance, faith_importance, faith_commitment, prayer_practice, marriage_vision, christian_values",
+          )
           .eq("user_id", userId)
           .maybeSingle(),
         supabase

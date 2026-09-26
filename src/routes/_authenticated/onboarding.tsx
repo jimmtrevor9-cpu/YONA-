@@ -17,6 +17,13 @@ import {
   personalInfoServerError,
   validatePersonalInfo,
 } from "@/features/profiles/personal-info";
+import {
+  CHRISTIAN_VALUES_MAX,
+  FAITH_LONG_MAX_LENGTH,
+  FAITH_SHORT_MAX_LENGTH,
+  formatChristianValues,
+  parseChristianValues,
+} from "@/features/profiles/christian-info";
 import { onboardingDataQuery } from "@/features/profiles/queries";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
@@ -55,6 +62,9 @@ function OnboardingPage() {
   const [churchAttendance, setChurchAttendance] = useState("");
   const [faithImportance, setFaithImportance] = useState("");
   const [marriageVision, setMarriageVision] = useState("");
+  const [faithCommitment, setFaithCommitment] = useState("");
+  const [prayerPractice, setPrayerPractice] = useState("");
+  const [christianValues, setChristianValues] = useState("");
 
   const [preferredGender, setPreferredGender] = useState<Gender | "">("");
   const [minAge, setMinAge] = useState(25);
@@ -80,6 +90,9 @@ function OnboardingPage() {
     setChurchAttendance(faith?.church_attendance ?? "");
     setFaithImportance(faith?.faith_importance ?? "");
     setMarriageVision(faith?.marriage_vision ?? "");
+    setFaithCommitment(faith?.faith_commitment ?? "");
+    setPrayerPractice(faith?.prayer_practice ?? "");
+    setChristianValues(formatChristianValues(faith?.christian_values));
     // Préférences : valeurs par défaut de l'onboarding tant qu'il n'a jamais été terminé.
     if (profile?.onboarding_completed_at && prefs) {
       setPreferredGender(prefs.preferred_gender ?? "");
@@ -127,6 +140,9 @@ function OnboardingPage() {
           church_attendance: churchAttendance.trim() || null,
           faith_importance: faithImportance.trim() || null,
           marriage_vision: marriageVision.trim() || null,
+          faith_commitment: faithCommitment.trim() || null,
+          prayer_practice: prayerPractice.trim() || null,
+          christian_values: parseChristianValues(christianValues),
         })
         .eq("user_id", userId);
       if (faith.error) throw faith.error;
@@ -263,6 +279,7 @@ function OnboardingPage() {
                 <Label htmlFor="denomination">Église / dénomination</Label>
                 <Input
                   id="denomination"
+                  maxLength={FAITH_SHORT_MAX_LENGTH}
                   value={denomination}
                   onChange={(e) => setDenomination(e.target.value)}
                   placeholder="Évangélique, catholique, protestante…"
@@ -272,6 +289,7 @@ function OnboardingPage() {
                 <Label htmlFor="churchAttendance">Fréquentation du culte</Label>
                 <Input
                   id="churchAttendance"
+                  maxLength={FAITH_SHORT_MAX_LENGTH}
                   value={churchAttendance}
                   onChange={(e) => setChurchAttendance(e.target.value)}
                   placeholder="Chaque dimanche"
@@ -281,19 +299,54 @@ function OnboardingPage() {
                 <Label htmlFor="faithImportance">Place de la foi dans votre vie</Label>
                 <Input
                   id="faithImportance"
+                  maxLength={FAITH_SHORT_MAX_LENGTH}
                   value={faithImportance}
                   onChange={(e) => setFaithImportance(e.target.value)}
                   placeholder="Centrale, importante…"
                 />
               </div>
               <div className="space-y-2">
+                <Label htmlFor="faithCommitment">Votre pratique chrétienne</Label>
+                <Input
+                  id="faithCommitment"
+                  maxLength={FAITH_SHORT_MAX_LENGTH}
+                  value={faithCommitment}
+                  onChange={(e) => setFaithCommitment(e.target.value)}
+                  placeholder="Engagé(e) dans un ministère, groupe de maison…"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="prayerPractice">Votre vie de prière</Label>
+                <Input
+                  id="prayerPractice"
+                  maxLength={FAITH_SHORT_MAX_LENGTH}
+                  value={prayerPractice}
+                  onChange={(e) => setPrayerPractice(e.target.value)}
+                  placeholder="Chaque jour, en famille…"
+                />
+              </div>
+              <div className="space-y-2">
                 <Label htmlFor="marriageVision">Votre vision du mariage</Label>
                 <Textarea
                   id="marriageVision"
+                  maxLength={FAITH_LONG_MAX_LENGTH}
                   rows={4}
                   value={marriageVision}
                   onChange={(e) => setMarriageVision(e.target.value)}
                 />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="christianValues">Vos valeurs chrétiennes</Label>
+                <Input
+                  id="christianValues"
+                  value={christianValues}
+                  onChange={(e) => setChristianValues(e.target.value)}
+                  placeholder="Fidélité, pardon, humilité…"
+                  aria-describedby="christianValuesHelp"
+                />
+                <p id="christianValuesHelp" className="text-xs text-muted-foreground">
+                  Séparées par des virgules, {CHRISTIAN_VALUES_MAX} au maximum.
+                </p>
               </div>
             </>
           ) : null}
