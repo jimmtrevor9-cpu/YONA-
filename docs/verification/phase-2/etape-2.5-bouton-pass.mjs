@@ -39,7 +39,6 @@ const id = {
   c: mk("c", "female"),
   d: mk("d", "female"),
 };
-sql(`insert into public.likes (sender_id, receiver_id) values ('${id.v}','${id.d}');`);
 const likesOfV = () =>
   sql(`select count(*) from public.likes where sender_id='${id.v}' and kind='like'`);
 
@@ -86,8 +85,14 @@ check(
   footer.map((t) => t.trim()).join(",") === "Passer,Like",
   footer.join(","),
 );
+// Un profil aimé n'est plus proposé au rechargement (étape 2.7) : on aime D pendant la visite.
+await card("d")
+  .getByRole("button", { name: /^Liker le profil/ })
+  .click();
+for (let i = 0; i < 50 && likesOfV() !== "1"; i++) await page.waitForTimeout(100);
+await page.waitForTimeout(300);
 check(
-  "Profil déjà aimé (D) : pas de bouton « Passer », seulement « Aimé »",
+  "Profil aimé (D) : pas de bouton « Passer », seulement « Aimé »",
   (await pass("d").count()) === 0 &&
     (await card("d").getByRole("button").textContent())?.trim() === "Aimé",
 );
@@ -166,8 +171,9 @@ check(
 await page.reload({ waitUntil: "networkidle" });
 await page.waitForTimeout(1200);
 check(
-  "Après rechargement, les profils passés réapparaissent (exclusion = étape 2.7)",
-  (await names()) === "Passa,Passb,Passc,Passd,Passw",
+  "Après rechargement, les profils passés ne sont plus proposés (étape 2.7)",
+  (await names()) === "",
+  await names(),
 );
 const other = await login("w");
 check(
@@ -182,7 +188,7 @@ check(
   "Page Recherche inchangée (aucun bouton sur les cartes)",
   (await page.locator("article button").count()) === 0,
 );
-const small = await login("v", 320);
+const small = await login("w", 320);
 const smallBox = await small.locator("article").first().locator("button").allTextContents();
 check(
   "Petit écran (320 px) : « Passer » et « Like » tiennent sur la carte, sans débordement",

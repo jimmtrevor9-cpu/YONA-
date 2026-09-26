@@ -223,15 +223,11 @@ check(
 );
 await ctx.close();
 ({ ctx, page } = await login("c"));
+// Depuis l'étape 2.7, un profil aimé n'est plus proposé.
 check(
-  "Nouvelle session : le Like est toujours là (bouton « Aimé »)",
-  (
-    await page
-      .locator("article")
-      .filter({ hasText: "Enrega" })
-      .getByRole("button", { name: /^(Liker le profil|Profil de .* aimé)/ })
-      .textContent()
-  )?.trim() === "Aimé",
+  "Nouvelle session : Like toujours en base, A n'est plus proposée à C",
+  sql(`select kind||'|'||status from public.likes where ${from("c", "a")}`) === "like|active" &&
+    (await page.locator("article").filter({ hasText: "Enrega " }).count()) === 0,
 );
 await ctx.close();
 check("Aucune erreur JavaScript", jsErrors.length === 0, jsErrors.join(" | "));

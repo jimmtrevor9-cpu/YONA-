@@ -139,10 +139,19 @@ const toast = async (p) => {
   return t;
 };
 
+const shown = (p, tag) =>
+  p
+    .locator("article")
+    .filter({ hasText: `Doublon${tag} ` })
+    .count();
+// Depuis l'étape 2.7, les profils déjà aimés ne sont plus proposés.
 check(
-  "Profils déjà aimés (A, B) affichés « Aimé » dans les deux onglets",
-  (await btn(tab1, "a").textContent())?.trim() === "Aimé" &&
-    (await btn(tab2, "b").textContent())?.trim() === "Aimé",
+  "Profils déjà aimés (A, B) : plus proposés, dans les deux onglets",
+  (await shown(tab1, "a")) +
+    (await shown(tab1, "b")) +
+    (await shown(tab2, "a")) +
+    (await shown(tab2, "b")) ===
+    0,
 );
 await btn(tab1, "c").click();
 let t = await toast(tab1);
@@ -220,26 +229,34 @@ check(
       "active",
   t,
 );
-await btn(tab1, "f").click();
-t = await toast(tab1);
+// F passée n'est plus proposée (étape 2.7) : le Like est envoyé comme depuis un onglet
+// resté ouvert, en rejouant l'appel serveur capturé.
+const likeF = await fetch(captured.url, {
+  method: "POST",
+  headers: Object.fromEntries(
+    Object.entries(captured.headers).filter(
+      ([k]) => !["host", "content-length", "connection"].includes(k),
+    ),
+  ),
+  body: captured.body.replace(id.c, id.f),
+}).then((r) => r.text());
 check(
   "Profil passé (« Pass ») puis aimé : même ligne, devenue un Like",
-  rows("v", "f") === "1" &&
+  /"alreadyLiked"\],"v":\[\{"t":1,"s":"[^"]+"\},\{"t":2,"s":3\}/.test(likeF) &&
+    rows("v", "f") === "1" &&
     sql(
       `select kind||'/'||status from public.likes where sender_id='${id.v}' and receiver_id='${id.f}'`,
     ) === "like/active",
-  t,
+  likeF.slice(0, 80),
 );
 
 await tab1.reload({ waitUntil: "networkidle" });
 await tab1.waitForTimeout(1200);
-const states = await Promise.all(
-  ["a", "b", "c", "d", "e", "f"].map(async (k) => (await btn(tab1, k).textContent())?.trim()),
-);
+const remaining = await Promise.all(["a", "b", "c", "d", "e", "f"].map((k) => shown(tab1, k)));
 check(
-  "Après rechargement : les 6 profils affichés « Aimé »",
-  states.every((s) => s === "Aimé"),
-  states.join(","),
+  "Après rechargement : les 6 profils aimés ne sont plus proposés",
+  remaining.every((n) => n === 0),
+  remaining.join(","),
 );
 check(
   "Total : exactement 1 ligne par profil aimé (6 pour V)",

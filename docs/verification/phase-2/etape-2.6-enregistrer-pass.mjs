@@ -47,13 +47,17 @@ const rows = (r) =>
 const browser = await chromium.launch();
 const jsErrors = [];
 const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
-let captured = null;
+let captured = null; // 1er appel Pass
+let capturedLike = null; // 1er appel Like
 async function tab() {
   const page = await ctx.newPage();
   page.on("pageerror", (e) => jsErrors.push(String(e).slice(0, 120)));
   page.on("request", (q) => {
-    if (q.url().includes("/_serverFn/") && q.method() === "POST" && !captured)
-      captured = { url: q.url(), headers: q.headers(), body: q.postData() };
+    if (q.url().includes("/_serverFn/") && q.method() === "POST") {
+      const call = { url: q.url(), headers: q.headers(), body: q.postData() };
+      if (!captured) captured = call;
+      else if (!capturedLike && call.url !== captured.url) capturedLike = call;
+    }
   });
   return page;
 }
@@ -113,27 +117,7 @@ check(
 await page.reload({ waitUntil: "networkidle" });
 await page.waitForTimeout(1200);
 check("Après rechargement : le Pass est toujours en base", row("a") === "pass/active");
-check(
-  "(Le profil passé est encore proposé : exclusion = étape 2.7)",
-  (await card(page, "a").count()) === 1,
-);
-await passBtn(page, "a").click();
-await page.waitForTimeout(1200);
-check(
-  "2e Pass du même profil : pas de doublon, aucun message d'erreur",
-  rows("a") === "1" && (await page.locator("[data-sonner-toast]").count()) === 0,
-);
-
-// C. Changer d'avis : Pass puis Like
-await page.reload({ waitUntil: "networkidle" });
-await page.waitForTimeout(1200);
-await likeBtn(page, "a").click();
-const tl = await toast(page);
-check(
-  "Profil passé puis aimé : même ligne, devenue un Like",
-  tl === "Like envoyé." && rows("a") === "1" && row("a") === "like/active",
-  tl,
-);
+check("Le profil passé n'est plus proposé (étape 2.7)", (await card(page, "a").count()) === 0);
 
 // D. Erreurs
 sql(`update public.profiles set visibility='hidden' where user_id='${id.b}';`);
@@ -223,6 +207,27 @@ check(
   "Serveur sans connexion : refusé, rien d'enregistré",
   (r.status >= 400 || r.text.includes("Unauthorized")) && rows("f") === "0",
   `HTTP ${r.status}`,
+);
+// A n'est plus proposée (étape 2.7) : 2e Pass puis Like envoyés comme depuis un onglet resté ouvert.
+r = await replay(id.a);
+check(
+  "2e Pass de A : « déjà passé », pas de doublon",
+  /"alreadyPassed"\],"v":\[\{"t":1,"s":"[^"]+"\},\{"t":2,"s":2\}/.test(r.text) && rows("a") === "1",
+  r.text.slice(0, 80),
+);
+const likeA = await fetch(capturedLike.url, {
+  method: "POST",
+  headers: Object.fromEntries(
+    Object.entries(capturedLike.headers).filter(
+      ([k]) => !["host", "content-length", "connection"].includes(k),
+    ),
+  ),
+  body: capturedLike.body.replace(id.d, id.a),
+}).then((x) => x.text());
+check(
+  "Profil passé puis aimé : même ligne, devenue un Like",
+  likeA.includes('"alreadyLiked"') && rows("a") === "1" && row("a") === "like/active",
+  row("a"),
 );
 const burst = await Promise.all(Array.from({ length: 5 }, () => replay(id.g)));
 check(

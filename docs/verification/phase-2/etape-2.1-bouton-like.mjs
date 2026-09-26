@@ -137,13 +137,14 @@ check("Clavier (Entrée) : Like envoyé", t === "Like envoyé." && likes("c") ==
 // E. Persistance
 await page.reload({ waitUntil: "networkidle" });
 await page.waitForTimeout(1500);
+// Depuis l'étape 2.7, un profil aimé n'est plus proposé après rechargement.
 check(
-  "Après rechargement : A, B, C « Aimé » ; D, E « Like »",
-  (
-    await Promise.all(
-      ["a", "b", "c", "d", "e"].map(async (k) => (await button(k).textContent())?.trim()),
-    )
-  ).join(",") === "Aimé,Aimé,Aimé,Like,Like",
+  "Après rechargement : A, B, C (aimées) plus proposées, Likes conservés ; D, E « Like »",
+  (await card("a").count()) + (await card("b").count()) + (await card("c").count()) === 0 &&
+    likes() === "3:like/active,like/active,like/active" &&
+    (await Promise.all(["d", "e"].map(async (k) => (await button(k).textContent())?.trim()))).join(
+      ",",
+    ) === "Like,Like",
 );
 
 // F. Erreurs
