@@ -8,6 +8,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/features/auth/AuthProvider";
+import {
+  FIRST_NAME_MAX_LENGTH,
+  OLDEST_BIRTH_DATE,
+  PLACE_MAX_LENGTH,
+  latestAllowedBirthDate,
+  personalInfoServerError,
+  validatePersonalInfo,
+} from "@/features/profiles/personal-info";
 import { onboardingDataQuery } from "@/features/profiles/queries";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
@@ -80,6 +88,35 @@ function OnboardingPage() {
     }
   }, [saved, prefilled]);
 
+  /** Étape « Vous » : informations personnelles obligatoires et âge minimum. */
+  function personalInfoError() {
+    return validatePersonalInfo(
+      { firstName, gender, birthDate },
+      { requireGender: true, requireBirthDate: true },
+    );
+  }
+
+  function goNext() {
+    if (step === 0) {
+      const error = personalInfoError();
+      if (error) {
+        toast.error(error);
+        return;
+      }
+    }
+    setStep(step + 1);
+  }
+
+  function submit() {
+    const error = personalInfoError();
+    if (error) {
+      setStep(0);
+      toast.error(error);
+      return;
+    }
+    finish.mutate();
+  }
+
   const finish = useMutation({
     mutationFn: async () => {
       const faith = await supabase
@@ -128,7 +165,8 @@ function OnboardingPage() {
       toast.success("Votre profil est prêt.");
       navigate({ to: "/discover", replace: true });
     },
-    onError: () => toast.error("Impossible d'enregistrer. Réessayez."),
+    onError: (error: Error) =>
+      toast.error(personalInfoServerError(error.message) ?? "Impossible d'enregistrer. Réessayez."),
   });
 
   return (
@@ -155,6 +193,7 @@ function OnboardingPage() {
                 <Label htmlFor="firstName">Prénom</Label>
                 <Input
                   id="firstName"
+                  maxLength={FIRST_NAME_MAX_LENGTH}
                   value={firstName}
                   onChange={(e) => setFirstName(e.target.value)}
                 />
@@ -177,6 +216,8 @@ function OnboardingPage() {
                 <Input
                   id="birthDate"
                   type="date"
+                  min={OLDEST_BIRTH_DATE}
+                  max={latestAllowedBirthDate()}
                   value={birthDate}
                   onChange={(e) => setBirthDate(e.target.value)}
                 />
@@ -184,12 +225,18 @@ function OnboardingPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
                   <Label htmlFor="city">Ville</Label>
-                  <Input id="city" value={city} onChange={(e) => setCity(e.target.value)} />
+                  <Input
+                    id="city"
+                    maxLength={PLACE_MAX_LENGTH}
+                    value={city}
+                    onChange={(e) => setCity(e.target.value)}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="country">Pays</Label>
                   <Input
                     id="country"
+                    maxLength={PLACE_MAX_LENGTH}
                     value={country}
                     onChange={(e) => setCountry(e.target.value)}
                   />
@@ -308,11 +355,11 @@ function OnboardingPage() {
             </Button>
           ) : null}
           {step < STEPS.length - 1 ? (
-            <Button className="flex-1" onClick={() => setStep(step + 1)}>
+            <Button className="flex-1" onClick={goNext}>
               Continuer
             </Button>
           ) : (
-            <Button className="flex-1" disabled={finish.isPending} onClick={() => finish.mutate()}>
+            <Button className="flex-1" disabled={finish.isPending} onClick={submit}>
               {finish.isPending ? "Enregistrement…" : "Terminer"}
             </Button>
           )}

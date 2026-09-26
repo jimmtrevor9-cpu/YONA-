@@ -59,10 +59,13 @@ export async function getPostLoginPath(userId: string): Promise<"/onboarding" | 
 
 export function computeAge(birthDate: string | null | undefined): number | null {
   if (!birthDate) return null;
-  const birth = new Date(birthDate);
+  // « AAAA-MM-JJ » est lu tel quel : new Date("AAAA-MM-JJ") serait interprété en UTC et
+  // décalerait l'anniversaire d'un jour dans les fuseaux à l'ouest de Greenwich.
+  const [year, month, day] = birthDate.split("-").map(Number);
+  if (!year || !month || !day) return null;
   const now = new Date();
-  let age = now.getFullYear() - birth.getFullYear();
-  const m = now.getMonth() - birth.getMonth();
-  if (m < 0 || (m === 0 && now.getDate() < birth.getDate())) age -= 1;
+  let age = now.getFullYear() - year;
+  const m = now.getMonth() + 1 - month;
+  if (m < 0 || (m === 0 && now.getDate() < day)) age -= 1;
   return age;
 }

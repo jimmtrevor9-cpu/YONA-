@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { signUp, translateAuthError } from "@/features/auth/auth.service";
+import { FIRST_NAME_MAX_LENGTH } from "@/features/profiles/personal-info";
 import { APP_NAME } from "@/lib/config";
 
 export const Route = createFileRoute("/register")({
@@ -26,9 +27,6 @@ export const Route = createFileRoute("/register")({
   }),
   component: RegisterPage,
 });
-
-/** Longueur maximale du prénom (contrainte profiles_first_name_length). */
-const FIRST_NAME_MAX_LENGTH = 60;
 
 function RegisterPage() {
   const navigate = useNavigate();
