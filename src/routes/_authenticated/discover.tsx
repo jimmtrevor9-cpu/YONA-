@@ -5,6 +5,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { AppHeader } from "@/components/AppHeader";
+import { MatchDialog } from "@/components/MatchDialog";
 import { BottomNav } from "@/components/BottomNav";
 import { ProfileCard } from "@/components/ProfileCard";
 import { Button } from "@/components/ui/button";
@@ -71,6 +72,12 @@ function DiscoverPage() {
       queryClient.setQueryData<string[]>(["likes", "sent", user.id], (current = []) =>
         current.includes(result.receiverId) ? current : [...current, result.receiverId],
       );
+      // Like réciproque tout juste enregistré : le Match est annoncé à la place du message.
+      if (result.mutual && result.matchId && !result.alreadyLiked) {
+        const profile = data?.find((p) => p.user_id === result.receiverId);
+        setNewMatchName(profile?.first_name ?? "cette personne");
+        return;
+      }
       toast.success(result.alreadyLiked ? "Vous aimez déjà ce profil." : "Like envoyé.");
     },
     onError: (error) => {
@@ -85,6 +92,7 @@ function DiscoverPage() {
   // Profils passés pendant cette visite : retirés tout de suite de la liste affichée,
   // puis enregistrés côté serveur (réaffichés si l'enregistrement échoue).
   const [passedIds, setPassedIds] = useState<string[]>([]);
+  const [newMatchName, setNewMatchName] = useState<string | null>(null);
   const passMutation = useMutation({
     mutationFn: (receiverId: string) => sendPass({ data: { receiverId } }),
     onError: (error, receiverId) => {
@@ -161,6 +169,7 @@ function DiscoverPage() {
           </div>
         )}
       </main>
+      <MatchDialog firstName={newMatchName} onClose={() => setNewMatchName(null)} />
       <BottomNav />
     </div>
   );

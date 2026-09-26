@@ -153,6 +153,11 @@ check(
   `mutual=${flag(res, "mutual")}`,
 );
 check("… et la base confirme", (await mutual("v", id.b)) === "true");
+// Depuis l'étape 3.4, un Like réciproque ouvre la fenêtre « Match » : on la ferme.
+for (let i = 0; i < 40 && !(await page.getByTestId("match-dialog").isVisible()); i++)
+  await page.waitForTimeout(100);
+await page.keyboard.press("Escape");
+await page.getByTestId("match-dialog").waitFor({ state: "hidden", timeout: 5000 });
 res = await clickLike("f");
 check(
   "Page : V aime F (qui ne l'a pas aimé) → « pas réciproque »",

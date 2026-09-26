@@ -179,6 +179,11 @@ check(
   "… la réponse du serveur contient l'identifiant de ce Match",
   mvb !== "aucun" && (responses[0] ?? "").includes(`"s":"${mvb.split("|")[0]}"`),
 );
+// Depuis l'étape 3.4, un Like réciproque ouvre la fenêtre « Match » : on la ferme.
+for (let i = 0; i < 40 && !(await page.getByTestId("match-dialog").isVisible()); i++)
+  await page.waitForTimeout(100);
+await page.keyboard.press("Escape");
+await page.getByTestId("match-dialog").waitFor({ state: "hidden", timeout: 5000 });
 responses.length = 0;
 await page
   .locator("article")
