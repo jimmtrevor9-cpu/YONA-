@@ -167,8 +167,9 @@ check(
 
 // ---------- E. Portée ----------
 check(
-  "Aucun Match créé à cette étape (création = étape 3.2)",
-  sql("select count(*) from public.matches") === "0",
+  "Depuis l'étape 3.2 : un Match existe pour chaque paire réciproque (A, B, E, F), aucun avec D",
+  sql(`select count(*) from public.matches where '${id.v}' in (user_1_id, user_2_id)`) === "4" &&
+    sql(`select count(*) from public.matches where '${id.d}' in (user_1_id, user_2_id)`) === "0",
 );
 check("Aucune erreur JavaScript", jsErrors.length === 0, jsErrors.join(" | "));
 await browser.close();

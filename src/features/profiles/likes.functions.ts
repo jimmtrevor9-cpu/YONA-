@@ -17,12 +17,32 @@ type AuthedClient = SupabaseClient<Database>;
 
 /**
  * Like réciproque : la personne visée a elle aussi un Like actif envers la personne
- * connectée (vérifié par la base, `has_mutual_like`). La création du Match suit (étape 3.2).
+ * connectée (vérifié par la base, `has_mutual_like`).
  */
 async function isMutualLike(supabase: AuthedClient, otherId: string): Promise<boolean> {
   const { data, error } = await supabase.rpc("has_mutual_like", { _other: otherId });
   if (error) throw error;
   return data === true;
+}
+
+/**
+ * Match entre la personne connectée et `otherId` (créé par la base dès le Like réciproque,
+ * déclencheur `likes_create_match`) ; `null` s'il n'existe pas.
+ */
+async function findMatchId(
+  supabase: AuthedClient,
+  userId: string,
+  otherId: string,
+): Promise<string | null> {
+  const [user1, user2] = userId < otherId ? [userId, otherId] : [otherId, userId];
+  const { data, error } = await supabase
+    .from("matches")
+    .select("id")
+    .eq("user_1_id", user1)
+    .eq("user_2_id", user2)
+    .maybeSingle();
+  if (error) throw error;
+  return data?.id ?? null;
 }
 
 /** Enregistre l'intention Like de la personne connectée et indique si elle est réciproque. */
@@ -56,10 +76,14 @@ export const likeProfile = createServerFn({ method: "POST" })
 
     if (existingError) throw existingError;
     if (existing?.kind === "like" && existing.status === "active") {
+      const mutual = await isMutualLike(context.supabase, data.receiverId);
       return {
         receiverId: data.receiverId,
         alreadyLiked: true,
-        mutual: await isMutualLike(context.supabase, data.receiverId),
+        mutual,
+        matchId: mutual
+          ? await findMatchId(context.supabase, context.userId, data.receiverId)
+          : null,
       };
     }
 
@@ -74,10 +98,12 @@ export const likeProfile = createServerFn({ method: "POST" })
     );
 
     if (error) throw error;
+    const mutual = await isMutualLike(context.supabase, data.receiverId);
     return {
       receiverId: data.receiverId,
       alreadyLiked: false,
-      mutual: await isMutualLike(context.supabase, data.receiverId),
+      mutual,
+      matchId: mutual ? await findMatchId(context.supabase, context.userId, data.receiverId) : null,
     };
   });
 
