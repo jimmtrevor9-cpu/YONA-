@@ -63,7 +63,8 @@ for (let i = 0; i < 80 && (await page.locator("[data-sonner-toast]").count()) > 
 await page.waitForTimeout(500);
 
 const card = (tag) => page.locator("article").filter({ hasText: `Like${tag}` });
-const button = (tag) => card(tag).getByRole("button");
+const button = (tag) =>
+  card(tag).getByRole("button", { name: /^(Liker le profil|Profil de .* aimé)/ });
 const toast = async () => {
   const list = page.locator("[data-sonner-toast]");
   for (let i = 0; i < 80 && (await list.count()) === 0; i++) await page.waitForTimeout(100);
@@ -78,7 +79,7 @@ const toast = async () => {
 };
 
 // A. Affichage
-const labels = await page.locator("article button").allTextContents();
+const labels = await page.getByRole("button", { name: /^Liker le profil/ }).allTextContents();
 check(
   "Un bouton « Like » sur chaque carte proposée",
   labels.length === 5 && labels.every((l) => l.trim() === "Like"),

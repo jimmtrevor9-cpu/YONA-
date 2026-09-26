@@ -155,7 +155,11 @@ check(
 // Un Like normal pour capturer l'appel serveur, puis rejeu vers soi-même
 await page.goto(`${BASE}/discover`, { waitUntil: "networkidle" });
 await page.waitForTimeout(1200);
-await page.locator("article").filter({ hasText: "Autom" }).getByRole("button").click();
+await page
+  .locator("article")
+  .filter({ hasText: "Autom" })
+  .getByRole("button", { name: /^(Liker le profil|Profil de .* aimé)/ })
+  .click();
 for (let i = 0; i < 50 && !captured; i++) await page.waitForTimeout(100);
 const replay = async (target) => {
   const res = await fetch(captured.url, {

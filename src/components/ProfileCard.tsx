@@ -1,4 +1,4 @@
-import { Heart, LoaderCircle, MapPin } from "lucide-react";
+import { Heart, LoaderCircle, MapPin, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { computeAge } from "@/features/profiles/queries";
@@ -19,6 +19,8 @@ interface ProfileCardProps {
   isLikePending?: boolean;
   isLikeStateLoading?: boolean;
   onLike?: (profileId: string) => void;
+  /** Passer ce profil (bouton affiché seulement si fourni et si le profil n'est pas aimé). */
+  onPass?: (profileId: string) => void;
 }
 
 /** Carte éditoriale d'un profil avec son action Like. */
@@ -28,6 +30,7 @@ export function ProfileCard({
   isLikePending,
   isLikeStateLoading,
   onLike,
+  onPass,
 }: ProfileCardProps) {
   const age = computeAge(profile.birth_date);
   const place = [profile.city, profile.country].filter(Boolean).join(", ");
@@ -63,7 +66,20 @@ export function ProfileCard({
       ) : null}
 
       {onLike ? (
-        <div className="mt-5 flex justify-end border-t border-border pt-4">
+        <div className="mt-5 flex justify-end gap-2 border-t border-border pt-4">
+          {onPass && !isLiked ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={isLikePending}
+              aria-label={`Passer le profil de ${profile.first_name ?? "cette personne"}`}
+              onClick={() => onPass(profile.user_id)}
+            >
+              <X aria-hidden />
+              Passer
+            </Button>
+          ) : null}
           <Button
             type="button"
             variant={isLiked ? "gold-outline" : "gold"}

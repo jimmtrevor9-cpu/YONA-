@@ -211,7 +211,11 @@ async function login(tag) {
   return { ctx, page };
 }
 let { ctx, page } = await login("c");
-await page.locator("article").filter({ hasText: "Enrega" }).getByRole("button").click();
+await page
+  .locator("article")
+  .filter({ hasText: "Enrega" })
+  .getByRole("button", { name: /^(Liker le profil|Profil de .* aimé)/ })
+  .click();
 for (let i = 0; i < 50 && count(from("c", "a")) === "0"; i++) await page.waitForTimeout(100);
 check(
   "Par la page : Like de C vers A enregistré, expéditeur = membre connecté",
@@ -222,7 +226,11 @@ await ctx.close();
 check(
   "Nouvelle session : le Like est toujours là (bouton « Aimé »)",
   (
-    await page.locator("article").filter({ hasText: "Enrega" }).getByRole("button").textContent()
+    await page
+      .locator("article")
+      .filter({ hasText: "Enrega" })
+      .getByRole("button", { name: /^(Liker le profil|Profil de .* aimé)/ })
+      .textContent()
   )?.trim() === "Aimé",
 );
 await ctx.close();

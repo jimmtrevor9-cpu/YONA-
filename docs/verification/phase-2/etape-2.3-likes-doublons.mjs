@@ -125,7 +125,7 @@ const btn = (p, tag) =>
   p
     .locator("article")
     .filter({ hasText: `Doublon${tag}` })
-    .getByRole("button");
+    .getByRole("button", { name: /^(Liker le profil|Profil de .* aimé)/ });
 const toast = async (p) => {
   const list = p.locator("[data-sonner-toast]");
   for (let i = 0; i < 80 && (await list.count()) === 0; i++) await p.waitForTimeout(100);

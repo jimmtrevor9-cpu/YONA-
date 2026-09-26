@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
+import { useState } from "react";
 import { toast } from "sonner";
 
 import { AppHeader } from "@/components/AppHeader";
@@ -79,6 +80,15 @@ function DiscoverPage() {
     },
   });
 
+  // Profils passés pendant cette visite : retirés de la liste affichée.
+  // (Leur enregistrement côté serveur est l'objet de l'étape 2.6.)
+  const [passedIds, setPassedIds] = useState<string[]>([]);
+  const handlePass = (profileId: string) => {
+    if (likeMutation.isPending && likeMutation.variables === profileId) return;
+    setPassedIds((current) => (current.includes(profileId) ? current : [...current, profileId]));
+  };
+  const profiles = (data ?? []).filter((profile) => !passedIds.includes(profile.user_id));
+
   const handleLike = (profileId: string) => {
     if (!user?.id || likeMutation.isPending || sentLikes.includes(profileId)) return;
     likeMutation.mutate(profileId);
@@ -114,8 +124,8 @@ function DiscoverPage() {
           <p className="text-sm text-destructive">
             Les profils n'ont pas pu être chargés. Réessayez dans un instant.
           </p>
-        ) : data && data.length > 0 ? (
-          data.map((profile) => (
+        ) : profiles.length > 0 ? (
+          profiles.map((profile) => (
             <ProfileCard
               key={profile.user_id}
               profile={profile}
@@ -123,6 +133,7 @@ function DiscoverPage() {
               isLikePending={likeMutation.isPending && likeMutation.variables === profile.user_id}
               isLikeStateLoading={isLikeStateLoading || isLikeStateError}
               onLike={handleLike}
+              onPass={handlePass}
             />
           ))
         ) : (
