@@ -27,6 +27,20 @@ export const likeProfile = createServerFn({ method: "POST" })
     if (profileError) throw profileError;
     if (!profile) throw new Error("Ce profil n'est plus disponible.");
 
+    // Un seul Like par couple (contrainte UNIQUE en base) : un Like déjà actif n'est pas
+    // réécrit, la réponse l'indique simplement.
+    const { data: existing, error: existingError } = await context.supabase
+      .from("likes")
+      .select("kind, status")
+      .eq("sender_id", context.userId)
+      .eq("receiver_id", data.receiverId)
+      .maybeSingle();
+
+    if (existingError) throw existingError;
+    if (existing?.kind === "like" && existing.status === "active") {
+      return { receiverId: data.receiverId, alreadyLiked: true };
+    }
+
     const { error } = await context.supabase.from("likes").upsert(
       {
         sender_id: context.userId,
@@ -38,5 +52,5 @@ export const likeProfile = createServerFn({ method: "POST" })
     );
 
     if (error) throw error;
-    return { receiverId: data.receiverId };
+    return { receiverId: data.receiverId, alreadyLiked: false };
   });

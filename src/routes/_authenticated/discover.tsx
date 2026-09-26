@@ -68,7 +68,7 @@ function DiscoverPage() {
       queryClient.setQueryData<string[]>(["likes", "sent", user.id], (current = []) =>
         current.includes(result.receiverId) ? current : [...current, result.receiverId],
       );
-      toast.success("Like envoyé.");
+      toast.success(result.alreadyLiked ? "Vous aimez déjà ce profil." : "Like envoyé.");
     },
     onError: (error) => {
       toast.error(likeErrorMessage(error));
