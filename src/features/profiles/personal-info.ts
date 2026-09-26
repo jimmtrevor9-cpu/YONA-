@@ -49,6 +49,9 @@ export function personalInfoServerError(message: string | undefined): string | n
     return `${APP_NAME} est réservé aux personnes majeures (${MIN_AGE} ans et plus).`;
   }
   if (m.includes("invalid_birth_date")) return "Date de naissance invalide.";
+  if (m.includes("profile_incomplete")) {
+    return "Indiquez votre prénom, votre sexe et votre date de naissance pour que votre profil soit visible.";
+  }
   if (m.includes("profiles_bio_length")) {
     return `La présentation est limitée à ${BIO_MAX_LENGTH} caractères.`;
   }

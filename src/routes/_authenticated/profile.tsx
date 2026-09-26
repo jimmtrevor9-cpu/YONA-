@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { Eye, EyeOff } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -22,6 +23,10 @@ import {
   validatePersonalInfo,
 } from "@/features/profiles/personal-info";
 import { computeAge, myProfileQuery } from "@/features/profiles/queries";
+import {
+  PROFILE_VISIBILITY_MESSAGES,
+  profileVisibilityState,
+} from "@/features/profiles/visibility";
 import { supabase } from "@/integrations/supabase/client";
 import { APP_NAME } from "@/lib/config";
 
@@ -86,6 +91,7 @@ function ProfilePage() {
   });
 
   const age = computeAge(birthDate);
+  const visibility = data ? profileVisibilityState(data) : null;
 
   return (
     <div className="min-h-screen bg-background pb-24">
@@ -95,12 +101,30 @@ function ProfilePage() {
           <Skeleton className="h-80 w-full rounded-2xl" />
         ) : (
           <>
-            {data && !data.onboarding_completed_at ? (
-              <div className="panel-2 flex items-center justify-between gap-3 p-4">
-                <p className="text-xs text-muted-foreground">Votre profil n'est pas finalisé.</p>
+            {data && visibility === "incomplete" ? (
+              <div
+                className="panel-2 flex items-center justify-between gap-3 p-4"
+                data-testid="profile-visibility"
+              >
+                <p className="text-xs text-muted-foreground">
+                  Votre profil n'est pas finalisé : il n'est pas encore visible par les autres
+                  membres.
+                </p>
                 <Button asChild size="sm" variant="secondary">
                   <Link to="/onboarding">Continuer</Link>
                 </Button>
+              </div>
+            ) : null}
+            {data && visibility && visibility !== "incomplete" ? (
+              <div className="panel-2 flex items-center gap-3 p-4" data-testid="profile-visibility">
+                {visibility === "visible" ? (
+                  <Eye className="size-4 shrink-0 text-gold-soft" aria-hidden />
+                ) : (
+                  <EyeOff className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                )}
+                <p className="text-xs text-muted-foreground">
+                  {PROFILE_VISIBILITY_MESSAGES[visibility]}
+                </p>
               </div>
             ) : null}
 

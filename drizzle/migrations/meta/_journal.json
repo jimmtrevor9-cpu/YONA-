@@ -78,6 +78,13 @@
       "when": 1790393506374,
       "tag": "0010_phase1_photos",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1790404506888,
+      "tag": "0011_phase1_visibilite_profil",
+      "breakpoints": true
     }
   ]
 }
