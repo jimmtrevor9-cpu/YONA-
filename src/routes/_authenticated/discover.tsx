@@ -1,16 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 
 import { AppHeader } from "@/components/AppHeader";
 import { BottomNav } from "@/components/BottomNav";
 import { ProfileCard } from "@/components/ProfileCard";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/features/auth/AuthProvider";
-import { discoverProfilesQuery } from "@/features/profiles/discovery";
+import { discoverFeedQuery } from "@/features/profiles/discovery";
 import { likeProfile } from "@/features/profiles/likes.functions";
 import { sentLikesQuery } from "@/features/profiles/likes";
+import { myProfileQuery } from "@/features/profiles/queries";
+import { profileVisibilityState } from "@/features/profiles/visibility";
 import { APP_NAME } from "@/lib/config";
 
 export const Route = createFileRoute("/_authenticated/discover")({
@@ -34,9 +37,17 @@ function DiscoverPage() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const sendLike = useServerFn(likeProfile);
-  const { data, isLoading, isError } = useQuery({
-    ...discoverProfilesQuery(user?.id ?? ""),
+  // Seul un membre au profil finalisé et non suspendu peut parcourir les profils
+  // (règle appliquée par le serveur ; ici, uniquement pour afficher le bon message).
+  const { data: me, isLoading: isMeLoading } = useQuery({
+    ...myProfileQuery(user?.id ?? ""),
     enabled: !!user?.id,
+  });
+  const myState = me ? profileVisibilityState(me) : null;
+  const canBrowse = myState !== null && myState !== "incomplete" && myState !== "suspended";
+  const { data, isLoading, isError } = useQuery({
+    ...discoverFeedQuery(user?.id ?? ""),
+    enabled: !!user?.id && canBrowse,
   });
   const {
     data: sentLikes = [],
@@ -71,10 +82,25 @@ function DiscoverPage() {
       <main className="mx-auto max-w-md space-y-4 px-5 py-6">
         <p className="eyebrow">Sélection du jour</p>
 
-        {isLoading ? (
+        {isMeLoading || (canBrowse && isLoading) ? (
           <div className="space-y-4">
             <Skeleton className="h-40 w-full rounded-2xl" />
             <Skeleton className="h-40 w-full rounded-2xl" />
+          </div>
+        ) : myState === "suspended" ? (
+          <div className="panel p-6 text-center" data-testid="discover-ineligible">
+            <p className="text-sm text-muted-foreground">
+              Votre profil est suspendu par la modération : la découverte n'est pas disponible.
+            </p>
+          </div>
+        ) : !canBrowse ? (
+          <div className="panel space-y-4 p-6 text-center" data-testid="discover-ineligible">
+            <p className="text-sm text-muted-foreground">
+              Finalisez votre profil pour découvrir les autres membres.
+            </p>
+            <Button asChild size="sm" variant="secondary">
+              <Link to="/onboarding">Continuer</Link>
+            </Button>
           </div>
         ) : isError ? (
           <p className="text-sm text-destructive">
@@ -94,7 +120,8 @@ function DiscoverPage() {
         ) : (
           <div className="panel p-6 text-center">
             <p className="text-sm text-muted-foreground">
-              Aucun profil à afficher pour le moment. Complétez le vôtre pour être visible.
+              Aucun profil ne correspond à vos préférences pour le moment. Les nouveaux profils
+              apparaîtront ici automatiquement.
             </p>
           </div>
         )}

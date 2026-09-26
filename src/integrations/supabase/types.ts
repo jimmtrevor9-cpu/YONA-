@@ -1002,10 +1002,24 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      can_browse_profiles: { Args: never; Returns: boolean }
       consume_ai_quota: { Args: { _feature?: string }; Returns: Json }
       consume_free_message: {
         Args: { _conversation_id: string }
         Returns: Json
+      }
+      discover_profiles: {
+        Args: { _limit?: number }
+        Returns: {
+          bio: string | null
+          birth_date: string | null
+          city: string | null
+          country: string | null
+          first_name: string | null
+          gender: Database["public"]["Enums"]["gender"] | null
+          interests: string[]
+          user_id: string
+        }[]
       }
       get_ai_quota: { Args: { _feature?: string }; Returns: Json }
       get_conversation_quota: {

@@ -85,6 +85,13 @@
       "when": 1790404506888,
       "tag": "0011_phase1_visibilite_profil",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1790405817990,
+      "tag": "0012_phase1_eligibilite_decouverte",
+      "breakpoints": true
     }
   ]
 }
