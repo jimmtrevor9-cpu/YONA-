@@ -24,6 +24,14 @@ import {
   formatChristianValues,
   parseChristianValues,
 } from "@/features/profiles/christian-info";
+import {
+  FAMILY_PROJECT_MAX_LENGTH,
+  PARTNER_MAX_AGE,
+  PARTNER_MIN_AGE,
+  RELATIONSHIP_GOAL_MAX_LENGTH,
+  preferencesServerError,
+  validateAgeRange,
+} from "@/features/profiles/preferences";
 import { onboardingDataQuery } from "@/features/profiles/queries";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
@@ -70,6 +78,7 @@ function OnboardingPage() {
   const [minAge, setMinAge] = useState(25);
   const [maxAge, setMaxAge] = useState(40);
   const [relationshipGoal, setRelationshipGoal] = useState("");
+  const [familyProject, setFamilyProject] = useState("");
 
   // Pré-remplissage avec les données déjà enregistrées (prénom saisi à l'inscription,
   // ou profil complet si l'onboarding est rouvert) pour ne jamais les écraser à vide.
@@ -99,6 +108,7 @@ function OnboardingPage() {
       setMinAge(prefs.min_age);
       setMaxAge(prefs.max_age);
       setRelationshipGoal(prefs.relationship_goal ?? "");
+      setFamilyProject(prefs.family_project ?? "");
     }
   }, [saved, prefilled]);
 
@@ -128,6 +138,11 @@ function OnboardingPage() {
       toast.error(error);
       return;
     }
+    const ageError = validateAgeRange(minAge, maxAge);
+    if (ageError) {
+      toast.error(ageError);
+      return;
+    }
     finish.mutate();
   }
 
@@ -154,6 +169,7 @@ function OnboardingPage() {
           min_age: minAge,
           max_age: maxAge,
           relationship_goal: relationshipGoal.trim() || null,
+          family_project: familyProject.trim() || null,
         })
         .eq("user_id", userId);
       if (prefs.error) throw prefs.error;
@@ -183,7 +199,11 @@ function OnboardingPage() {
       navigate({ to: "/discover", replace: true });
     },
     onError: (error: Error) =>
-      toast.error(personalInfoServerError(error.message) ?? "Impossible d'enregistrer. Réessayez."),
+      toast.error(
+        personalInfoServerError(error.message) ??
+          preferencesServerError(error.message) ??
+          "Impossible d'enregistrer. Réessayez.",
+      ),
   });
 
   return (
@@ -372,8 +392,8 @@ function OnboardingPage() {
                   <Input
                     id="minAge"
                     type="number"
-                    min={18}
-                    max={99}
+                    min={PARTNER_MIN_AGE}
+                    max={PARTNER_MAX_AGE}
                     value={minAge}
                     onChange={(e) => setMinAge(Number(e.target.value))}
                   />
@@ -383,8 +403,8 @@ function OnboardingPage() {
                   <Input
                     id="maxAge"
                     type="number"
-                    min={18}
-                    max={99}
+                    min={PARTNER_MIN_AGE}
+                    max={PARTNER_MAX_AGE}
                     value={maxAge}
                     onChange={(e) => setMaxAge(Number(e.target.value))}
                   />
@@ -394,9 +414,20 @@ function OnboardingPage() {
                 <Label htmlFor="relationshipGoal">Ce que vous recherchez</Label>
                 <Input
                   id="relationshipGoal"
+                  maxLength={RELATIONSHIP_GOAL_MAX_LENGTH}
                   value={relationshipGoal}
                   onChange={(e) => setRelationshipGoal(e.target.value)}
                   placeholder="Une relation menant au mariage"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="familyProject">Votre projet familial</Label>
+                <Input
+                  id="familyProject"
+                  maxLength={FAMILY_PROJECT_MAX_LENGTH}
+                  value={familyProject}
+                  onChange={(e) => setFamilyProject(e.target.value)}
+                  placeholder="Fonder une famille, avoir des enfants…"
                 />
               </div>
             </>

@@ -37,7 +37,7 @@ export const onboardingDataQuery = (userId: string) =>
           .maybeSingle(),
         supabase
           .from("preferences")
-          .select("preferred_gender, min_age, max_age, relationship_goal")
+          .select("preferred_gender, min_age, max_age, relationship_goal, family_project")
           .eq("user_id", userId)
           .maybeSingle(),
       ]);
