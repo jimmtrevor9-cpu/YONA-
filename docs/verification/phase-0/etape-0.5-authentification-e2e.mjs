@@ -23,7 +23,9 @@ async function lastMailLink(to, subjectPart) {
     const list = await (
       await fetch(`${MAILPIT}/api/v1/search?query=to:${encodeURIComponent(to)}`)
     ).json();
-    const msg = list.messages?.find((m) => m.Subject.toLowerCase().includes(subjectPart));
+    const msg = list.messages?.find((m) =>
+      subjectPart.split("|").some((part) => m.Subject.toLowerCase().includes(part)),
+    );
     if (msg) {
       const full = await (await fetch(`${MAILPIT}/api/v1/message/${msg.ID}`)).json();
       const link = (full.HTML || full.Text).match(/href="([^"]*\/auth\/v1\/verify[^"]*)"/)?.[1];
@@ -52,6 +54,7 @@ await page.waitForURL(/\/login$/, { timeout: 8000 }).catch(() => {});
 ok("Route protégée /discover sans session → /login", page.url().endsWith("/login"), page.url());
 
 // 2. Inscription
+const signupAt = Date.now();
 await page.goto(`${BASE}/register`, { waitUntil: "networkidle" });
 await page.fill("#firstName", "TestE2E");
 await page.fill("#email", email);
@@ -128,11 +131,13 @@ await page.getByRole("button", { name: "Quitter" }).click();
 await page.waitForURL(/\/login/, { timeout: 8000 }).catch(() => {});
 
 // 9. Mot de passe oublié → email → nouveau mot de passe
+// Supabase n'envoie qu'un email par minute et par compte ([auth.email] max_frequency).
+await page.waitForTimeout(Math.max(0, 62_000 - (Date.now() - signupAt)));
 await page.goto(`${BASE}/forgot-password`, { waitUntil: "networkidle" });
 await page.fill("#email", email);
 await page.click("button[type=submit]");
 await page.waitForTimeout(1500);
-const resetLink = await lastMailLink(email, "reset");
+const resetLink = await lastMailLink(email, "réinitialis|reset");
 ok("Email de réinitialisation reçu", !!resetLink);
 await page.goto(resetLink, { waitUntil: "networkidle" });
 ok("Lien → page /reset-password", page.url().includes("/reset-password"), page.url().split("#")[0]);

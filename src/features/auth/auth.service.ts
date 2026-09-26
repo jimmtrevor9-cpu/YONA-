@@ -7,6 +7,13 @@ export function translateAuthError(message: string): string {
   if (m.includes("email not confirmed")) return "Veuillez confirmer votre email avant de vous connecter.";
   if (m.includes("user already registered")) return "Un compte existe déjà avec cet email.";
   if (m.includes("password should be at least")) return "Le mot de passe doit contenir au moins 8 caractères.";
+  // Délai minimal entre deux emails (ex. « …only request this after 59 seconds. »).
+  if (m.includes("for security purposes")) {
+    const seconds = m.match(/after (\d+) second/)?.[1];
+    return seconds
+      ? `Pour votre sécurité, patientez ${seconds} secondes avant de réessayer.`
+      : "Pour votre sécurité, patientez une minute avant de réessayer.";
+  }
   if (m.includes("rate limit")) return "Trop de tentatives. Réessayez dans quelques minutes.";
   if (m.includes("same password")) return "Le nouveau mot de passe doit être différent de l'ancien.";
   return "Une erreur est survenue. Veuillez réessayer.";

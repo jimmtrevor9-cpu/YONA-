@@ -51,6 +51,23 @@ d'accès, bucket `photos` privé avec 4 règles d'accès.
 | Site URL | adresse du site (ex. `https://votre-domaine`) | liens des emails |
 | Redirect URLs | `https://votre-domaine/login`, `https://votre-domaine/reset-password` | confirmation et mot de passe oublié |
 
+### Email « mot de passe oublié » en français
+
+Par défaut, Supabase envoie cet email en anglais. Modèle YONA prêt à l'emploi :
+`supabase/templates/reinitialisation-mot-de-passe.html`.
+
+- **Tableau de bord Supabase** : Authentication → Email Templates → *Reset Password* :
+  sujet `Réinitialisez votre mot de passe YONA`, puis coller le contenu du fichier.
+- **CLI Supabase** (`config.toml`) :
+  ```toml
+  [auth.email.template.recovery]
+  subject = "Réinitialisez votre mot de passe YONA"
+  content_path = "./supabase/templates/reinitialisation-mot-de-passe.html"
+  ```
+
+Délai entre deux emails (réglage *Email rate limits* / `max_frequency`) : 60 s
+recommandé. YONA affiche alors « Pour votre sécurité, patientez N secondes… ».
+
 ## 5. Vérification réalisée (étape 0.2)
 
 Testé avec un Supabase local complet (`supabase start`) : l'application buildée
