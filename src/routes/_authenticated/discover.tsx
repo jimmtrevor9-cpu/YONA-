@@ -77,6 +77,7 @@ function DiscoverPage() {
         const profile = data?.find((p) => p.user_id === result.receiverId);
         setNewMatchName(profile?.first_name ?? "cette personne");
         void queryClient.invalidateQueries({ queryKey: ["matches"] });
+        void queryClient.invalidateQueries({ queryKey: ["conversations"] });
         return;
       }
       toast.success(result.alreadyLiked ? "Vous aimez déjà ce profil." : "Like envoyé.");
