@@ -198,9 +198,9 @@ await browser.close();
 // ---------- D. Persistance, portée, suppression ----------
 check("Persistance : le Match V–A est toujours là", matchOf(id.v, id.a) === mva);
 check(
-  "Aucune conversation créée à cette étape (étape 4.1)",
+  "Depuis l'étape 4.1 : chaque Match actif de V a sa conversation",
   sql(
-    `select count(*) from public.conversations where match_id in (select id from public.matches where '${id.v}' in (user_1_id,user_2_id))`,
+    `select count(*) from public.matches m where '${id.v}' in (m.user_1_id,m.user_2_id) and not exists (select 1 from public.conversations c where c.match_id=m.id)`,
   ) === "0",
 );
 sql(`delete from auth.users where id='${id.a}';`);

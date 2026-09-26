@@ -15,7 +15,7 @@ insert into public.payments (id,user_id,type,amount,provider,status) values ('dd
 insert into public.subscriptions (user_id,plan,status,starts_at,expires_at,payment_id) values ('cccccccc-0000-4000-8000-000000000003','premium_monthly','active',now()-interval '1 day',now()+interval '29 days','dddddddd-0000-4000-8000-000000000004');
 select 'T3 is_premium C=true, A=false', public.is_premium('cccccccc-0000-4000-8000-000000000003') and not public.is_premium('aaaaaaaa-0000-4000-8000-000000000001');
 insert into public.matches (id,user_1_id,user_2_id) values ('eeeeeeee-0000-4000-8000-000000000005','aaaaaaaa-0000-4000-8000-000000000001','bbbbbbbb-0000-4000-8000-000000000002');
-insert into public.conversations (id,match_id,user_1_id,user_2_id) values ('ffffffff-0000-4000-8000-000000000006','eeeeeeee-0000-4000-8000-000000000005','aaaaaaaa-0000-4000-8000-000000000001','bbbbbbbb-0000-4000-8000-000000000002');
+insert into public.conversations (id,match_id,user_1_id,user_2_id) values ('ffffffff-0000-4000-8000-000000000006','eeeeeeee-0000-4000-8000-000000000005','aaaaaaaa-0000-4000-8000-000000000001','bbbbbbbb-0000-4000-8000-000000000002') on conflict (match_id) do update set id = excluded.id; -- depuis l'étape 4.1, la base crée déjà la conversation du Match
 
 set local role authenticated;
 -- === Utilisateur A ===

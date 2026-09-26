@@ -54,7 +54,7 @@ insert into public.user_roles (user_id, role) values ('${ids.E}','admin');
 insert into public.blocks (blocker_id, blocked_id) values ('${ids.C}','${ids.A}');
 insert into public.likes (sender_id, receiver_id) values ('${ids.B}','${ids.A}'), ('${ids.A}','${ids.D}');
 insert into public.matches (id,user_1_id,user_2_id) values ('${MATCH}','${ids.A}','${ids.B}'), ('f1000000-0000-4000-8000-000000000003','${ids.B}','${ids.C}');
-insert into public.conversations (id,match_id,user_1_id,user_2_id) values ('${CONV}','${MATCH}','${ids.A}','${ids.B}'), ('${CONV_BC}','f1000000-0000-4000-8000-000000000003','${ids.B}','${ids.C}');
+insert into public.conversations (id,match_id,user_1_id,user_2_id) values ('${CONV}','${MATCH}','${ids.A}','${ids.B}'), ('${CONV_BC}','f1000000-0000-4000-8000-000000000003','${ids.B}','${ids.C}') on conflict (match_id) do update set id = excluded.id; -- depuis l'étape 4.1, la base crée déjà la conversation du Match
 insert into public.messages (conversation_id,sender_id,content) values ('${CONV}','${ids.B}','Bonjour A'), ('${CONV_BC}','${ids.B}','Bonjour C');
 insert into public.messages (conversation_id,sender_id,content,status) values ('${CONV}','${ids.B}','bloqué','blocked');
 insert into public.payments (id,user_id,type,amount,provider,status) values ('f3000000-0000-4000-8000-000000000001','${ids.B}','subscription',500,'test','succeeded');
