@@ -38,7 +38,7 @@ par les fichiers de `supabase/migrations/`, appliqués **dans l'ordre**
   npx supabase db push
   ```
 
-Résultat attendu : 21 tables (toutes protégées par RLS), 33 fonctions, 65 règles
+Résultat attendu : 21 tables (toutes protégées par RLS), 34 fonctions, 65 règles
 d'accès, bucket `photos` privé (JPG, PNG, WebP, 5 Mo max) avec 4 règles d'accès.
 
 ## 4. Réglages de l'authentification (Supabase → Authentication)

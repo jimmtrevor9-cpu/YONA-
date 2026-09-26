@@ -1,7 +1,9 @@
 import { createServerFn } from "@tanstack/react-start";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import type { Database } from "@/integrations/supabase/types";
 
 const likeProfileInput = z.object({
   // Forme canonique (minuscules) : « ABC… » et « abc… » désignent le même membre.
@@ -11,7 +13,19 @@ const likeProfileInput = z.object({
     .transform((value) => value.toLowerCase()),
 });
 
-/** Enregistre uniquement l'intention Like de la personne connectée. */
+type AuthedClient = SupabaseClient<Database>;
+
+/**
+ * Like réciproque : la personne visée a elle aussi un Like actif envers la personne
+ * connectée (vérifié par la base, `has_mutual_like`). La création du Match suit (étape 3.2).
+ */
+async function isMutualLike(supabase: AuthedClient, otherId: string): Promise<boolean> {
+  const { data, error } = await supabase.rpc("has_mutual_like", { _other: otherId });
+  if (error) throw error;
+  return data === true;
+}
+
+/** Enregistre l'intention Like de la personne connectée et indique si elle est réciproque. */
 export const likeProfile = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data) => likeProfileInput.parse(data))
@@ -42,7 +56,11 @@ export const likeProfile = createServerFn({ method: "POST" })
 
     if (existingError) throw existingError;
     if (existing?.kind === "like" && existing.status === "active") {
-      return { receiverId: data.receiverId, alreadyLiked: true };
+      return {
+        receiverId: data.receiverId,
+        alreadyLiked: true,
+        mutual: await isMutualLike(context.supabase, data.receiverId),
+      };
     }
 
     const { error } = await context.supabase.from("likes").upsert(
@@ -56,7 +74,11 @@ export const likeProfile = createServerFn({ method: "POST" })
     );
 
     if (error) throw error;
-    return { receiverId: data.receiverId, alreadyLiked: false };
+    return {
+      receiverId: data.receiverId,
+      alreadyLiked: false,
+      mutual: await isMutualLike(context.supabase, data.receiverId),
+    };
   });
 
 /**

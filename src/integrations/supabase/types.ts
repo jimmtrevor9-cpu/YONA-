@@ -1059,6 +1059,7 @@ export type Database = {
         Args: { _conversation_id: string; _user_id: string }
         Returns: boolean
       }
+      has_mutual_like: { Args: { _other: string }; Returns: boolean }
       is_discoverable_profile: { Args: { _user_id: string }; Returns: boolean }
       is_premium: { Args: { _user_id: string }; Returns: boolean }
       record_profile_visit: {

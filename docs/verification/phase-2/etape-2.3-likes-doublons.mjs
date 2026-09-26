@@ -207,7 +207,7 @@ check(
     replay.every(
       (r) =>
         r.status === 200 &&
-        /"alreadyLiked"\],"v":\[\{"t":1,"s":"[^"]+"\},\{"t":2,"s":2\}/.test(r.text),
+        /"alreadyLiked","mutual"\],"v":\[\{"t":1,"s":"[^"]+"\},\{"t":2,"s":2\}/.test(r.text),
     ) &&
     rows("v", "d") === "1",
   replay.map((r) => r.status).join(","),
@@ -242,7 +242,7 @@ const likeF = await fetch(captured.url, {
 }).then((r) => r.text());
 check(
   "Profil passé (« Pass ») puis aimé : même ligne, devenue un Like",
-  /"alreadyLiked"\],"v":\[\{"t":1,"s":"[^"]+"\},\{"t":2,"s":3\}/.test(likeF) &&
+  /"alreadyLiked","mutual"\],"v":\[\{"t":1,"s":"[^"]+"\},\{"t":2,"s":3\}/.test(likeF) &&
     rows("v", "f") === "1" &&
     sql(
       `select kind||'/'||status from public.likes where sender_id='${id.v}' and receiver_id='${id.f}'`,
