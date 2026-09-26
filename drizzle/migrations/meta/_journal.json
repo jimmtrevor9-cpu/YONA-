@@ -71,6 +71,13 @@
       "when": 1790392661435,
       "tag": "0009_phase1_preferences",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1790393506374,
+      "tag": "0010_phase1_photos",
+      "breakpoints": true
     }
   ]
 }

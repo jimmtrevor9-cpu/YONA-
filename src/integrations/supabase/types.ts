@@ -1051,6 +1051,7 @@ export type Database = {
         Args: { _visited_user_id: string }
         Returns: undefined
       }
+      set_primary_photo: { Args: { _photo_id: string }; Returns: undefined }
       touch_activity: { Args: never; Returns: undefined }
     }
     Enums: {

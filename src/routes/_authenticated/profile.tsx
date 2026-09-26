@@ -5,6 +5,7 @@ import { toast } from "sonner";
 
 import { AppHeader } from "@/components/AppHeader";
 import { BottomNav } from "@/components/BottomNav";
+import { ProfilePhotos } from "@/components/ProfilePhotos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -103,6 +104,8 @@ function ProfilePage() {
               </div>
             ) : null}
 
+            <ProfilePhotos userId={userId} />
+
             <form
               className="panel gold-thread space-y-4 p-5"
               onSubmit={(e) => {
@@ -193,7 +196,7 @@ function ProfilePage() {
             </form>
 
             <p className="text-center text-[11px] text-muted-foreground">
-              Photos, préférences avancées et abonnement Premium arrivent en Phase 2.
+              Préférences avancées et abonnement Premium arrivent en Phase 2.
             </p>
           </>
         )}
