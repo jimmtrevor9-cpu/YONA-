@@ -4,7 +4,11 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 const likeProfileInput = z.object({
-  receiverId: z.string().uuid(),
+  // Forme canonique (minuscules) : « ABC… » et « abc… » désignent le même membre.
+  receiverId: z
+    .string()
+    .uuid()
+    .transform((value) => value.toLowerCase()),
 });
 
 /** Enregistre uniquement l'intention Like de la personne connectée. */
