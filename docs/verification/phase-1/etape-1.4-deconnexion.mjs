@@ -112,6 +112,12 @@ for (const path of ["/discover", "/search", "/profile"]) {
   const ctx = await browser.newContext();
   const page = await login(ctx, users.A);
   await page.goto(`${BASE}/profile`, { waitUntil: "networkidle" });
+  // Le prénom s'affiche une fois le profil chargé : on attend qu'il soit rempli.
+  const filled = () =>
+    page
+      .waitForFunction(() => document.querySelector("#firstName")?.value, null, { timeout: 5000 })
+      .catch(() => {});
+  await filled();
   const aSeen = await page
     .locator("#firstName")
     .inputValue()
@@ -122,7 +128,7 @@ for (const path of ["/discover", "/search", "/profile"]) {
   await page.click("button[type=submit]");
   await page.waitForURL(/\/discover$/, { timeout: 8000 });
   await page.goto(`${BASE}/profile`, { waitUntil: "networkidle" });
-  await page.waitForTimeout(800);
+  await filled();
   const bSeen = await page
     .locator("#firstName")
     .inputValue()

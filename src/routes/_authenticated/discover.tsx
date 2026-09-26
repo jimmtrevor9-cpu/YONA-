@@ -11,7 +11,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { discoverFeedQuery } from "@/features/profiles/discovery";
 import { likeProfile } from "@/features/profiles/likes.functions";
-import { sentLikesQuery } from "@/features/profiles/likes";
+import {
+  isProfileUnavailableError,
+  likeErrorMessage,
+  sentLikesQuery,
+} from "@/features/profiles/likes";
 import { myProfileQuery } from "@/features/profiles/queries";
 import { profileVisibilityState } from "@/features/profiles/visibility";
 import { APP_NAME } from "@/lib/config";
@@ -66,8 +70,12 @@ function DiscoverPage() {
       );
       toast.success("Like envoyé.");
     },
-    onError: () => {
-      toast.error("Le Like n'a pas pu être envoyé. Réessayez dans un instant.");
+    onError: (error) => {
+      toast.error(likeErrorMessage(error));
+      // Profil devenu indisponible entre-temps : la liste est rechargée pour le retirer.
+      if (isProfileUnavailableError(error)) {
+        void queryClient.invalidateQueries({ queryKey: ["profiles", "discover-feed"] });
+      }
     },
   });
 

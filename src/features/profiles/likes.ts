@@ -19,3 +19,21 @@ export const sentLikesQuery = (userId: string) =>
     },
     staleTime: 60 * 1000,
   });
+
+/** Refus explicites renvoyés par le serveur (`likeProfile`) et affichés tels quels. */
+const LIKE_SERVER_MESSAGES = [
+  "Ce profil n'est plus disponible.",
+  "Vous ne pouvez pas liker votre propre profil.",
+];
+
+/** Message à afficher après l'échec d'un Like. */
+export function likeErrorMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : "";
+  return LIKE_SERVER_MESSAGES.includes(message)
+    ? message
+    : "Le Like n'a pas pu être envoyé. Réessayez dans un instant.";
+}
+
+/** Vrai si le profil visé n'est plus proposable (masqué, suspendu, bloqué…). */
+export const isProfileUnavailableError = (error: unknown) =>
+  error instanceof Error && error.message === LIKE_SERVER_MESSAGES[0];
