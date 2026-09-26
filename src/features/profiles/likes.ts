@@ -24,6 +24,8 @@ export const sentLikesQuery = (userId: string) =>
 const LIKE_SERVER_MESSAGES = [
   "Ce profil n'est plus disponible.",
   "Vous ne pouvez pas liker votre propre profil.",
+  "Vous ne pouvez pas passer votre propre profil.",
+  "Vous aimez déjà ce profil.",
 ];
 
 /** Message à afficher après l'échec d'un Like. */
@@ -37,3 +39,11 @@ export function likeErrorMessage(error: unknown): string {
 /** Vrai si le profil visé n'est plus proposable (masqué, suspendu, bloqué…). */
 export const isProfileUnavailableError = (error: unknown) =>
   error instanceof Error && error.message === LIKE_SERVER_MESSAGES[0];
+
+/** Message à afficher après l'échec d'un Pass. */
+export function passErrorMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : "";
+  return LIKE_SERVER_MESSAGES.includes(message)
+    ? message
+    : "Le Pass n'a pas pu être enregistré. Réessayez dans un instant.";
+}

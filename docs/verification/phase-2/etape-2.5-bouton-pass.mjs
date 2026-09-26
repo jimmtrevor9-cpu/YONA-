@@ -1,5 +1,5 @@
 // YONA — Phase 2 / Étape 2.5 — Vérification du bouton Pass (page Découverte).
-// L'enregistrement du Pass en base est l'objet de l'étape 2.6 : ici, aucune écriture attendue.
+// Depuis l'étape 2.6, chaque Pass est enregistré en base (type « pass »).
 // Usage : PLAYWRIGHT_ROOT="$(npm root -g)" node docs/verification/phase-2/etape-2.5-bouton-pass.mjs
 import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
@@ -40,7 +40,8 @@ const id = {
   d: mk("d", "female"),
 };
 sql(`insert into public.likes (sender_id, receiver_id) values ('${id.v}','${id.d}');`);
-const likesOfV = () => sql(`select count(*) from public.likes where sender_id='${id.v}'`);
+const likesOfV = () =>
+  sql(`select count(*) from public.likes where sender_id='${id.v}' and kind='like'`);
 
 // ---------- Navigateur ----------
 const browser = await chromium.launch();
@@ -150,15 +151,22 @@ check(
       .isVisible()),
 );
 
-// F. Portée (avant l'étape 2.6)
+// F. Portée
+for (
+  let i = 0;
+  i < 50 &&
+  sql(`select count(*) from public.likes where sender_id='${id.v}' and kind='pass'`) !== "5";
+  i++
+)
+  await page.waitForTimeout(100);
 check(
-  "Aucune écriture en base pour les Pass (enregistrement = étape 2.6)",
-  sql(`select count(*) from public.likes where sender_id='${id.v}'`) === "0",
+  "Les 5 Pass sont enregistrés en base (depuis l'étape 2.6)",
+  sql(`select count(*) from public.likes where sender_id='${id.v}' and kind='pass'`) === "5",
 );
 await page.reload({ waitUntil: "networkidle" });
 await page.waitForTimeout(1200);
 check(
-  "Après rechargement, les profils passés réapparaissent (attendu jusqu'à l'étape 2.6)",
+  "Après rechargement, les profils passés réapparaissent (exclusion = étape 2.7)",
   (await names()) === "Passa,Passb,Passc,Passd,Passw",
 );
 const other = await login("w");

@@ -11,10 +11,11 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { discoverFeedQuery } from "@/features/profiles/discovery";
-import { likeProfile } from "@/features/profiles/likes.functions";
+import { likeProfile, passProfile } from "@/features/profiles/likes.functions";
 import {
   isProfileUnavailableError,
   likeErrorMessage,
+  passErrorMessage,
   sentLikesQuery,
 } from "@/features/profiles/likes";
 import { myProfileQuery } from "@/features/profiles/queries";
@@ -42,6 +43,7 @@ function DiscoverPage() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const sendLike = useServerFn(likeProfile);
+  const sendPass = useServerFn(passProfile);
   // Seul un membre au profil finalisé et non suspendu peut parcourir les profils
   // (règle appliquée par le serveur ; ici, uniquement pour afficher le bon message).
   const { data: me, isLoading: isMeLoading } = useQuery({
@@ -80,12 +82,26 @@ function DiscoverPage() {
     },
   });
 
-  // Profils passés pendant cette visite : retirés de la liste affichée.
-  // (Leur enregistrement côté serveur est l'objet de l'étape 2.6.)
+  // Profils passés pendant cette visite : retirés tout de suite de la liste affichée,
+  // puis enregistrés côté serveur (réaffichés si l'enregistrement échoue).
   const [passedIds, setPassedIds] = useState<string[]>([]);
+  const passMutation = useMutation({
+    mutationFn: (receiverId: string) => sendPass({ data: { receiverId } }),
+    onError: (error, receiverId) => {
+      toast.error(passErrorMessage(error));
+      if (isProfileUnavailableError(error)) {
+        void queryClient.invalidateQueries({ queryKey: ["profiles", "discover-feed"] });
+      } else {
+        setPassedIds((current) => current.filter((id) => id !== receiverId));
+        void queryClient.invalidateQueries({ queryKey: ["likes", "sent"] });
+      }
+    },
+  });
   const handlePass = (profileId: string) => {
     if (likeMutation.isPending && likeMutation.variables === profileId) return;
-    setPassedIds((current) => (current.includes(profileId) ? current : [...current, profileId]));
+    if (passedIds.includes(profileId)) return;
+    setPassedIds((current) => [...current, profileId]);
+    passMutation.mutate(profileId);
   };
   const profiles = (data ?? []).filter((profile) => !passedIds.includes(profile.user_id));
 
