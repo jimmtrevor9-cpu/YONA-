@@ -1,6 +1,6 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/features/auth/AuthProvider";
+import { onboardingDataQuery } from "@/features/profiles/queries";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import { APP_NAME } from "@/lib/config";
@@ -51,25 +52,36 @@ function OnboardingPage() {
   const [maxAge, setMaxAge] = useState(40);
   const [relationshipGoal, setRelationshipGoal] = useState("");
 
+  // Pré-remplissage avec les données déjà enregistrées (prénom saisi à l'inscription,
+  // ou profil complet si l'onboarding est rouvert) pour ne jamais les écraser à vide.
+  const queryClient = useQueryClient();
+  const { data: saved } = useQuery({ ...onboardingDataQuery(userId), enabled: !!userId });
+  const [prefilled, setPrefilled] = useState(false);
+  useEffect(() => {
+    if (!saved || prefilled) return;
+    setPrefilled(true);
+    const { profile, faith, prefs } = saved;
+    setFirstName(profile?.first_name ?? "");
+    setGender(profile?.gender ?? "");
+    setBirthDate(profile?.birth_date ?? "");
+    setCity(profile?.city ?? "");
+    setCountry(profile?.country ?? "");
+    setBio(profile?.bio ?? "");
+    setDenomination(faith?.denomination ?? "");
+    setChurchAttendance(faith?.church_attendance ?? "");
+    setFaithImportance(faith?.faith_importance ?? "");
+    setMarriageVision(faith?.marriage_vision ?? "");
+    // Préférences : valeurs par défaut de l'onboarding tant qu'il n'a jamais été terminé.
+    if (profile?.onboarding_completed_at && prefs) {
+      setPreferredGender(prefs.preferred_gender ?? "");
+      setMinAge(prefs.min_age);
+      setMaxAge(prefs.max_age);
+      setRelationshipGoal(prefs.relationship_goal ?? "");
+    }
+  }, [saved, prefilled]);
+
   const finish = useMutation({
     mutationFn: async () => {
-      const profile = await supabase
-        .from("profiles")
-        .update({
-          first_name: firstName.trim() || null,
-          gender: gender || null,
-          birth_date: birthDate || null,
-          city: city.trim() || null,
-          country: country.trim() || null,
-          bio: bio.trim() || null,
-          onboarding_step: STEPS.length,
-          onboarding_completed_at: new Date().toISOString(),
-          status: "active",
-          visibility: "visible",
-        })
-        .eq("user_id", userId);
-      if (profile.error) throw profile.error;
-
       const faith = await supabase
         .from("christian_profiles")
         .update({
@@ -91,8 +103,28 @@ function OnboardingPage() {
         })
         .eq("user_id", userId);
       if (prefs.error) throw prefs.error;
+
+      // Le profil (qui devient actif et visible) est enregistré en dernier : un échec
+      // précédent ne laisse jamais un profil visible à moitié rempli.
+      const profile = await supabase
+        .from("profiles")
+        .update({
+          first_name: firstName.trim() || null,
+          gender: gender || null,
+          birth_date: birthDate || null,
+          city: city.trim() || null,
+          country: country.trim() || null,
+          bio: bio.trim() || null,
+          onboarding_step: STEPS.length,
+          onboarding_completed_at: new Date().toISOString(),
+          status: "active",
+          visibility: "visible",
+        })
+        .eq("user_id", userId);
+      if (profile.error) throw profile.error;
     },
     onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["profiles"] });
       toast.success("Votre profil est prêt.");
       navigate({ to: "/discover", replace: true });
     },
@@ -102,10 +134,10 @@ function OnboardingPage() {
   return (
     <main className="min-h-screen bg-background px-5 py-10">
       <div className="mx-auto w-full max-w-md">
-        <p className="eyebrow">Étape {step + 1} sur {STEPS.length}</p>
-        <h1 className="mt-2 font-display text-2xl font-semibold text-foreground">
-          {STEPS[step]}
-        </h1>
+        <p className="eyebrow">
+          Étape {step + 1} sur {STEPS.length}
+        </p>
+        <h1 className="mt-2 font-display text-2xl font-semibold text-foreground">{STEPS[step]}</h1>
 
         <div className="mt-4 flex gap-1.5">
           {STEPS.map((label, index) => (
@@ -280,11 +312,7 @@ function OnboardingPage() {
               Continuer
             </Button>
           ) : (
-            <Button
-              className="flex-1"
-              disabled={finish.isPending}
-              onClick={() => finish.mutate()}
-            >
+            <Button className="flex-1" disabled={finish.isPending} onClick={() => finish.mutate()}>
               {finish.isPending ? "Enregistrement…" : "Terminer"}
             </Button>
           )}

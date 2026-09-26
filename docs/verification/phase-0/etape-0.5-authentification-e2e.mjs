@@ -3,6 +3,7 @@
 // application buildée pour ce projet et servie sur BASE (outils/serveur-local.mjs).
 // Usage : PLAYWRIGHT_ROOT="$(npm root -g)" node docs/verification/phase-0/etape-0.5-authentification-e2e.mjs
 // Crée un compte de TEST local (domaine example.test) — jamais sur une base réelle.
+import { execSync } from "node:child_process";
 import { createRequire } from "node:module";
 
 const { chromium } = createRequire(`${process.env.PLAYWRIGHT_ROOT ?? ""}/`)("playwright");
@@ -81,12 +82,17 @@ ok("Connexion avant confirmation refusée (message FR)", t.includes("confirmer v
 const confirmLink = await lastMailLink(email, "confirm");
 ok("Email de confirmation reçu", !!confirmLink);
 await page.goto(confirmLink, { waitUntil: "networkidle" });
-await page.waitForURL(/\/discover/, { timeout: 10000 }).catch(() => {});
+await page.waitForURL(/\/onboarding/, { timeout: 10000 }).catch(() => {});
 ok(
-  "Lien de confirmation → session ouverte, arrivée sur /discover",
-  page.url().includes("/discover"),
+  "Lien de confirmation → session ouverte, arrivée sur la création du profil (/onboarding)",
+  page.url().includes("/onboarding"),
   page.url(),
 );
+// Profil considéré comme créé (la création du profil est testée à l'étape 1.8).
+execSync(
+  `docker exec supabase_db_yona-local psql -U postgres -c "update public.profiles set onboarding_completed_at = now() where user_id = (select id from auth.users where email = '${email}')"`,
+);
+await page.goto(`${BASE}/discover`, { waitUntil: "networkidle" });
 
 // 5. Persistance de session après rechargement
 await page.reload({ waitUntil: "networkidle" });

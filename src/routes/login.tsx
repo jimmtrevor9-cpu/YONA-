@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { signIn, translateAuthError } from "@/features/auth/auth.service";
+import { getPostLoginPath } from "@/features/profiles/queries";
 import { APP_NAME } from "@/lib/config";
 
 export const Route = createFileRoute("/login")({
@@ -27,26 +28,34 @@ export const Route = createFileRoute("/login")({
 
 function LoginPage() {
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [pending, setPending] = useState(false);
 
+  // Déjà connecté (ou arrivée depuis le lien de confirmation) : profil à créer → onboarding.
   useEffect(() => {
-    if (isAuthenticated) navigate({ to: "/discover", replace: true });
-  }, [isAuthenticated, navigate]);
+    if (!isAuthenticated || !user) return;
+    let cancelled = false;
+    void getPostLoginPath(user.id).then((to) => {
+      if (!cancelled) navigate({ to, replace: true });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated, user, navigate]);
 
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
     setPending(true);
-    const { error } = await signIn({ email: email.trim(), password });
+    const { data, error } = await signIn({ email: email.trim(), password });
     setPending(false);
     if (error) {
       toast.error(translateAuthError(error.message));
       return;
     }
     toast.success("Bon retour parmi nous.");
-    navigate({ to: "/discover", replace: true });
+    navigate({ to: await getPostLoginPath(data.user.id), replace: true });
   }
 
   return (

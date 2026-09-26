@@ -20,7 +20,7 @@ const check = (name, pass, detail = "") => {
 const email = `test-connexion-${Date.now()}@example.test`;
 const pwd = "TestConn!2026";
 sql(
-  `insert into auth.users (instance_id,id,aud,role,email,encrypted_password,email_confirmed_at,raw_app_meta_data,raw_user_meta_data,created_at,updated_at,confirmation_token,recovery_token,email_change_token_new,email_change) values ('00000000-0000-0000-0000-000000000000',gen_random_uuid(),'authenticated','authenticated','${email}',crypt('${pwd}',gen_salt('bf')),now(),'{"provider":"email","providers":["email"]}','{"first_name":"Conn"}',now(),now(),'','','','');`,
+  `insert into auth.users (instance_id,id,aud,role,email,encrypted_password,email_confirmed_at,raw_app_meta_data,raw_user_meta_data,created_at,updated_at,confirmation_token,recovery_token,email_change_token_new,email_change) values ('00000000-0000-0000-0000-000000000000',gen_random_uuid(),'authenticated','authenticated','${email}',crypt('${pwd}',gen_salt('bf')),now(),'{"provider":"email","providers":["email"]}','{"first_name":"Conn"}',now(),now(),'','','',''); update public.profiles p set onboarding_completed_at = now() from auth.users a where a.id = p.user_id and a.email like 'test-%@example.test' and p.onboarding_completed_at is null;`,
 );
 
 const browser = await chromium.launch();
