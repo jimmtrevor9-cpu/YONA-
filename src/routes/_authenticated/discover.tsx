@@ -76,6 +76,7 @@ function DiscoverPage() {
       if (result.mutual && result.matchId && !result.alreadyLiked) {
         const profile = data?.find((p) => p.user_id === result.receiverId);
         setNewMatchName(profile?.first_name ?? "cette personne");
+        void queryClient.invalidateQueries({ queryKey: ["matches"] });
         return;
       }
       toast.success(result.alreadyLiked ? "Vous aimez déjà ce profil." : "Like envoyé.");
