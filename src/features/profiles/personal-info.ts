@@ -9,6 +9,8 @@ export const MIN_AGE = 18;
 export const FIRST_NAME_MAX_LENGTH = 60;
 export const PLACE_MAX_LENGTH = 100;
 export const OLDEST_BIRTH_DATE = "1900-01-01";
+/** Présentation (bio) : contrainte profiles_bio_length. */
+export const BIO_MAX_LENGTH = 2000;
 
 const pad = (n: number) => String(n).padStart(2, "0");
 
@@ -47,6 +49,9 @@ export function personalInfoServerError(message: string | undefined): string | n
     return `${APP_NAME} est réservé aux personnes majeures (${MIN_AGE} ans et plus).`;
   }
   if (m.includes("invalid_birth_date")) return "Date de naissance invalide.";
+  if (m.includes("profiles_bio_length")) {
+    return `La présentation est limitée à ${BIO_MAX_LENGTH} caractères.`;
+  }
   if (m.includes("profiles_city_length") || m.includes("profiles_country_length")) {
     return `La ville et le pays sont limités à ${PLACE_MAX_LENGTH} caractères.`;
   }

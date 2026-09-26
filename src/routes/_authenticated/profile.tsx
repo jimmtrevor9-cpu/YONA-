@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/features/auth/AuthProvider";
 import {
+  BIO_MAX_LENGTH,
   FIRST_NAME_MAX_LENGTH,
   OLDEST_BIRTH_DATE,
   PLACE_MAX_LENGTH,
@@ -178,6 +179,7 @@ function ProfilePage() {
                 <Label htmlFor="bio">Présentation</Label>
                 <Textarea
                   id="bio"
+                  maxLength={BIO_MAX_LENGTH}
                   rows={5}
                   value={bio}
                   onChange={(e) => setBio(e.target.value)}
