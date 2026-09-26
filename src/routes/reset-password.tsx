@@ -27,29 +27,42 @@ export const Route = createFileRoute("/reset-password")({
   component: ResetPasswordPage,
 });
 
+const LINK_INVALID_MESSAGE =
+  "Ce lien n'est plus valable. Demandez un nouveau lien depuis « Mot de passe oublié ? ».";
+
 function ResetPasswordPage() {
   const navigate = useNavigate();
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [pending, setPending] = useState(false);
   const [recovery, setRecovery] = useState(true);
+  const [linkExpired, setLinkExpired] = useState(false);
 
   useEffect(() => {
     const hash = window.location.hash;
     setRecovery(hash.includes("type=recovery") || hash.includes("access_token"));
+    // Lien expiré ou déjà utilisé : Supabase renvoie ici avec « #error=…&error_code=otp_expired ».
+    setLinkExpired(hash.includes("error="));
 
     // Le client Supabase consomme le jeton du lien (et vide l'URL) avant cet effet :
     // on reconnaît donc aussi le lien via l'événement de récupération ou la session ouverte.
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "PASSWORD_RECOVERY" || session) setRecovery(true);
+      if (event === "PASSWORD_RECOVERY" || session) {
+        setRecovery(true);
+        setLinkExpired(false);
+      }
     });
     return () => subscription.unsubscribe();
   }, []);
 
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
+    if (!recovery) {
+      toast.error(LINK_INVALID_MESSAGE);
+      return;
+    }
     if (password.length < 8) {
       toast.error("Le mot de passe doit contenir au moins 8 caractères.");
       return;
@@ -76,7 +89,9 @@ function ResetPasswordPage() {
       subtitle={
         recovery
           ? "Choisissez un mot de passe solide, différent de l'ancien."
-          : "Ouvrez cette page depuis le lien reçu par email."
+          : linkExpired
+            ? "Ce lien a expiré ou a déjà été utilisé. Demandez-en un nouveau depuis « Mot de passe oublié ? »."
+            : "Ouvrez cette page depuis le lien reçu par email."
       }
       footer={
         <Link to="/login" className="text-gold underline-offset-4 hover:underline">

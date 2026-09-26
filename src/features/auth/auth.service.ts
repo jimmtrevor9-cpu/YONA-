@@ -15,7 +15,10 @@ export function translateAuthError(message: string): string {
       : "Pour votre sécurité, patientez une minute avant de réessayer.";
   }
   if (m.includes("rate limit")) return "Trop de tentatives. Réessayez dans quelques minutes.";
-  if (m.includes("same password")) return "Le nouveau mot de passe doit être différent de l'ancien.";
+  if (m.includes("same password") || m.includes("should be different from the old"))
+    return "Le nouveau mot de passe doit être différent de l'ancien.";
+  if (m.includes("session missing"))
+    return "Ce lien n'est plus valable. Demandez un nouveau lien depuis « Mot de passe oublié ? ».";
   return "Une erreur est survenue. Veuillez réessayer.";
 }
 
