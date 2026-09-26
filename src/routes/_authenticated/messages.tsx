@@ -65,40 +65,44 @@ function MessagesPage() {
               const name = conversation.firstName ?? "Membre";
               const last = conversation.lastMessage;
               return (
-                <li
-                  key={conversation.conversationId}
-                  className="panel gold-thread flex items-center gap-4 p-4"
-                >
-                  <Avatar className="size-12 ring-1 ring-gold/20">
-                    {conversation.photoUrl ? (
-                      <AvatarImage
-                        src={conversation.photoUrl}
-                        alt={`Photo de ${name}`}
-                        className="object-cover"
-                      />
-                    ) : null}
-                    <AvatarFallback className="bg-accent font-display text-lg text-gold-soft">
-                      {name.charAt(0).toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-baseline justify-between gap-2">
-                      <h2 className="truncate font-display text-base font-semibold text-foreground">
-                        {name}
-                      </h2>
-                      <time
-                        dateTime={conversation.activityAt}
-                        className="shrink-0 text-[11px] text-muted-foreground"
-                      >
-                        {formatActivity(conversation.activityAt)}
-                      </time>
+                <li key={conversation.conversationId}>
+                  <Link
+                    to="/messages/$conversationId"
+                    params={{ conversationId: conversation.conversationId }}
+                    aria-label={`Ouvrir la conversation avec ${name}`}
+                    className="panel gold-thread flex items-center gap-4 p-4 transition-colors hover:bg-surface-2"
+                  >
+                    <Avatar className="size-12 ring-1 ring-gold/20">
+                      {conversation.photoUrl ? (
+                        <AvatarImage
+                          src={conversation.photoUrl}
+                          alt={`Photo de ${name}`}
+                          className="object-cover"
+                        />
+                      ) : null}
+                      <AvatarFallback className="bg-accent font-display text-lg text-gold-soft">
+                        {name.charAt(0).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <h2 className="truncate font-display text-base font-semibold text-foreground">
+                          {name}
+                        </h2>
+                        <time
+                          dateTime={conversation.activityAt}
+                          className="shrink-0 text-[11px] text-muted-foreground"
+                        >
+                          {formatActivity(conversation.activityAt)}
+                        </time>
+                      </div>
+                      <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                        {last
+                          ? `${last.fromMe ? "Vous : " : ""}${last.content}`
+                          : `Nouveau Match : dites bonjour à ${name} !`}
+                      </p>
                     </div>
-                    <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                      {last
-                        ? `${last.fromMe ? "Vous : " : ""}${last.content}`
-                        : `Nouveau Match : dites bonjour à ${name} !`}
-                    </p>
-                  </div>
+                  </Link>
                 </li>
               );
             })}

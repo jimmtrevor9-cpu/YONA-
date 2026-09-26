@@ -101,3 +101,77 @@ export const myConversationsQuery = (userId: string) =>
     },
     staleTime: 15 * 1000,
   });
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export interface ConversationHeader {
+  conversationId: string;
+  matchId: string;
+  status: "open" | "locked" | "closed";
+  userId: string;
+  firstName: string | null;
+  photoUrl: string | null;
+}
+
+/**
+ * Conversation ouverte depuis la messagerie. `null` si l'adresse est mal formée, si la
+ * conversation n'existe pas, est fermée, n'appartient pas à la personne connectée, si son
+ * Match n'est plus actif ou si le profil de l'autre personne n'est plus visible
+ * (règles d'accès existantes, mêmes conditions que la liste des conversations).
+ */
+export const conversationQuery = (userId: string, conversationId: string) =>
+  queryOptions({
+    queryKey: ["conversations", "one", userId, conversationId],
+    queryFn: async (): Promise<ConversationHeader | null> => {
+      if (!UUID_PATTERN.test(conversationId)) return null;
+      const { data: conversation, error } = await supabase
+        .from("conversations")
+        .select("id, match_id, user_1_id, user_2_id, status")
+        .eq("id", conversationId)
+        .neq("status", "closed")
+        .maybeSingle();
+      if (error) throw error;
+      if (!conversation) return null;
+      const other =
+        conversation.user_1_id === userId ? conversation.user_2_id : conversation.user_1_id;
+
+      const [matchRes, profileRes, photoRes] = await Promise.all([
+        supabase
+          .from("matches")
+          .select("id")
+          .eq("id", conversation.match_id)
+          .eq("status", "active")
+          .maybeSingle(),
+        supabase.from("profiles").select("first_name").eq("user_id", other).maybeSingle(),
+        supabase
+          .from("photos")
+          .select("storage_path")
+          .eq("user_id", other)
+          .eq("is_primary", true)
+          .eq("status", "approved")
+          .maybeSingle(),
+      ]);
+      if (matchRes.error) throw matchRes.error;
+      if (profileRes.error) throw profileRes.error;
+      if (photoRes.error) throw photoRes.error;
+      if (!matchRes.data || !profileRes.data) return null;
+
+      let photoUrl: string | null = null;
+      if (photoRes.data) {
+        const { data: signed } = await supabase.storage
+          .from("photos")
+          .createSignedUrl(photoRes.data.storage_path, 60 * 60);
+        photoUrl = signed?.signedUrl ?? null;
+      }
+
+      return {
+        conversationId: conversation.id,
+        matchId: conversation.match_id,
+        status: conversation.status,
+        userId: other,
+        firstName: profileRes.data.first_name,
+        photoUrl,
+      };
+    },
+    staleTime: 30 * 1000,
+  });
