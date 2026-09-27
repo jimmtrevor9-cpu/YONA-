@@ -204,6 +204,13 @@
       "when": 1790532000000,
       "tag": "0028_phase6_numeros_classiques",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1790535600000,
+      "tag": "0029_phase6_formats_internationaux",
+      "breakpoints": true
     }
   ]
 }
