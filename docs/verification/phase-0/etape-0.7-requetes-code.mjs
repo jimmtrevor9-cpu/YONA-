@@ -176,49 +176,53 @@ noErr("likes.ts:11 — Likes envoyés", sent, `${sent.data?.length} Like(s)`);
 check("Un seul Like en base après 2 envois", sent.data?.length === 1);
 // ---- quotas.ts : favoris ----
 noErr(
-  "quotas.ts:74 — ajouter un favori",
+  "quotas.ts:66 — ajouter un favori",
   await A.c.from("favorites").insert({ user_id: A.id, favorite_user_id: B.id }),
 );
 const favs = await A.c
   .from("favorites")
   .select("favorite_user_id, created_at")
   .order("created_at", { ascending: false });
-noErr("quotas.ts:94 — lister mes favoris", favs, `${favs.data?.length}`);
+noErr("quotas.ts:86 — lister mes favoris", favs, `${favs.data?.length}`);
 // ---- Fonctions (RPC) appelées par le code ----
 const rpcs = [
   ["roles.ts:9 — has_role", A, "has_role", { _user_id: A.id, _role: "admin" }, false],
   ["presence.ts:17 — touch_activity", A, "touch_activity", undefined],
   ["presence.ts:21 — get_presence", A, "get_presence", { _user_id: B.id }],
-  ["quotas.ts:62 — get_ai_quota", A, "get_ai_quota", { _feature: "roi_salomon" }],
-  ["quotas.ts:69 — consume_ai_quota", A, "consume_ai_quota", { _feature: "roi_salomon" }],
+  ["quotas.ts:48 — get_ai_quota", A, "get_ai_quota", { _feature: "roi_salomon" }],
+  ["quotas.ts:55 — consume_ai_quota", A, "consume_ai_quota", { _feature: "roi_salomon" }],
   [
-    "quotas.ts:36 — get_conversation_quota (conversation inexistante)",
+    "quotas.ts:30 — get_conversation_quota (conversation inexistante)",
     A,
     "get_conversation_quota",
     { _conversation_id: "00000000-0000-4000-8000-000000000000" },
   ],
   [
-    "quotas.ts:44 — consume_free_message (conversation inexistante)",
-    A,
-    "consume_free_message",
-    { _conversation_id: "00000000-0000-4000-8000-000000000000" },
-  ],
-  [
-    "quotas.ts:53 — has_active_conversation_unlock",
+    "quotas.ts:39 — has_active_conversation_unlock",
     A,
     "has_active_conversation_unlock",
     { _conversation_id: "00000000-0000-4000-8000-000000000000" },
   ],
-  ["quotas.ts:115 — record_profile_visit", A, "record_profile_visit", { _visited_user_id: B.id }],
-  ["quotas.ts:108 — get_favorited_by (B, gratuit)", B, "get_favorited_by", undefined],
-  ["quotas.ts:122 — get_profile_visitors (B, gratuit)", B, "get_profile_visitors", undefined],
+  ["quotas.ts:101 — record_profile_visit", A, "record_profile_visit", { _visited_user_id: B.id }],
+  ["quotas.ts:94 — get_favorited_by (B, gratuit)", B, "get_favorited_by", undefined],
+  ["quotas.ts:109 — get_profile_visitors (B, gratuit)", B, "get_profile_visitors", undefined],
 ];
 for (const [label, u, fn, args] of rpcs) {
   const r = await u.c.rpc(fn, args);
   noErr(label, r, `→ ${JSON.stringify(r.data)}`.slice(0, 110));
 }
+// Depuis l'étape 5.1, le compteur de messages gratuits n'est modifiable que par l'envoi
+// d'un message : l'ancienne fonction `consume_free_message` est refusée aux membres.
+const consume = await A.c.rpc("consume_free_message", {
+  _conversation_id: "00000000-0000-4000-8000-000000000000",
+});
+check(
+  "consume_free_message (retirée du code) : refusée aux membres",
+  !!consume.error && /permission denied/.test(consume.error.message),
+  consume.error?.message ?? "",
+);
 noErr(
-  "quotas.ts:84 — retirer le favori",
+  "quotas.ts:76 — retirer le favori",
   await A.c.from("favorites").delete().eq("user_id", A.id).eq("favorite_user_id", B.id),
 );
 

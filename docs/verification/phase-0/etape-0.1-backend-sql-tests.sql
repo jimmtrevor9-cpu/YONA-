@@ -15,23 +15,32 @@ insert into public.payments (id,user_id,type,amount,provider,status) values ('dd
 insert into public.subscriptions (user_id,plan,status,starts_at,expires_at,payment_id) values ('cccccccc-0000-4000-8000-000000000003','premium_monthly','active',now()-interval '1 day',now()+interval '29 days','dddddddd-0000-4000-8000-000000000004');
 select 'T3 is_premium C=true, A=false', public.is_premium('cccccccc-0000-4000-8000-000000000003') and not public.is_premium('aaaaaaaa-0000-4000-8000-000000000001');
 insert into public.matches (id,user_1_id,user_2_id) values ('eeeeeeee-0000-4000-8000-000000000005','aaaaaaaa-0000-4000-8000-000000000001','bbbbbbbb-0000-4000-8000-000000000002');
-insert into public.conversations (id,match_id,user_1_id,user_2_id) values ('ffffffff-0000-4000-8000-000000000006','eeeeeeee-0000-4000-8000-000000000005','aaaaaaaa-0000-4000-8000-000000000001','bbbbbbbb-0000-4000-8000-000000000002') on conflict (match_id) do update set id = excluded.id; -- depuis l'étape 4.1, la base crée déjà la conversation du Match
+-- Depuis l'étape 4.1, la base crée déjà la conversation du Match (et, depuis 5.1, ses compteurs) : remplacée par une conversation à identifiant fixe.
+delete from public.conversations where match_id = 'eeeeeeee-0000-4000-8000-000000000005';
+insert into public.conversations (id,match_id,user_1_id,user_2_id) values ('ffffffff-0000-4000-8000-000000000006','eeeeeeee-0000-4000-8000-000000000005','aaaaaaaa-0000-4000-8000-000000000001','bbbbbbbb-0000-4000-8000-000000000002');
 
 set local role authenticated;
 -- === Utilisateur A ===
 select set_config('request.jwt.claim.sub','aaaaaaaa-0000-4000-8000-000000000001',true);
 select 'T4 has_role(A,user)=true, is_admin()=false', public.has_role(auth.uid(),'user') and not public.is_admin();
 select 'T5 quota conv A initial', public.get_conversation_quota('ffffffff-0000-4000-8000-000000000006');
+-- Depuis l'étape 5.1, consume_free_message n'est plus appelable par les membres : T6-T7 et
+-- T9 l'appellent en rôle service (même identité, auth.uid() inchangé).
+select 'T5b consume_free_message refusée aux membres', not has_function_privilege('authenticated', 'public.consume_free_message(uuid)', 'execute');
+set local role service_role;
 select 'T6 A msg1', public.consume_free_message('ffffffff-0000-4000-8000-000000000006')->>'used';
 select 'T6 A msg2', public.consume_free_message('ffffffff-0000-4000-8000-000000000006')->>'used';
 select 'T6 A msg3', public.consume_free_message('ffffffff-0000-4000-8000-000000000006')->>'used';
 select 'T7 A msg4 refusé', public.consume_free_message('ffffffff-0000-4000-8000-000000000006');
+set local role authenticated;
 -- === Utilisateur B : quota indépendant ===
 select set_config('request.jwt.claim.sub','bbbbbbbb-0000-4000-8000-000000000002',true);
 select 'T8 B quota indépendant', public.get_conversation_quota('ffffffff-0000-4000-8000-000000000006');
 -- === Utilisateur C : pas participant ===
 select set_config('request.jwt.claim.sub','cccccccc-0000-4000-8000-000000000003',true);
+set local role service_role;
 select 'T9 C non participant', public.consume_free_message('ffffffff-0000-4000-8000-000000000006');
+set local role authenticated;
 -- === IA ===
 select set_config('request.jwt.claim.sub','aaaaaaaa-0000-4000-8000-000000000001',true);
 select 'T10 IA A q1..q4', public.consume_ai_quota()->>'allowed', public.consume_ai_quota()->>'allowed', public.consume_ai_quota()->>'allowed', public.consume_ai_quota();

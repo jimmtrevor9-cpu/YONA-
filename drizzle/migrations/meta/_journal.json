@@ -169,6 +169,13 @@
       "when": 1790514000000,
       "tag": "0023_phase4_date_dernier_message",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1790517600000,
+      "tag": "0024_phase5_compteur_individuel",
+      "breakpoints": true
     }
   ]
 }

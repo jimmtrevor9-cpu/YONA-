@@ -34,15 +34,6 @@ export async function getConversationQuota(conversationId: string): Promise<Conv
   return data as unknown as ConversationQuota;
 }
 
-/** Consomme un message gratuit (ou confirme l'accès illimité Premium / déblocage actif). */
-export async function consumeFreeMessage(conversationId: string): Promise<ConversationQuota> {
-  const { data, error } = await supabase.rpc("consume_free_message", {
-    _conversation_id: conversationId,
-  });
-  if (error) throw error;
-  return data as unknown as ConversationQuota;
-}
-
 /** Un déblocage payé est-il actif sur cette conversation (valable pour les deux participants) ? */
 export async function hasActiveConversationUnlock(conversationId: string): Promise<boolean> {
   const { data, error } = await supabase.rpc("has_active_conversation_unlock", {
