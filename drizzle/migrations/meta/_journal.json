@@ -211,6 +211,13 @@
       "when": 1790535600000,
       "tag": "0029_phase6_formats_internationaux",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1790539200000,
+      "tag": "0030_phase6_espaces",
+      "breakpoints": true
     }
   ]
 }
