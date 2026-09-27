@@ -2,7 +2,6 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeft, Briefcase, MapPin } from "lucide-react";
 import { useState } from "react";
-import { toast } from "sonner";
 
 import { AppHeader } from "@/components/AppHeader";
 import { BottomNav } from "@/components/BottomNav";
@@ -11,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { myFavoriteIdsQuery } from "@/features/favorites/queries";
+import { useFavoriteToggle } from "@/features/favorites/useFavoriteToggle";
 import { matchProfileQuery } from "@/features/matches/queries";
 import { computeAge } from "@/features/profiles/queries";
 import { APP_NAME } from "@/lib/config";
@@ -40,6 +40,7 @@ function MatchProfilePage() {
     ...myFavoriteIdsQuery(user?.id ?? ""),
     enabled: !!user?.id,
   });
+  const favorite = useFavoriteToggle(user?.id ?? "");
   const { data, isLoading, isError } = useQuery({
     ...matchProfileQuery(user?.id ?? "", matchId),
     enabled: !!user?.id,
@@ -125,7 +126,10 @@ function MatchProfilePage() {
                 <FavoriteButton
                   name={name}
                   isFavorite={favoriteIds?.has(data.userId) ?? false}
-                  onToggle={() => toast.info("L'ajout aux favoris arrive très bientôt.")}
+                  isPending={favorite.pendingId === data.userId}
+                  onToggle={() =>
+                    favorite.toggle(data.userId, favoriteIds?.has(data.userId) ?? false)
+                  }
                   className="-mr-2"
                 />
               </div>

@@ -54,18 +54,17 @@ check(
       .getByRole("button", { name: /^Passer le profil/ })
       .count()) === 1,
 );
-await star("Fagrace").click();
-const t = await toastText(pv);
-check(
-  "Clic : « L'ajout aux favoris arrive très bientôt. » (enregistrement : étape 8.2)",
-  t.includes("L'ajout aux favoris arrive très bientôt."),
-  t,
-);
-check("Rien n'est enregistré par ce clic", favCount() === "1");
 await star("Fagrace").focus();
 check(
   "Bouton atteignable au clavier",
   await star("Fagrace").evaluate((el) => el === document.activeElement),
+);
+await star("Fagrace").click();
+const t = await toastText(pv);
+check(
+  "Clic : le favori est désormais enregistré (étape 8.2)",
+  t.includes("Ajouté à vos favoris.") && favCount() === "2",
+  t,
 );
 
 // B. Profil d'un Match

@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { myFavoriteIdsQuery } from "@/features/favorites/queries";
+import { useFavoriteToggle } from "@/features/favorites/useFavoriteToggle";
 import { discoverFeedQuery } from "@/features/profiles/discovery";
 import { likeProfile, passProfile } from "@/features/profiles/likes.functions";
 import {
@@ -52,10 +53,8 @@ function DiscoverPage() {
     ...myFavoriteIdsQuery(user?.id ?? ""),
     enabled: !!user?.id,
   });
-  // L'enregistrement des favoris arrive à l'étape 8.2 : en attendant, le bouton l'indique.
-  const handleToggleFavorite = () => {
-    toast.info("L'ajout aux favoris arrive très bientôt.");
-  };
+  const favorite = useFavoriteToggle(user?.id ?? "");
+
   const { data: me, isLoading: isMeLoading } = useQuery({
     ...myProfileQuery(user?.id ?? ""),
     enabled: !!user?.id,
@@ -170,7 +169,10 @@ function DiscoverPage() {
               onLike={handleLike}
               onPass={handlePass}
               isFavorite={favoriteIds?.has(profile.user_id) ?? false}
-              onToggleFavorite={handleToggleFavorite}
+              isFavoritePending={favorite.pendingId === profile.user_id}
+              onToggleFavorite={(profileId) =>
+                favorite.toggle(profileId, favoriteIds?.has(profileId) ?? false)
+              }
             />
           ))
         ) : (

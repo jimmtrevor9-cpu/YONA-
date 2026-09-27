@@ -28,7 +28,7 @@ un écran. Aucun bouton Favori n'existait.
 L'enregistrement est l'étape 8.2 : en attendant, un clic affiche « L'ajout aux favoris
 arrive très bientôt. » et n'enregistre rien.
 
-## Tests (`etape-8.1-bouton-favori.mjs`) — 11/11
+## Tests (`etape-8.1-bouton-favori.mjs`) — 11/11 (10/10 depuis l'étape 8.2)
 
 | Test | Résultat |
 |---|---|
@@ -52,3 +52,6 @@ Après correction — séries touchant la découverte, les Likes, les Matchs et 
 (Phases 4 à 7 non concernées ; série complète prévue en fin de phase 8.)
 
 Type-check : 0 erreur · Build : réussi · Lint : 1 112 (inchangé).
+
+> Depuis l'étape 8.2, le clic enregistre réellement le favori : le test vérifie désormais
+> le message « Ajouté à vos favoris. » et l'enregistrement (10/10).
