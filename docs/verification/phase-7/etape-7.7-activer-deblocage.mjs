@@ -1,5 +1,5 @@
-// YONA — Phase 5 / Étape 7.6 — Vérification de l'enregistrement du paiement confirmé.
-// Usage : PLAYWRIGHT_ROOT="$(npm root -g)" node docs/verification/phase-7/etape-7.6-paiement-confirme.mjs
+// YONA — Phase 5 / Étape 7.7 — Vérification de l'activation du déblocage.
+// Usage : PLAYWRIGHT_ROOT="$(npm root -g)" node docs/verification/phase-7/etape-7.7-activer-deblocage.mjs
 import { execFileSync } from "node:child_process";
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
@@ -37,12 +37,12 @@ const check = (name, pass, detail = "") => {
 };
 
 // ---------- Comptes de test temporaires ----------
-sql("delete from auth.users where email like 'test-u76-%@example.test';");
+sql("delete from auth.users where email like 'test-u77-%@example.test';");
 const stamp = Date.now();
-const PWD = "TestU76!2026";
+const PWD = "TestU77!2026";
 const emails = {};
 const mk = (tag, gender, name) => {
-  const e = `test-u76-${tag}-${stamp}@example.test`;
+  const e = `test-u77-${tag}-${stamp}@example.test`;
   emails[tag] = e;
   sql(
     `insert into auth.users (instance_id,id,aud,role,email,encrypted_password,email_confirmed_at,raw_app_meta_data,raw_user_meta_data,created_at,updated_at,confirmation_token,recovery_token,email_change_token_new,email_change) values ('00000000-0000-0000-0000-000000000000',gen_random_uuid(),'authenticated','authenticated','${e}',crypt('${PWD}',gen_salt('bf')),now(),'{"provider":"email","providers":["email"]}','{"first_name":"${name}"}',now(),now(),'','','','');
@@ -195,276 +195,150 @@ const startPayment = (tag, c) =>
     _conversation_id: c,
     _provider: "test",
   });
+const unlocks = (c) =>
+  sql(
+    `select string_agg(status || ':' || amount || currency || ':' || (expires_at - starts_at) || ':' || (paid_by_user_id::text) , ',' order by starts_at) from public.conversation_unlocks where conversation_id='${c}'`,
+  );
+const confirm = (pid, ref) =>
+  service("confirm_payment", {
+    _payment_id: pid,
+    _provider: "test",
+    _provider_transaction_id: ref,
+    _amount: 100,
+    _currency: "USD",
+  });
 for (let i = 1; i <= 3; i++) await send("v", cA, `Message ${i}`);
 
-// A. Parcours complet dans l'application (mode test)
+// A. Activation depuis l'application
 const pv = await login("v");
-let captured = null;
-pv.on("request", (q) => {
-  if (
-    q.url().includes("/_serverFn/") &&
-    q.method() === "POST" &&
-    (q.postData() ?? "").includes("paymentId")
-  )
-    captured = { url: q.url(), headers: q.headers(), body: q.postData() };
-});
 await pv.goto(`${BASE}/messages/${cA}/debloquer`, { waitUntil: "networkidle" });
 await pv.getByRole("button", { name: "Payer 1 USD" }).click();
 await pv.getByTestId("payment-pending").waitFor({ timeout: 8000 });
-check(
-  "Paiement en attente : bouton « Confirmer le paiement de test (aucun argent réel) » (mode test)",
-  (await pv
-    .getByRole("button", { name: "Confirmer le paiement de test (aucun argent réel)" })
-    .count()) === 1,
-);
+check("Avant confirmation : aucun déblocage", (unlocks(cA) ?? "") === "");
+const before = sql("select now()");
 await pv.getByRole("button", { name: "Confirmer le paiement de test (aucun argent réel)" }).click();
 await pv
   .getByTestId("payment-confirmed")
   .waitFor({ timeout: 8000 })
   .catch(() => {});
 check(
-  "Confirmation : « Paiement confirmé. » — « Votre paiement de 1 USD a bien été enregistré. »",
+  "Écran : « Le déblocage de la conversation avec Qgrace est activé pour 3 jours. »",
   ((await pv.getByTestId("payment-confirmed").textContent()) ?? "").includes(
-    "Votre paiement de 1 USD a bien été enregistré.",
+    "Le déblocage de la conversation avec Qgrace est activé pour 3 jours.",
   ),
 );
-const p = pay("v").split("|");
 check(
-  "Paiement « réussi » en base, avec référence du prestataire et date de confirmation",
-  p[0] === "succeeded" && p[1].startsWith("test-") && p[2] === "true",
-  pay("v"),
+  "Déblocage créé : actif, 1 USD, durée 3 jours exactement, payé par Paul",
+  unlocks(cA) === `active:100USD:3 days:${id.v}`,
+  unlocks(cA),
 );
 check(
-  "Montant et devise inchangés (100 cents, USD)",
-  sql(`select amount || currency from public.payments where user_id='${id.v}'`) === "100USD",
-);
-// Depuis l'étape 7.7, la confirmation active un (seul) déblocage lié au paiement.
-check(
-  "Un seul déblocage lié à ce paiement (activation : étape 7.7)",
+  "Commence à la confirmation (heure du serveur) et lié au paiement",
   sql(
-    `select count(*) from public.conversation_unlocks u join public.payments p on p.id=u.payment_id where p.user_id='${id.v}'`,
-  ) === "1",
+    `select (u.starts_at >= '${before}'::timestamptz and u.starts_at <= now() and u.payment_id = p.id)::text from public.conversation_unlocks u join public.payments p on p.user_id='${id.v}' where u.conversation_id='${cA}'`,
+  ) === "true",
 );
-const replay = await fetch(captured.url, {
-  method: "POST",
-  headers: Object.fromEntries(
-    Object.entries(captured.headers).filter(
-      ([k]) => !["host", "content-length", "connection"].includes(k),
-    ),
-  ),
-  body: captured.body,
-}).then((x) => x.text());
+let r = await api("v", "rpc/has_active_conversation_unlock", "POST", { _conversation_id: cA });
+const rA = await api("a", "rpc/has_active_conversation_unlock", "POST", { _conversation_id: cA });
 check(
-  "Rejouer la confirmation : refusée (« n'est plus en attente »), rien ne change",
-  replay.includes("n'est plus en attente") && pay("v").split("|")[1] === p[1],
+  "Serveur : conversation débloquée (pour Paul et pour Grace)",
+  r.text === "true" && rA.text === "true",
+  `${r.text}/${rA.text}`,
 );
+check(
+  "Autre conversation de Paul : non débloquée",
+  (await api("v", "rpc/has_active_conversation_unlock", "POST", { _conversation_id: cB })).text ===
+    "false",
+);
+await pv.getByRole("link", { name: "Revenir à la conversation" }).click();
+await pv.waitForURL(new RegExp(`/messages/${cA}$`), { timeout: 8000 }).catch(() => {});
+check("« Revenir à la conversation »", pv.url().endsWith(`/messages/${cA}`));
 
-// B. Un membre ne peut pas confirmer lui-même
-// La conversation Paul–Grace est désormais débloquée (7.7) : Grace paie dans une autre
-// conversation (avec le 4e compte de test).
-sql(
-  `insert into public.likes (sender_id, receiver_id) values ('${id.a}','${id.c}'), ('${id.c}','${id.a}');`,
+// B. Un paiement = un déblocage ; seuls les paiements réussis de déblocage activent
+const ref = sql(`select provider_transaction_id from public.payments where user_id='${id.v}'`);
+const pid = sql(`select id from public.payments where user_id='${id.v}'`);
+await confirm(pid, ref);
+check(
+  "Confirmation répétée : toujours un seul déblocage",
+  sql(`select count(*) from public.conversation_unlocks where conversation_id='${cA}'`) === "1",
 );
-const cD = conv("a", "c");
-const pidA = (await startPayment("a", cD)).json;
-let r = await api("a", "rpc/confirm_payment", "POST", {
-  _payment_id: pidA,
+const pidB = (await startPayment("b", cB)).json;
+check("Paiement en attente : aucun déblocage", (unlocks(cB) ?? "") === "");
+await service("confirm_payment", {
+  _payment_id: pidB,
   _provider: "test",
-  _provider_transaction_id: "x",
-  _amount: 100,
-  _currency: "USD",
-});
-check(
-  "Membre appelant confirm_payment directement : refusé",
-  [401, 403, 404].includes(r.status) && pay("a").startsWith("pending"),
-  String(r.status),
-);
-r = await api(null, "rpc/confirm_payment", "POST", {
-  _payment_id: pidA,
-  _provider: "test",
-  _provider_transaction_id: "x",
-  _amount: 100,
-  _currency: "USD",
-});
-check(
-  "Visiteur : refusé",
-  [401, 403, 404].includes(r.status) && pay("a").startsWith("pending"),
-  String(r.status),
-);
-const otherBody = captured.body.replace(
-  /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/,
-  pidA,
-);
-const stolen = await fetch(captured.url, {
-  method: "POST",
-  headers: Object.fromEntries(
-    Object.entries(captured.headers).filter(
-      ([k]) => !["host", "content-length", "connection"].includes(k),
-    ),
-  ),
-  body: otherBody,
-}).then((x) => x.text());
-check(
-  "Paul confirme le paiement de Grace via le serveur de l'application : refusé (« introuvable »)",
-  stolen.includes("introuvable") && pay("a").startsWith("pending"),
-);
-
-// C. Contrôles de la fonction serveur (rôle service)
-r = await service("confirm_payment", {
-  _payment_id: pidA,
-  _provider: "test",
-  _provider_transaction_id: "",
-  _amount: 100,
-  _currency: "USD",
-});
-check(
-  "Référence de transaction absente : refusé",
-  r.text.includes("payment_reference_missing") && pay("a").startsWith("pending"),
-);
-r = await service("confirm_payment", {
-  _payment_id: pidA,
-  _provider: "stripe",
-  _provider_transaction_id: "tx-1",
-  _amount: 100,
-  _currency: "USD",
-});
-check(
-  "Autre prestataire que celui du paiement : refusé",
-  r.text.includes("payment_not_found") && pay("a").startsWith("pending"),
-);
-r = await service("confirm_payment", {
-  _payment_id: pidA,
-  _provider: "test",
-  _provider_transaction_id: p[1],
-  _amount: 100,
-  _currency: "USD",
-});
-check(
-  "Référence déjà utilisée par un autre paiement : refusé",
-  r.status >= 400 && pay("a").startsWith("pending"),
-  r.text.slice(0, 80),
-);
-r = await service("confirm_payment", {
-  _payment_id: pidA,
-  _provider: "test",
-  _provider_transaction_id: "tx-montant",
+  _provider_transaction_id: "tx-faux",
   _amount: 1,
   _currency: "USD",
 });
 check(
-  "Montant confirmé différent (1 cent) : paiement marqué « échoué » (motif enregistré), jamais « réussi »",
-  r.text.includes("failed") &&
+  "Paiement échoué (mauvais montant) : aucun déblocage",
+  (unlocks(cB) ?? "") === "" && pay("b").startsWith("failed"),
+);
+sql(`insert into public.payments (user_id, type, amount, currency, provider, status, metadata) values ('${id.b}','subscription',500,'USD','test','pending', jsonb_build_object('conversation_id','${cB}'));
+     update public.payments set status='succeeded', provider_transaction_id='tx-abo' where user_id='${id.b}' and type='subscription';`);
+check("Paiement réussi d'un autre type (abonnement) : aucun déblocage", (unlocks(cB) ?? "") === "");
+
+// C. Les deux participants paient presque en même temps
+sql(
+  `insert into public.likes (sender_id, receiver_id) values ('${id.a}','${id.c}'), ('${id.c}','${id.a}');`,
+);
+const cD = conv("a", "c");
+const p1 = (await startPayment("a", cD)).json;
+const p2 = (await startPayment("c", cD)).json;
+await Promise.all([confirm(p1, "tx-a"), confirm(p2, "tx-c")]);
+const seq = sql(
+  `select string_agg(to_char(expires_at - starts_at, 'DD') || ':' || (lag_end is null or starts_at = lag_end)::text, ',' order by starts_at) from (select *, lag(expires_at) over (order by starts_at) lag_end from public.conversation_unlocks where conversation_id='${cD}') t`,
+);
+check(
+  "Deux paiements confirmés en même temps : deux déblocages de 3 jours à la suite (6 jours, aucun perdu)",
+  seq === "03:true,03:true" &&
     sql(
-      `select status || ':' || (metadata->>'failure') from public.payments where id='${pidA}'`,
-    ) === "failed:amount_mismatch",
-);
-const pidB = (await startPayment("b", cB)).json;
-r = await service("confirm_payment", {
-  _payment_id: pidB,
-  _provider: "test",
-  _provider_transaction_id: "tx-devise",
-  _amount: 100,
-  _currency: "EUR",
-});
-check(
-  "Devise confirmée différente (EUR) : « échoué »",
-  r.text.includes("failed") && pay("b").startsWith("failed"),
-);
-const pidB2 = (await startPayment("b", cB)).json;
-r = await service("confirm_payment", {
-  _payment_id: pidB2,
-  _provider: "test",
-  _provider_transaction_id: "tx-ok",
-  _amount: 100,
-  _currency: "usd",
-});
-check(
-  "Confirmation correcte par le serveur : « réussi »",
-  r.text.includes("succeeded") && pay("b").startsWith("succeeded|tx-ok"),
-);
-r = await service("confirm_payment", {
-  _payment_id: pidB2,
-  _provider: "test",
-  _provider_transaction_id: "tx-ok",
-  _amount: 100,
-  _currency: "USD",
-});
-check(
-  "Même confirmation répétée par le prestataire : acceptée sans rien changer",
-  r.text.includes("succeeded") && pay("b").startsWith("succeeded|tx-ok"),
-);
-r = await service("confirm_payment", {
-  _payment_id: pidB2,
-  _provider: "test",
-  _provider_transaction_id: "tx-autre",
-  _amount: 100,
-  _currency: "USD",
-});
-check(
-  "Seconde confirmation avec une autre référence : refusée",
-  r.text.includes("payment_already_confirmed") && pay("b").startsWith("succeeded|tx-ok"),
-);
-check(
-  "Paiement échoué : ne peut plus être confirmé",
-  (
-    await service("confirm_payment", {
-      _payment_id: pidA,
-      _provider: "test",
-      _provider_transaction_id: "tx-2",
-      _amount: 100,
-      _currency: "USD",
-    })
-  ).text.includes("payment_not_pending"),
+      `select (max(expires_at) - min(starts_at))::text from public.conversation_unlocks where conversation_id='${cD}'`,
+    ) === "6 days",
+  seq,
 );
 
-// D. Sans mode test, pas de confirmation par l'application
-const srv = spawn("node", ["docs/verification/outils/serveur-local.mjs"], {
-  env: {
-    ...process.env,
-    SUPABASE_URL: API,
-    SUPABASE_PUBLISHABLE_KEY: KEY,
-    SUPABASE_SERVICE_ROLE_KEY: SERVICE_KEY,
-    PAYMENT_PROVIDER: "",
-    PORT: "4174",
-  },
-  stdio: "ignore",
+// D. Protections
+r = await api("v", `conversation_unlocks?conversation_id=eq.${cA}`, "PATCH", {
+  expires_at: "2999-01-01T00:00:00Z",
 });
-for (let i = 0; i < 40; i++) {
-  try {
-    await fetch("http://127.0.0.1:4174/");
-    break;
-  } catch {
-    await new Promise((res) => setTimeout(res, 250));
-  }
-}
-const pidC = (await startPayment("c", cD)).json;
-const noTest = await fetch(captured.url.replace(":4173", ":4174"), {
-  method: "POST",
-  // Même requête que l'application, envoyée à la bonne adresse (le serveur refuse les
-  // requêtes venant d'une autre origine).
-  headers: Object.fromEntries(
-    Object.entries(captured.headers)
-      .filter(([k]) => !["host", "content-length", "connection"].includes(k))
-      .map(([k, v]) => [k, ["origin", "referer"].includes(k) ? v.replace(":4173", ":4174") : v]),
-  ),
-  body: captured.body.replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/, pidC),
-}).then((x) => x.text());
-srv.kill();
 check(
-  "Serveur sans mode test : confirmation de test refusée",
-  noTest.includes("n'existe qu'en mode test") &&
-    sql(`select status from public.payments where id='${pidC}'`) === "pending",
+  "Prolonger soi-même son déblocage : refusé",
+  [401, 403].includes(r.status) &&
+    sql(
+      `select to_char(expires_at - starts_at,'DD') from public.conversation_unlocks where conversation_id='${cA}'`,
+    ) === "03",
+  String(r.status),
+);
+r = await api("v", "conversation_unlocks", "POST", {
+  conversation_id: cB,
+  paid_by_user_id: id.v,
+  status: "active",
+  starts_at: new Date().toISOString(),
+  expires_at: "2999-01-01T00:00:00Z",
+});
+check(
+  "Créer soi-même un déblocage : refusé",
+  [401, 403].includes(r.status) && (unlocks(cB) ?? "") === "",
+  String(r.status),
+);
+r = await api("a", `conversation_unlocks?select=id&conversation_id=eq.${cA}`);
+const rC = await api("c", `conversation_unlocks?select=id&conversation_id=eq.${cA}`);
+check(
+  "Les deux participants voient le déblocage ; une personne extérieure non",
+  r.json?.length === 1 && rC.json?.length === 0,
 );
 check("Aucune erreur JavaScript", jsErrors.length === 0, jsErrors.join(" | "));
 await browser.close();
 
 // ---------- Nettoyage ----------
-sql("delete from auth.users where email like 'test-u76-%@example.test';");
+sql("delete from auth.users where email like 'test-u77-%@example.test';");
 check(
-  "Nettoyage : comptes, conversations et paiements supprimés",
-  sql("select count(*) from auth.users where email like 'test-u76-%'") === "0" &&
+  "Nettoyage : comptes, conversations, paiements et déblocages supprimés",
+  sql("select count(*) from auth.users where email like 'test-u77-%'") === "0" &&
     sql(
-      `select count(*) from public.payments where metadata->>'conversation_id' in ('${cA}','${cB}')`,
+      `select count(*) from public.conversation_unlocks where conversation_id in ('${cA}','${cB}','${cD}')`,
     ) === "0",
 );
 

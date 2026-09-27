@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { ArrowLeft, Check, LockOpen, ShieldCheck } from "lucide-react";
@@ -54,8 +54,11 @@ function UnlockPaymentPage() {
     mutationFn: () => start({ data: { conversationId } }),
   });
   const confirmTest = useServerFn(confirmTestPayment);
+  const queryClient = useQueryClient();
   const confirmation = useMutation({
     mutationFn: (paymentId: string) => confirmTest({ data: { paymentId } }),
+    // Le déblocage vient d'être activé par le serveur : la conversation est relue.
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["conversations"] }),
   });
   const name = data?.firstName ?? "Membre";
 
@@ -160,8 +163,14 @@ function UnlockPaymentPage() {
                   <Check className="mx-auto size-6 text-gold" aria-hidden />
                   <p className="text-sm font-medium text-foreground">Paiement confirmé.</p>
                   <p className="text-xs text-muted-foreground">
-                    Votre paiement de {PRICE} a bien été enregistré.
+                    Votre paiement de {PRICE} a bien été enregistré. Le déblocage de la conversation
+                    avec {name} est activé pour {DURATION}.
                   </p>
+                  <Button asChild size="sm" variant="secondary">
+                    <Link to="/messages/$conversationId" params={{ conversationId }}>
+                      Revenir à la conversation
+                    </Link>
+                  </Button>
                 </div>
               ) : payment.isSuccess ? (
                 <div className="space-y-3 text-center" data-testid="payment-pending" role="status">

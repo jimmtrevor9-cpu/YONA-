@@ -281,6 +281,13 @@
       "when": 1790571600000,
       "tag": "0039_phase7_paiement_confirme",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1790575200000,
+      "tag": "0040_phase7_activer_deblocage",
+      "breakpoints": true
     }
   ]
 }
