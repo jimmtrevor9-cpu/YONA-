@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { AppHeader } from "@/components/AppHeader";
 import { MessageComposer } from "@/components/MessageComposer";
 import { MessageThread } from "@/components/MessageThread";
+import { UnlockOffer } from "@/components/UnlockOffer";
 import { BottomNav } from "@/components/BottomNav";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -191,6 +192,8 @@ function ConversationPage() {
               notice={sendNotice}
               onTextChange={() => setSendNotice(null)}
             />
+
+            {quota?.exhausted ? <UnlockOffer otherName={name} /> : null}
           </>
         )}
       </main>
