@@ -10,6 +10,8 @@ export const SEND_MESSAGE_ERRORS = {
   conversation_unavailable: "Cette conversation n'est plus disponible.",
   free_limit_reached:
     "Vous avez utilisé vos 3 messages gratuits dans cette conversation. Votre message n'a pas été envoyé.",
+  phone_number_detected:
+    "Votre message n'a pas été envoyé : il semble contenir un numéro de téléphone. Pour la sécurité de tous, l'échange de numéros n'est pas autorisé sur YONA. Retirez le numéro puis renvoyez votre message (il n'a pas été décompté de vos messages gratuits).",
   sender_not_allowed: "Votre profil doit être finalisé et actif pour envoyer des messages.",
 } as const;
 
@@ -40,4 +42,9 @@ export function sendMessageErrorMessage(error: unknown): string {
 /** La conversation n'est plus utilisable : la page doit se rafraîchir. */
 export function isConversationGoneError(error: unknown): boolean {
   return error instanceof Error && error.message === SEND_MESSAGE_ERRORS.conversation_unavailable;
+}
+
+/** L'envoi a été refusé parce que le message contient un numéro de téléphone. */
+export function isPhoneNumberError(error: unknown): boolean {
+  return error instanceof Error && error.message === SEND_MESSAGE_ERRORS.phone_number_detected;
 }

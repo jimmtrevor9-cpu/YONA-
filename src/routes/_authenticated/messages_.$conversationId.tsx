@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { ArrowLeft } from "lucide-react";
+import { useState } from "react";
 import { toast } from "sonner";
 
 import { AppHeader } from "@/components/AppHeader";
@@ -20,7 +21,12 @@ import {
   type ThreadMessage,
 } from "@/features/messaging/queries";
 import { messageQuotaQuery } from "@/features/messaging/quota";
-import { isConversationGoneError, sendMessageErrorMessage } from "@/features/messaging/send";
+import {
+  isConversationGoneError,
+  isPhoneNumberError,
+  sendMessageErrorMessage,
+  SEND_MESSAGE_ERRORS,
+} from "@/features/messaging/send";
 import { APP_NAME } from "@/lib/config";
 
 export const Route = createFileRoute("/_authenticated/messages_/$conversationId")({
@@ -41,6 +47,7 @@ function ConversationPage() {
   const { conversationId } = Route.useParams();
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const [sendNotice, setSendNotice] = useState<string | null>(null);
   const { data, isLoading, isError } = useQuery({
     ...conversationQuery(user?.id ?? "", conversationId),
     enabled: !!user?.id,
@@ -90,7 +97,14 @@ function ConversationPage() {
       return true;
     } catch (error) {
       queryClient.setQueryData(queryKey, (list) => list?.filter((m) => m.id !== pending.id));
-      toast.error(sendMessageErrorMessage(error));
+      if (isPhoneNumberError(error)) {
+        // Refus pour numéro de téléphone : explication gardée sous le champ jusqu'à la
+        // prochaine modification du texte, en plus de la notification.
+        setSendNotice(SEND_MESSAGE_ERRORS.phone_number_detected);
+        toast.error(SEND_MESSAGE_ERRORS.phone_number_detected, { duration: 8000 });
+      } else {
+        toast.error(sendMessageErrorMessage(error));
+      }
       void refreshQuota();
       if (isConversationGoneError(error)) {
         void queryClient.invalidateQueries({ queryKey: ["conversations"] });
@@ -174,6 +188,8 @@ function ConversationPage() {
               otherName={name}
               onSend={sendMessage}
               remaining={quota?.remaining ?? null}
+              notice={sendNotice}
+              onTextChange={() => setSendNotice(null)}
             />
           </>
         )}

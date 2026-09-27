@@ -27,6 +27,10 @@ interface MessageComposerProps {
   onSend: (text: string) => Promise<boolean>;
   /** Messages gratuits restants (`null` : pas encore connu). À 0, l'écriture est fermée. */
   remaining?: number | null;
+  /** Explication d'un refus (ex. numéro de téléphone), affichée sous le champ. */
+  notice?: string | null;
+  /** Appelé à chaque modification du texte (sert à effacer l'explication). */
+  onTextChange?: () => void;
 }
 
 /** Champ de saisie et bouton « Envoyer » d'un message. */
@@ -36,6 +40,8 @@ export function MessageComposer({
   otherName,
   onSend,
   remaining = null,
+  notice = null,
+  onTextChange,
 }: MessageComposerProps) {
   const [text, setText] = useState(() => readDraft(userId, conversationId));
   const [sending, setSending] = useState(false);
@@ -56,6 +62,7 @@ export function MessageComposer({
   const exhausted = remaining !== null && remaining <= 0;
   const canSend = isMessageSendable(text) && !sending && !exhausted;
   const quotaId = useId();
+  const noticeId = useId();
 
   async function send() {
     // Un seul envoi à la fois (double clic, Ctrl+Entrée répété).
@@ -103,6 +110,7 @@ export function MessageComposer({
           onChange={(e) => {
             setText(e.target.value);
             saveDraft(userId, conversationId, e.target.value);
+            onTextChange?.();
           }}
           placeholder={exhausted ? "Messages gratuits utilisés" : `Écrivez à ${otherName}…`}
           autoComplete="off"
@@ -114,8 +122,13 @@ export function MessageComposer({
               void send();
             }
           }}
+          aria-invalid={notice ? true : undefined}
           aria-describedby={
-            [length >= MESSAGE_COUNTER_FROM ? counterId : "", remaining !== null ? quotaId : ""]
+            [
+              notice ? noticeId : "",
+              length >= MESSAGE_COUNTER_FROM ? counterId : "",
+              remaining !== null ? quotaId : "",
+            ]
               .filter(Boolean)
               .join(" ") || undefined
           }
@@ -136,6 +149,16 @@ export function MessageComposer({
           <SendHorizontal className={cn("size-4", sending && "animate-pulse")} aria-hidden />
         </Button>
       </div>
+      {notice ? (
+        <div
+          id={noticeId}
+          role="alert"
+          data-testid="message-notice"
+          className="rounded-xl border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive"
+        >
+          {notice}
+        </div>
+      ) : null}
       {length >= MESSAGE_COUNTER_FROM ? (
         <p
           id={counterId}
