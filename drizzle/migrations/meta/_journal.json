@@ -183,6 +183,13 @@
       "when": 1790521200000,
       "tag": "0025_phase5_premier_message_gratuit",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1790524800000,
+      "tag": "0026_phase5_bloquer_quatrieme_message",
+      "breakpoints": true
     }
   ]
 }

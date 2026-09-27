@@ -8,6 +8,8 @@ export const SEND_MESSAGE_ERRORS = {
   message_empty: "Écrivez un message avant de l'envoyer.",
   message_too_long: "Votre message dépasse 4 000 caractères.",
   conversation_unavailable: "Cette conversation n'est plus disponible.",
+  free_limit_reached:
+    "Vous avez utilisé vos 3 messages gratuits dans cette conversation. Votre message n'a pas été envoyé.",
   sender_not_allowed: "Votre profil doit être finalisé et actif pour envoyer des messages.",
 } as const;
 

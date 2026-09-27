@@ -111,7 +111,15 @@ const waitCount = async (c, n) => {
     await new Promise((r) => setTimeout(r, 100));
   return count(c);
 };
+// Depuis l'étape 5.5, chaque personne n'a que 3 messages gratuits par conversation. Ce
+// test porte sur l'envoi lui-même (et non sur le quota, vérifié par la phase 5) : les
+// compteurs de ses comptes de test sont remis à 0 avant chaque envoi.
+const resetQuota = () =>
+  sql(
+    "update public.conversation_user_usage set free_messages_used=0 where user_id in (select id from auth.users where email like 'test-emsg-%@example.test')",
+  );
 const sendVia = async (page, text, how = "click") => {
+  resetQuota();
   await field(page).fill(text);
   if (how === "click") await button(page).click();
   else {
@@ -176,6 +184,7 @@ check(
       "4000",
 );
 await field(pv).fill("Un seul envoi");
+resetQuota();
 await button(pv).dblclick();
 await pv.waitForTimeout(1500);
 check("Double clic : un seul message", count(cA, "and content='Un seul envoi'") === "1");
@@ -275,6 +284,7 @@ check("Réseau revenu : nouvel essai réussi", (await waitCount(cG, 1)) === "1")
 
 // D. Appels directs au serveur de l'application (rejeu de l'appel capturé)
 const replay = async (conversationId, content, withAuth = true) => {
+  resetQuota();
   const headers = Object.fromEntries(
     Object.entries(captured.headers).filter(
       ([k]) =>
@@ -317,11 +327,12 @@ check(
   "Serveur : conversation inexistante → « plus disponible »",
   r.text.includes("Cette conversation n'est plus disponible."),
 );
-const burst = await Promise.all(Array.from({ length: 5 }, (_, i) => replay(cA, `Rafale ${i}`)));
+// 3 envois simultanés (au plus 3 messages gratuits par personne depuis l'étape 5.5).
+const burst = await Promise.all(Array.from({ length: 3 }, (_, i) => replay(cA, `Rafale ${i}`)));
 check(
-  "5 envois simultanés : 5 messages, date du dernier message = le plus récent",
+  "3 envois simultanés : 3 messages, date du dernier message = le plus récent",
   burst.every((x) => x.status === 200) &&
-    count(cA, "and content like 'Rafale %'") === "5" &&
+    count(cA, "and content like 'Rafale %'") === "3" &&
     sql(
       `select c.last_message_at = (select max(created_at) from public.messages where conversation_id=c.id) from public.conversations c where c.id='${cA}'`,
     ) === "t",
@@ -339,6 +350,7 @@ const tokenOf = async (tag) =>
     ).json()
   ).access_token;
 const rpc = async (token, conversationId, content) => {
+  resetQuota();
   const res = await fetch(`${API}/rest/v1/rpc/send_message`, {
     method: "POST",
     headers: {

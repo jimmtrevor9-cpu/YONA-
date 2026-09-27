@@ -117,8 +117,17 @@ const rpc = async (tag, fn, args = {}) => {
   } catch {}
   return { status: res.status, text, json };
 };
-const send = (tag, c, content) =>
-  rpc(tag, "send_message", { _conversation_id: c, _content: content });
+// Depuis l'étape 5.5, chaque personne n'a que 3 messages gratuits par conversation. Ce
+// test porte sur l'envoi lui-même (et non sur le quota, vérifié par la phase 5) : les
+// compteurs de ses comptes de test sont remis à 0 avant chaque envoi.
+const resetQuota = () =>
+  sql(
+    "update public.conversation_user_usage set free_messages_used=0 where user_id in (select id from auth.users where email like 'test-unrd-%@example.test')",
+  );
+const send = (tag, c, content) => {
+  resetQuota();
+  return rpc(tag, "send_message", { _conversation_id: c, _content: content });
+};
 const unreadOf = async (tag) => {
   const r = await rpc(tag, "get_unread_counts");
   return Object.fromEntries((r.json ?? []).map((x) => [x.conversation_id, x.unread]));

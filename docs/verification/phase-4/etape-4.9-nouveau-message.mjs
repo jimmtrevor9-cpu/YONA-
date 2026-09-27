@@ -116,6 +116,13 @@ const insert = (c, from, content, status = "delivered") =>
     `insert into public.messages (conversation_id, sender_id, content, status) values ('${c}','${id[from]}','${content}','${status}');`,
   );
 
+// Depuis l'étape 5.5, chaque personne n'a que 3 messages gratuits par conversation. Ce
+// test porte sur l'envoi lui-même (et non sur le quota, vérifié par la phase 5) : les
+// compteurs de ses comptes de test sont remis à 0 avant chaque envoi.
+const resetQuota = () =>
+  sql(
+    "update public.conversation_user_usage set free_messages_used=0 where user_id in (select id from auth.users where email like 'test-nmsg-%@example.test')",
+  );
 // A. Côté expéditeur : affichage immédiat
 const pv = await login("v");
 await openConv(pv, cA);
@@ -128,6 +135,7 @@ await pv.route("**/_serverFn/**", async (r) => {
   await r.continue();
 });
 await field(pv).fill("Bonjour Grace !");
+resetQuota();
 await button(pv).click();
 await pv.waitForTimeout(300);
 check(
@@ -171,6 +179,7 @@ check(
 );
 for (let i = 1; i <= 5; i++) {
   await field(pv).fill(`Rafale ${i}`);
+  resetQuota();
   await button(pv).click();
   await waitFor(async () => (await field(pv).inputValue()) === "");
   await waitFor(async () => (await bubble(pv, `Rafale ${i}`).count()) === 1);
@@ -185,6 +194,7 @@ check(
   order.join(","),
 );
 await field(pa).fill("Bonjour Paul !");
+resetQuota();
 await button(pa).click();
 check(
   "Réponse de Grace reçue en direct par Paul",
@@ -259,6 +269,7 @@ check(
 // E. Échec d'envoi : le message provisoire disparaît
 await pv.route("**/_serverFn/**", (r) => r.abort());
 await field(pv).fill("Échec d'envoi");
+resetQuota();
 await button(pv).click();
 const failMsg = await toastText(pv);
 await pv.waitForTimeout(300);
@@ -321,6 +332,7 @@ await spyA.client.removeAllChannels();
 const small = await login("v", 320);
 await openConv(small, cA);
 await field(small).fill("Depuis un petit écran");
+resetQuota();
 await button(small).click();
 check(
   "Petit écran (320 px) : message affiché, sans débordement",
