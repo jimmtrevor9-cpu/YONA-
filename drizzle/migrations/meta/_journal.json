@@ -176,6 +176,13 @@
       "when": 1790517600000,
       "tag": "0024_phase5_compteur_individuel",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1790521200000,
+      "tag": "0025_phase5_premier_message_gratuit",
+      "breakpoints": true
     }
   ]
 }
