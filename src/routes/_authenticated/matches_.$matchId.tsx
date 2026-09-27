@@ -2,12 +2,15 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeft, Briefcase, MapPin } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
 
 import { AppHeader } from "@/components/AppHeader";
 import { BottomNav } from "@/components/BottomNav";
+import { FavoriteButton } from "@/components/FavoriteButton";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/features/auth/AuthProvider";
+import { myFavoriteIdsQuery } from "@/features/favorites/queries";
 import { matchProfileQuery } from "@/features/matches/queries";
 import { computeAge } from "@/features/profiles/queries";
 import { APP_NAME } from "@/lib/config";
@@ -33,6 +36,10 @@ function MatchProfilePage() {
   const { matchId } = Route.useParams();
   const { user } = useAuth();
   const [photoIndex, setPhotoIndex] = useState(0);
+  const { data: favoriteIds } = useQuery({
+    ...myFavoriteIdsQuery(user?.id ?? ""),
+    enabled: !!user?.id,
+  });
   const { data, isLoading, isError } = useQuery({
     ...matchProfileQuery(user?.id ?? "", matchId),
     enabled: !!user?.id,
@@ -110,10 +117,18 @@ function MatchProfilePage() {
             ) : null}
 
             <section className="panel gold-thread space-y-2 p-5">
-              <h2 className="font-display text-2xl font-semibold text-foreground">
-                {name}
-                {age ? <span className="text-muted-foreground"> · {age} ans</span> : null}
-              </h2>
+              <div className="flex items-start justify-between gap-3">
+                <h2 className="font-display text-2xl font-semibold text-foreground">
+                  {name}
+                  {age ? <span className="text-muted-foreground"> · {age} ans</span> : null}
+                </h2>
+                <FavoriteButton
+                  name={name}
+                  isFavorite={favoriteIds?.has(data.userId) ?? false}
+                  onToggle={() => toast.info("L'ajout aux favoris arrive très bientôt.")}
+                  className="-mr-2"
+                />
+              </div>
               {place ? (
                 <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <MapPin className="size-3.5" aria-hidden />

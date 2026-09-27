@@ -79,7 +79,8 @@ check(
     (await pass("a").textContent())?.trim() === "Passer" &&
     (await pass("a").getAttribute("aria-label")) === "Passer le profil de Passa",
 );
-const footer = await card("a").locator("button").allTextContents();
+// Boutons de la ligne d'actions (depuis l'étape 8.1, l'étoile Favori est dans l'en-tête).
+const footer = await card("a").locator("div.border-t button").allTextContents();
 check(
   "Ordre : « Passer » puis « Like », sur la même ligne",
   footer.map((t) => t.trim()).join(",") === "Passer,Like",
@@ -94,7 +95,7 @@ await page.waitForTimeout(300);
 check(
   "Profil aimé (D) : pas de bouton « Passer », seulement « Aimé »",
   (await pass("d").count()) === 0 &&
-    (await card("d").getByRole("button").textContent())?.trim() === "Aimé",
+    (await card("d").locator("div.border-t").getByRole("button").textContent())?.trim() === "Aimé",
 );
 const box = await pass("a").boundingBox();
 check("Zone de toucher suffisante (≥ 36 px de haut)", (box?.height ?? 0) >= 36, `${box?.height}px`);
@@ -189,7 +190,11 @@ check(
   (await page.locator("article button").count()) === 0,
 );
 const small = await login("w", 320);
-const smallBox = await small.locator("article").first().locator("button").allTextContents();
+const smallBox = await small
+  .locator("article")
+  .first()
+  .locator("div.border-t button")
+  .allTextContents();
 check(
   "Petit écran (320 px) : « Passer » et « Like » tiennent sur la carte, sans débordement",
   smallBox.length === 2 &&

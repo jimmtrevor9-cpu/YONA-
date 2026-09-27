@@ -1,5 +1,6 @@
 import { Heart, LoaderCircle, MapPin, X } from "lucide-react";
 
+import { FavoriteButton } from "@/components/FavoriteButton";
 import { Button } from "@/components/ui/button";
 import { computeAge } from "@/features/profiles/queries";
 
@@ -21,6 +22,10 @@ interface ProfileCardProps {
   onLike?: (profileId: string) => void;
   /** Passer ce profil (bouton affiché seulement si fourni et si le profil n'est pas aimé). */
   onPass?: (profileId: string) => void;
+  /** Favori : bouton étoile affiché seulement si fourni. */
+  isFavorite?: boolean;
+  isFavoritePending?: boolean;
+  onToggleFavorite?: (profileId: string) => void;
 }
 
 /** Carte éditoriale d'un profil avec son action Like. */
@@ -31,6 +36,9 @@ export function ProfileCard({
   isLikeStateLoading,
   onLike,
   onPass,
+  isFavorite = false,
+  isFavoritePending = false,
+  onToggleFavorite,
 }: ProfileCardProps) {
   const age = computeAge(profile.birth_date);
   const place = [profile.city, profile.country].filter(Boolean).join(", ");
@@ -42,6 +50,15 @@ export function ProfileCard({
           {profile.first_name ?? "Profil"}
           {age ? <span className="text-muted-foreground"> · {age} ans</span> : null}
         </h3>
+        {onToggleFavorite ? (
+          <FavoriteButton
+            name={profile.first_name ?? "ce profil"}
+            isFavorite={isFavorite}
+            isPending={isFavoritePending}
+            onToggle={() => onToggleFavorite(profile.user_id)}
+            className="-my-2 -mr-2"
+          />
+        ) : null}
       </header>
 
       {place ? (
