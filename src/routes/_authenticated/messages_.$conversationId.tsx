@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
+import { toast } from "sonner";
 
 import { AppHeader } from "@/components/AppHeader";
 import { MessageComposer } from "@/components/MessageComposer";
@@ -35,6 +36,13 @@ function ConversationPage() {
     enabled: !!user?.id,
   });
   const name = data?.firstName ?? "Membre";
+
+  // L'enregistrement sécurisé du message côté serveur arrive à l'étape 4.8 : d'ici là,
+  // rien n'est envoyé et le texte reste dans le champ.
+  const sendMessage = async () => {
+    toast.info("L'envoi des messages n'est pas encore activé. Votre texte est conservé.");
+    return false;
+  };
 
   return (
     <div className="min-h-screen bg-background pb-24">
@@ -109,6 +117,7 @@ function ConversationPage() {
               userId={user?.id ?? ""}
               conversationId={data.conversationId}
               otherName={name}
+              onSend={sendMessage}
             />
           </>
         )}
