@@ -38,8 +38,22 @@ par les fichiers de `supabase/migrations/`, appliqués **dans l'ordre**
   npx supabase db push
   ```
 
-Résultat attendu : 22 tables (toutes protégées par RLS), 46 fonctions, 66 règles
-d'accès, bucket `photos` privé (JPG, PNG, WebP, 5 Mo max) avec 4 règles d'accès.
+Résultat attendu : 22 tables (toutes protégées par RLS), 47 fonctions, 66 règles
+d'accès, bucket `photos` privé (JPG, PNG, WebP, 5 Mo max) avec 4 règles d'accès, et la
+tâche planifiée `yona-expirer-deblocages` (extension pg_cron, toutes les 5 minutes).
+Si l'hébergeur ne propose pas pg_cron, la migration continue quand même : l'expiration
+des déblocages reste exacte (par date) ; seul le statut « expiré » de l'historique n'est
+alors mis à jour que par un appel à `expire_conversation_unlocks()`.
+
+### Paiement (déblocage à 1 USD)
+
+- Variable serveur `PAYMENT_PROVIDER` : **laisser vide** tant qu'aucun prestataire de
+  paiement réel n'est branché — l'écran de paiement affiche alors « Le paiement en ligne
+  n'est pas encore disponible. » et aucun paiement n'est possible.
+- `PAYMENT_PROVIDER=test` : prestataire de **test**, sans argent réel, à réserver aux
+  environnements de vérification (jamais en production).
+- La confirmation d'un paiement se fait uniquement côté serveur (fonction
+  `confirm_payment`, rôle service) : il faut `SUPABASE_SERVICE_ROLE_KEY` côté serveur.
 
 ## 4. Réglages de l'authentification (Supabase → Authentication)
 
