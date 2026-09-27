@@ -1066,6 +1066,17 @@ export type Database = {
         Args: { _visited_user_id: string }
         Returns: undefined
       }
+      send_message: {
+        Args: { _content: string; _conversation_id: string }
+        Returns: {
+          content: string
+          conversation_id: string
+          created_at: string
+          id: string
+          sender_id: string
+          status: Database["public"]["Enums"]["message_status"]
+        }[]
+      }
       set_primary_photo: { Args: { _photo_id: string }; Returns: undefined }
       touch_activity: { Args: never; Returns: undefined }
     }

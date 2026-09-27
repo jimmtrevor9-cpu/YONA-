@@ -141,6 +141,13 @@
       "when": 1790435410005,
       "tag": "0019_phase4_conversation_auto",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1790503200000,
+      "tag": "0020_phase4_enregistrer_message",
+      "breakpoints": true
     }
   ]
 }

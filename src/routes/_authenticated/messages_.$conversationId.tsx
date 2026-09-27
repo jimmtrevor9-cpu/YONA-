@@ -1,5 +1,6 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
 import { ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 
@@ -11,7 +12,9 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/features/auth/AuthProvider";
+import { sendMessage as sendMessageFn } from "@/features/messaging/messages.functions";
 import { conversationQuery } from "@/features/messaging/queries";
+import { isConversationGoneError, sendMessageErrorMessage } from "@/features/messaging/send";
 import { APP_NAME } from "@/lib/config";
 
 export const Route = createFileRoute("/_authenticated/messages_/$conversationId")({
@@ -37,11 +40,23 @@ function ConversationPage() {
   });
   const name = data?.firstName ?? "Membre";
 
-  // L'enregistrement sécurisé du message côté serveur arrive à l'étape 4.8 : d'ici là,
-  // rien n'est envoyé et le texte reste dans le champ.
-  const sendMessage = async () => {
-    toast.info("L'envoi des messages n'est pas encore activé. Votre texte est conservé.");
-    return false;
+  const queryClient = useQueryClient();
+  const send = useServerFn(sendMessageFn);
+
+  // Envoi : enregistré et vérifié par le serveur ; en cas de refus, le texte reste dans le
+  // champ et la raison s'affiche.
+  const sendMessage = async (content: string) => {
+    try {
+      await send({ data: { conversationId, content } });
+      void queryClient.invalidateQueries({ queryKey: ["conversations"] });
+      return true;
+    } catch (error) {
+      toast.error(sendMessageErrorMessage(error));
+      if (isConversationGoneError(error)) {
+        void queryClient.invalidateQueries({ queryKey: ["conversations"] });
+      }
+      return false;
+    }
   };
 
   return (

@@ -91,9 +91,7 @@ const field = (page) => page.getByLabel(/^Votre message à /);
 const button = (page) =>
   page.getByRole("button", { name: /^(Envoyer le message|Envoi du message…)$/ });
 const infoToast = (page) =>
-  page
-    .locator("[data-sonner-toast]")
-    .filter({ hasText: "L'envoi des messages n'est pas encore activé." });
+  page.locator("[data-sonner-toast]").filter({ hasText: "Le message n'a pas pu être envoyé." });
 const waitToast = async (page) => {
   for (let i = 0; i < 30 && (await infoToast(page).count()) === 0; i++)
     await page.waitForTimeout(100);
@@ -105,7 +103,10 @@ const clearToasts = async (page) => {
 };
 
 // A. Présence et état du bouton
+// Depuis l'étape 4.8, le bouton envoie réellement : ici l'envoi est coupé (réseau) pour
+// vérifier le bouton seul — texte conservé, rien d'enregistré.
 const pv = await login("v");
+await pv.route("**/_serverFn/**", (r) => r.abort());
 await openConv(pv, cA);
 check(
   "Bouton « Envoyer le message » présent à côté du champ",
@@ -148,7 +149,7 @@ check("Texte de 4 000 caractères (limite) : bouton activé", await button(pv).i
 await field(pv).fill("Bonjour Grace !\nComment vas-tu ?");
 await button(pv).click();
 check(
-  "Clic : message clair « L'envoi des messages n'est pas encore activé. Votre texte est conservé. »",
+  "Clic (envoi coupé) : message clair « Le message n'a pas pu être envoyé… »",
   await waitToast(pv),
 );
 check(
