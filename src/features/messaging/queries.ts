@@ -175,3 +175,45 @@ export const conversationQuery = (userId: string, conversationId: string) =>
     },
     staleTime: 30 * 1000,
   });
+
+export interface ThreadMessage {
+  id: string;
+  content: string;
+  fromMe: boolean;
+  /** « blocked » : message retenu par la modération (visible seulement par son auteur). */
+  status: "delivered" | "blocked";
+  createdAt: string;
+}
+
+/** Nombre maximal de messages chargés (les plus récents). */
+export const THREAD_PAGE_SIZE = 200;
+
+/**
+ * Messages d'une conversation, du plus ancien au plus récent (les 200 derniers).
+ * Règles d'accès existantes : les participants lisent les messages livrés ; chacun lit en
+ * plus ses propres messages retenus par la modération. Les messages supprimés sont exclus.
+ */
+export const conversationMessagesQuery = (userId: string, conversationId: string) =>
+  queryOptions({
+    queryKey: ["conversations", "messages", userId, conversationId],
+    queryFn: async (): Promise<ThreadMessage[]> => {
+      const { data, error } = await supabase
+        .from("messages")
+        .select("id, sender_id, content, status, created_at")
+        .eq("conversation_id", conversationId)
+        .neq("status", "deleted")
+        .order("created_at", { ascending: false })
+        .limit(THREAD_PAGE_SIZE);
+      if (error) throw error;
+      return (data ?? [])
+        .map((m) => ({
+          id: m.id,
+          content: m.content,
+          fromMe: m.sender_id === userId,
+          status: m.status === "blocked" ? ("blocked" as const) : ("delivered" as const),
+          createdAt: m.created_at,
+        }))
+        .reverse();
+    },
+    staleTime: 10 * 1000,
+  });

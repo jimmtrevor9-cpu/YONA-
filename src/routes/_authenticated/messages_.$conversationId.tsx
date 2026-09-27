@@ -3,6 +3,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
 
 import { AppHeader } from "@/components/AppHeader";
+import { MessageThread } from "@/components/MessageThread";
 import { BottomNav } from "@/components/BottomNav";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -24,7 +25,7 @@ export const Route = createFileRoute("/_authenticated/messages_/$conversationId"
   component: ConversationPage,
 });
 
-/** Page d'une conversation (les messages s'y affichent à partir de l'étape 4.5). */
+/** Page d'une conversation : en-tête et fil des messages. */
 function ConversationPage() {
   const { conversationId } = Route.useParams();
   const { user } = useAuth();
@@ -95,9 +96,11 @@ function ConversationPage() {
               aria-label={`Conversation avec ${name}`}
               data-testid="conversation-thread"
             >
-              <p className="text-center text-xs text-muted-foreground">
-                Début de votre conversation avec {name}.
-              </p>
+              <MessageThread
+                userId={user?.id ?? ""}
+                conversationId={data.conversationId}
+                otherName={name}
+              />
             </section>
           </>
         )}
