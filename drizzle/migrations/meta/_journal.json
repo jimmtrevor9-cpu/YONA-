@@ -225,6 +225,13 @@
       "when": 1790542800000,
       "tag": "0031_phase6_tirets",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1790546400000,
+      "tag": "0032_phase6_parentheses",
+      "breakpoints": true
     }
   ]
 }
