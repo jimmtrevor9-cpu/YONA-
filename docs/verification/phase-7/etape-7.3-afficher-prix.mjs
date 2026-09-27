@@ -188,7 +188,7 @@ check(
 check(
   "Bouton : « Débloquer la conversation pour 1 USD » (prix annoncé aussi aux lecteurs d'écran)",
   (await offer(pv)
-    .getByRole("button", { name: "Débloquer la conversation pour 1 USD", exact: true })
+    .getByRole("link", { name: "Débloquer la conversation pour 1 USD", exact: true })
     .count()) === 1,
 );
 check(

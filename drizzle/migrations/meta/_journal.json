@@ -267,6 +267,13 @@
       "when": 1790564400000,
       "tag": "0037_phase7_detecter_quota_epuise",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1790568000000,
+      "tag": "0038_phase7_ecran_paiement",
+      "breakpoints": true
     }
   ]
 }

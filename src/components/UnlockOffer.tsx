@@ -1,10 +1,12 @@
 import { LockOpen } from "lucide-react";
+import { Link } from "@tanstack/react-router";
 import { useId } from "react";
 
 import { Button } from "@/components/ui/button";
 import { CONVERSATION_UNLOCK, formatDays, formatUsdShort } from "@/features/monetization/rules";
 
 interface UnlockOfferProps {
+  conversationId: string;
   otherName: string;
 }
 
@@ -12,7 +14,7 @@ interface UnlockOfferProps {
  * Offre de déblocage d'une conversation, affichée quand le serveur signale que les
  * messages gratuits sont épuisés (étape 7.1).
  */
-export function UnlockOffer({ otherName }: UnlockOfferProps) {
+export function UnlockOffer({ conversationId, otherName }: UnlockOfferProps) {
   const titleId = useId();
 
   return (
@@ -39,10 +41,11 @@ export function UnlockOffer({ otherName }: UnlockOfferProps) {
         Paiement unique, pour cette conversation seulement. Sans abonnement ni renouvellement
         automatique.
       </p>
-      <Button type="button" className="w-full" disabled>
-        Débloquer la conversation pour {formatUsdShort(CONVERSATION_UNLOCK.amount)}
+      <Button asChild className="w-full">
+        <Link to="/messages/$conversationId/debloquer" params={{ conversationId }}>
+          Débloquer la conversation pour {formatUsdShort(CONVERSATION_UNLOCK.amount)}
+        </Link>
       </Button>
-      <p className="text-[11px] text-muted-foreground">Le paiement arrive très bientôt.</p>
     </section>
   );
 }

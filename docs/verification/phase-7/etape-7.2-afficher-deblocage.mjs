@@ -196,9 +196,11 @@ check(
   (await pv.getByRole("region", { name: "Débloquer cette conversation" }).count()) === 1,
 );
 check(
-  "Bouton « Débloquer la conversation » présent mais inactif tant que le paiement n'existe pas",
-  (await offer(pv).getByRole("button", { name: "Débloquer la conversation" }).isDisabled()) &&
-    txt.includes("Le paiement arrive très bientôt."),
+  // Depuis l'étape 7.5, le bouton mène à l'écran de paiement.
+  "Bouton « Débloquer la conversation… » présent et actif (lien vers l'écran de paiement)",
+  (await offer(pv)
+    .getByRole("link", { name: /^Débloquer la conversation/ })
+    .getAttribute("href")) === `/messages/${cA}/debloquer`,
 );
 await pv.reload({ waitUntil: "networkidle" });
 await openConv(pv, cA);

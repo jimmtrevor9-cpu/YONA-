@@ -193,7 +193,9 @@ function ConversationPage() {
               onTextChange={() => setSendNotice(null)}
             />
 
-            {quota?.exhausted ? <UnlockOffer otherName={name} /> : null}
+            {quota?.exhausted ? (
+              <UnlockOffer conversationId={conversationId} otherName={name} />
+            ) : null}
           </>
         )}
       </main>

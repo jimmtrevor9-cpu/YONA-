@@ -1131,6 +1131,10 @@ export type Database = {
         }[]
       }
       set_primary_photo: { Args: { _photo_id: string }; Returns: undefined }
+      start_conversation_unlock_payment: {
+        Args: { _conversation_id: string; _provider: string }
+        Returns: string
+      }
       touch_activity: { Args: never; Returns: undefined }
     }
     Enums: {

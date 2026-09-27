@@ -23,6 +23,7 @@ import { Route as AuthenticatedProfileRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedSearchRouteImport } from './routes/_authenticated/search'
 import { Route as AuthenticatedMatchesMatchIdRouteImport } from './routes/_authenticated/matches_.$matchId'
 import { Route as AuthenticatedMessagesConversationIdRouteImport } from './routes/_authenticated/messages_.$conversationId'
+import { Route as AuthenticatedMessagesConversationIdDebloquerRouteImport } from './routes/_authenticated/messages_.$conversationId_.debloquer'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -95,6 +96,12 @@ const AuthenticatedMessagesConversationIdRoute =
     path: '/messages/$conversationId',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedMessagesConversationIdDebloquerRoute =
+  AuthenticatedMessagesConversationIdDebloquerRouteImport.update({
+    id: '/messages_/$conversationId_/debloquer',
+    path: '/messages/$conversationId/debloquer',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -110,6 +117,7 @@ export interface FileRoutesByFullPath {
   '/search': typeof AuthenticatedSearchRoute
   '/matches/$matchId': typeof AuthenticatedMatchesMatchIdRoute
   '/messages/$conversationId': typeof AuthenticatedMessagesConversationIdRoute
+  '/messages/$conversationId/debloquer': typeof AuthenticatedMessagesConversationIdDebloquerRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -125,6 +133,7 @@ export interface FileRoutesByTo {
   '/search': typeof AuthenticatedSearchRoute
   '/matches/$matchId': typeof AuthenticatedMatchesMatchIdRoute
   '/messages/$conversationId': typeof AuthenticatedMessagesConversationIdRoute
+  '/messages/$conversationId/debloquer': typeof AuthenticatedMessagesConversationIdDebloquerRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -142,6 +151,7 @@ export interface FileRoutesById {
   '/_authenticated/search': typeof AuthenticatedSearchRoute
   '/_authenticated/matches_/$matchId': typeof AuthenticatedMatchesMatchIdRoute
   '/_authenticated/messages_/$conversationId': typeof AuthenticatedMessagesConversationIdRoute
+  '/_authenticated/messages_/$conversationId_/debloquer': typeof AuthenticatedMessagesConversationIdDebloquerRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -159,6 +169,7 @@ export interface FileRouteTypes {
     | '/search'
     | '/matches/$matchId'
     | '/messages/$conversationId'
+    | '/messages/$conversationId/debloquer'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -174,6 +185,7 @@ export interface FileRouteTypes {
     | '/search'
     | '/matches/$matchId'
     | '/messages/$conversationId'
+    | '/messages/$conversationId/debloquer'
   id:
     | '__root__'
     | '/'
@@ -190,6 +202,7 @@ export interface FileRouteTypes {
     | '/_authenticated/search'
     | '/_authenticated/matches_/$matchId'
     | '/_authenticated/messages_/$conversationId'
+    | '/_authenticated/messages_/$conversationId_/debloquer'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -301,6 +314,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedMessagesConversationIdRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/messages_/$conversationId_/debloquer': {
+      id: '/_authenticated/messages_/$conversationId_/debloquer'
+      path: '/messages/$conversationId/debloquer'
+      fullPath: '/messages/$conversationId/debloquer'
+      preLoaderRoute: typeof AuthenticatedMessagesConversationIdDebloquerRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
   }
 }
 
@@ -313,6 +333,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedSearchRoute: typeof AuthenticatedSearchRoute
   AuthenticatedMatchesMatchIdRoute: typeof AuthenticatedMatchesMatchIdRoute
   AuthenticatedMessagesConversationIdRoute: typeof AuthenticatedMessagesConversationIdRoute
+  AuthenticatedMessagesConversationIdDebloquerRoute: typeof AuthenticatedMessagesConversationIdDebloquerRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
@@ -325,6 +346,8 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedMatchesMatchIdRoute: AuthenticatedMatchesMatchIdRoute,
   AuthenticatedMessagesConversationIdRoute:
     AuthenticatedMessagesConversationIdRoute,
+  AuthenticatedMessagesConversationIdDebloquerRoute:
+    AuthenticatedMessagesConversationIdDebloquerRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =

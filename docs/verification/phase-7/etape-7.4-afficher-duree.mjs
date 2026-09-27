@@ -194,7 +194,7 @@ check(
   "Prix et durée ensemble (1 USD, 3 jours) ; bouton inchangé",
   ((await pv.getByTestId("unlock-price").textContent()) ?? "").trim() === "1 USD" &&
     (await offer(pv)
-      .getByRole("button", { name: "Débloquer la conversation pour 1 USD", exact: true })
+      .getByRole("link", { name: "Débloquer la conversation pour 1 USD", exact: true })
       .count()) === 1,
 );
 check(
