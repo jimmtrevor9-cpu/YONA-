@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { AppHeader } from "@/components/AppHeader";
 import { MessageComposer } from "@/components/MessageComposer";
 import { MessageThread } from "@/components/MessageThread";
+import { UnlockedBanner } from "@/components/UnlockedBanner";
 import { UnlockOffer } from "@/components/UnlockOffer";
 import { BottomNav } from "@/components/BottomNav";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -170,6 +171,10 @@ function ConversationPage() {
               </div>
             </section>
 
+            {quota?.unlocked ? (
+              <UnlockedBanner byMe={quota.unlockedBy === user?.id} otherName={name} />
+            ) : null}
+
             <section
               className="panel min-h-60 p-5"
               aria-label={`Conversation avec ${name}`}
@@ -193,7 +198,7 @@ function ConversationPage() {
               onTextChange={() => setSendNotice(null)}
             />
 
-            {quota?.exhausted ? (
+            {quota?.exhausted && !quota.unlocked ? (
               <UnlockOffer conversationId={conversationId} otherName={name} />
             ) : null}
           </>

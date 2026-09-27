@@ -8,6 +8,12 @@ export interface MessageQuota {
   remaining: number;
   /** Quota gratuit épuisé (signal du serveur) : déclenche l'offre de déblocage. */
   exhausted: boolean;
+  /** Conversation débloquée (pour les deux participants), vérifié par le serveur. */
+  unlocked: boolean;
+  /** Personne qui a payé le déblocage en cours. */
+  unlockedBy: string | null;
+  /** Fin de la période débloquée (date ISO). */
+  unlockExpiresAt: string | null;
 }
 
 /**
@@ -29,6 +35,9 @@ export const messageQuotaQuery = (userId: string, conversationId: string) =>
         limit: row.quota_limit,
         remaining: row.remaining,
         exhausted: row.exhausted,
+        unlocked: row.unlocked,
+        unlockedBy: row.unlocked_by,
+        unlockExpiresAt: row.unlock_expires_at,
       };
     },
     staleTime: 30 * 1000,

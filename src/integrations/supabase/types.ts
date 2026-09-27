@@ -1108,6 +1108,9 @@ export type Database = {
           exhausted: boolean
           quota_limit: number
           remaining: number
+          unlock_expires_at: string | null
+          unlocked: boolean
+          unlocked_by: string | null
           used: number
         }[]
       }
