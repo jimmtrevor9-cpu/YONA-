@@ -1,5 +1,5 @@
-// YONA — Phase 5 / Étape 7.2 — Vérification de l'affichage du déblocage.
-// Usage : PLAYWRIGHT_ROOT="$(npm root -g)" node docs/verification/phase-7/etape-7.2-afficher-deblocage.mjs
+// YONA — Phase 5 / Étape 7.4 — Vérification de l'affichage de la durée.
+// Usage : PLAYWRIGHT_ROOT="$(npm root -g)" node docs/verification/phase-7/etape-7.4-afficher-duree.mjs
 import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
 
@@ -36,12 +36,12 @@ const check = (name, pass, detail = "") => {
 };
 
 // ---------- Comptes de test temporaires ----------
-sql("delete from auth.users where email like 'test-u72-%@example.test';");
+sql("delete from auth.users where email like 'test-u74-%@example.test';");
 const stamp = Date.now();
-const PWD = "TestU72!2026";
+const PWD = "TestU74!2026";
 const emails = {};
 const mk = (tag, gender, name) => {
-  const e = `test-u72-${tag}-${stamp}@example.test`;
+  const e = `test-u74-${tag}-${stamp}@example.test`;
   emails[tag] = e;
   sql(
     `insert into auth.users (instance_id,id,aud,role,email,encrypted_password,email_confirmed_at,raw_app_meta_data,raw_user_meta_data,created_at,updated_at,confirmation_token,recovery_token,email_change_token_new,email_change) values ('00000000-0000-0000-0000-000000000000',gen_random_uuid(),'authenticated','authenticated','${e}',crypt('${PWD}',gen_salt('bf')),now(),'{"provider":"email","providers":["email"]}','{"first_name":"${name}"}',now(),now(),'','','','');
@@ -169,72 +169,54 @@ const waitOffer = async (p, present) => {
   return (await offer(p).count()) === 1;
 };
 
-// A. Pas d'offre tant qu'il reste des messages gratuits
+for (let i = 1; i <= 3; i++) await send("v", cA, `Message ${i}`);
+
+// A. Durée affichée
 const pv = await login("v");
 await openConv(pv, cA);
-check("3 messages restants : aucune offre de déblocage", !(await waitOffer(pv, false)));
-for (let i = 1; i <= 2; i++) {
-  await field(pv).fill(`Message ${i}`);
-  await button(pv).click();
-  await waitCount(cA, i);
-}
-check("1 message restant : toujours aucune offre", !(await waitOffer(pv, false)));
-
-// B. Offre dès le quota épuisé
-await field(pv).fill("Message 3");
-await button(pv).click();
-check("Après le 3e message : l'offre apparaît sans recharger", await waitOffer(pv, true));
+await waitOffer(pv, true);
+check(
+  "Durée mise en avant : « Messages illimités pendant 3 jours »",
+  ((await pv.getByTestId("unlock-duration").textContent()) ?? "").trim() ===
+    "Messages illimités pendant 3 jours",
+);
 const txt = ((await offer(pv).textContent()) ?? "").replace(/\s+/g, " ");
 check(
-  "Contenu : titre « Débloquer cette conversation » et « Continuez à écrire à … sans limite »",
-  txt.includes("Débloquer cette conversation") &&
-    txt.includes("Continuez à écrire à Qgrace sans limite dans cette conversation"),
-  txt.slice(0, 120),
+  "Texte : « … sans limite dans cette conversation pendant 3 jours. »",
+  txt.includes("Continuez à écrire à Qgrace sans limite dans cette conversation pendant 3 jours."),
+  txt.slice(0, 140),
 );
 check(
-  "Section nommée pour les lecteurs d'écran (titre relié)",
-  (await pv.getByRole("region", { name: "Débloquer cette conversation" }).count()) === 1,
+  "Précision : sans abonnement ni renouvellement automatique",
+  txt.includes("Sans abonnement ni renouvellement automatique."),
 );
 check(
-  "Bouton « Débloquer la conversation » présent mais inactif tant que le paiement n'existe pas",
-  (await offer(pv).getByRole("button", { name: "Débloquer la conversation" }).isDisabled()) &&
-    txt.includes("Le paiement arrive très bientôt."),
+  "Prix et durée ensemble (1 USD, 3 jours) ; bouton inchangé",
+  ((await pv.getByTestId("unlock-price").textContent()) ?? "").trim() === "1 USD" &&
+    (await offer(pv)
+      .getByRole("button", { name: "Débloquer la conversation pour 1 USD", exact: true })
+      .count()) === 1,
 );
+check(
+  "Aucune autre durée affichée (pas de « mois », « semaine », « 30 jours »)",
+  !/mois|semaine|30 jours|7 jours/.test(txt),
+);
+
+// B. Cohérence
 await pv.reload({ waitUntil: "networkidle" });
 await openConv(pv, cA);
 await waitOffer(pv, true);
-await pv.waitForTimeout(500);
-const box = await offer(pv).evaluate((el) => {
-  const r = el.getBoundingClientRect();
-  return { top: r.top, bottom: r.bottom, h: window.innerHeight };
-});
 check(
-  "Offre visible à l'écran à l'ouverture de la conversation",
-  box.top >= 0 && box.top < box.h,
-  JSON.stringify(box),
+  "Après rechargement : même durée",
+  ((await pv.getByTestId("unlock-duration").textContent()) ?? "").includes("3 jours"),
 );
-
-// C. Persistance, indépendance
-await pv.reload({ waitUntil: "networkidle" });
-await openConv(pv, cA);
-check("Après rechargement : offre toujours affichée", await waitOffer(pv, true));
 await openConv(pv, cB);
-check("Autre conversation de Paul (quota intact) : pas d'offre", !(await waitOffer(pv, false)));
-const pa = await login("a");
-await openConv(pa, cA);
 check(
-  "Grace (quota intact) : pas d'offre dans la même conversation",
-  !(await waitOffer(pa, false)),
-);
-const pc = await login("c");
-await pc.goto(`${BASE}/messages/${cA}`, { waitUntil: "networkidle" });
-await pc.getByTestId("conversation-unavailable").waitFor({ timeout: 8000 });
-check(
-  "Personne extérieure : conversation non disponible, pas d'offre",
-  (await offer(pc).count()) === 0,
+  "Conversation non épuisée : aucune durée affichée",
+  !(await waitOffer(pv, false)) && (await pv.getByTestId("unlock-duration").count()) === 0,
 );
 
-// D. Petit écran
+// C. Petit écran
 const small = await (await browser.newContext({ viewport: { width: 320, height: 700 } })).newPage();
 small.on("pageerror", (e) => jsErrors.push(String(e).slice(0, 120)));
 await small.goto(`${BASE}/login`, { waitUntil: "networkidle" });
@@ -243,19 +225,20 @@ await small.fill("#password", PWD);
 await small.click("button[type=submit]");
 await small.waitForURL(/\/discover$/, { timeout: 8000 });
 await openConv(small, cA);
+await waitOffer(small, true);
 check(
-  "Petit écran (320 px) : offre affichée, sans débordement",
-  (await waitOffer(small, true)) &&
+  "Petit écran (320 px) : durée lisible, sans débordement",
+  (await small.getByTestId("unlock-duration").isVisible()) &&
     !(await small.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)),
 );
 check("Aucune erreur JavaScript", jsErrors.length === 0, jsErrors.join(" | "));
 await browser.close();
 
 // ---------- Nettoyage ----------
-sql("delete from auth.users where email like 'test-u72-%@example.test';");
+sql("delete from auth.users where email like 'test-u74-%@example.test';");
 check(
   "Nettoyage : comptes, conversations et messages supprimés",
-  sql("select count(*) from auth.users where email like 'test-u72-%'") === "0" &&
+  sql("select count(*) from auth.users where email like 'test-u74-%'") === "0" &&
     sql(`select count(*) from public.messages where conversation_id in ('${cA}','${cB}')`) === "0",
 );
 

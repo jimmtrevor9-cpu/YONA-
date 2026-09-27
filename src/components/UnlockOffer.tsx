@@ -2,7 +2,7 @@ import { LockOpen } from "lucide-react";
 import { useId } from "react";
 
 import { Button } from "@/components/ui/button";
-import { CONVERSATION_UNLOCK, formatUsdShort } from "@/features/monetization/rules";
+import { CONVERSATION_UNLOCK, formatDays, formatUsdShort } from "@/features/monetization/rules";
 
 interface UnlockOfferProps {
   otherName: string;
@@ -26,13 +26,18 @@ export function UnlockOffer({ otherName }: UnlockOfferProps) {
         Débloquer cette conversation
       </h2>
       <p className="text-sm text-muted-foreground">
-        Continuez à écrire à {otherName} sans limite dans cette conversation.
+        Continuez à écrire à {otherName} sans limite dans cette conversation pendant{" "}
+        {formatDays(CONVERSATION_UNLOCK.durationDays)}.
       </p>
       <p className="font-display text-2xl font-semibold text-gold" data-testid="unlock-price">
         {formatUsdShort(CONVERSATION_UNLOCK.amount)}
       </p>
+      <p className="text-sm font-medium text-foreground" data-testid="unlock-duration">
+        Messages illimités pendant {formatDays(CONVERSATION_UNLOCK.durationDays)}
+      </p>
       <p className="text-[11px] text-muted-foreground">
-        Paiement unique, pour cette conversation seulement.
+        Paiement unique, pour cette conversation seulement. Sans abonnement ni renouvellement
+        automatique.
       </p>
       <Button type="button" className="w-full" disabled>
         Débloquer la conversation pour {formatUsdShort(CONVERSATION_UNLOCK.amount)}

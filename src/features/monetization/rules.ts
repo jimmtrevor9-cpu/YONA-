@@ -62,6 +62,11 @@ export function formatUsdShort(amountInCents: number): string {
   return `${text} ${CURRENCY_LABEL}`;
 }
 
+/** Durée en jours, en toutes lettres courtes (« 1 jour », « 3 jours »). */
+export function formatDays(days: number): string {
+  return days === 1 ? "1 jour" : `${days} jours`;
+}
+
 /** Conservé pour l'affichage des montants historiques en FCFA. */
 export function formatFcfa(amount: number): string {
   return `${new Intl.NumberFormat("fr-FR").format(amount)} ${LEGACY_CURRENCY_LABEL}`;
