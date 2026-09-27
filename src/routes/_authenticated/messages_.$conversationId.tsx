@@ -13,7 +13,12 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { sendMessage as sendMessageFn } from "@/features/messaging/messages.functions";
-import { conversationQuery } from "@/features/messaging/queries";
+import {
+  conversationMessagesQuery,
+  conversationQuery,
+  mergeThreadMessage,
+  type ThreadMessage,
+} from "@/features/messaging/queries";
 import { isConversationGoneError, sendMessageErrorMessage } from "@/features/messaging/send";
 import { APP_NAME } from "@/lib/config";
 
@@ -43,14 +48,38 @@ function ConversationPage() {
   const queryClient = useQueryClient();
   const send = useServerFn(sendMessageFn);
 
-  // Envoi : enregistré et vérifié par le serveur ; en cas de refus, le texte reste dans le
-  // champ et la raison s'affiche.
+  // Envoi : le message s'affiche tout de suite (« Envoi… »), puis est remplacé par le
+  // message enregistré et vérifié par le serveur. En cas de refus, il disparaît du fil, le
+  // texte reste dans le champ et la raison s'affiche.
   const sendMessage = async (content: string) => {
+    const { queryKey } = conversationMessagesQuery(user?.id ?? "", conversationId);
+    const pending: ThreadMessage = {
+      id: `envoi-${crypto.randomUUID()}`,
+      content,
+      fromMe: true,
+      status: "sending",
+      createdAt: new Date().toISOString(),
+    };
+    queryClient.setQueryData(queryKey, (list) => mergeThreadMessage(list, pending));
     try {
-      await send({ data: { conversationId, content } });
-      void queryClient.invalidateQueries({ queryKey: ["conversations"] });
+      const sent = await send({ data: { conversationId, content } });
+      queryClient.setQueryData(queryKey, (list) =>
+        mergeThreadMessage(
+          list,
+          {
+            id: sent.id,
+            content: sent.content,
+            fromMe: true,
+            status: "delivered",
+            createdAt: sent.createdAt,
+          },
+          pending.id,
+        ),
+      );
+      void queryClient.invalidateQueries({ queryKey: ["conversations", "mine"] });
       return true;
     } catch (error) {
+      queryClient.setQueryData(queryKey, (list) => list?.filter((m) => m.id !== pending.id));
       toast.error(sendMessageErrorMessage(error));
       if (isConversationGoneError(error)) {
         void queryClient.invalidateQueries({ queryKey: ["conversations"] });

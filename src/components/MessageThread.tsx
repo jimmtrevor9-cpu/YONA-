@@ -1,7 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useRef } from "react";
+import { ArrowDown } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 import { Skeleton } from "@/components/ui/skeleton";
+import { useLiveConversation } from "@/features/messaging/live";
 import { conversationMessagesQuery } from "@/features/messaging/queries";
 import { cn } from "@/lib/utils";
 
@@ -31,15 +33,44 @@ interface MessageThreadProps {
 
 /** Fil des messages d'une conversation (plus anciens en haut, défilement vers le bas). */
 export function MessageThread({ userId, conversationId, otherName }: MessageThreadProps) {
+  const live = useLiveConversation(userId, conversationId);
   const { data, isLoading, isError } = useQuery({
     ...conversationMessagesQuery(userId, conversationId),
     enabled: !!userId,
+    // Sans connexion en direct, les nouveaux messages sont recherchés toutes les 10 s.
+    refetchInterval: live ? false : 10 * 1000,
   });
   const endRef = useRef<HTMLDivElement>(null);
+  const lastIdRef = useRef<string | null>(null);
+  const nearBottomRef = useRef(true);
+  const [unseen, setUnseen] = useState(false);
 
+  const scrollToBottom = () => {
+    window.scrollTo({ top: document.documentElement.scrollHeight });
+    setUnseen(false);
+  };
+
+  // Position de lecture : proche du bas de la page ou en train de relire l'historique.
   useEffect(() => {
-    // Tout en bas de la page : dernier message visible juste au-dessus du champ de saisie.
-    if (endRef.current) window.scrollTo({ top: document.documentElement.scrollHeight });
+    const onScroll = () => {
+      nearBottomRef.current =
+        window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 160;
+      if (nearBottomRef.current) setUnseen(false);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  // Nouveau dernier message : on descend s'il vient de soi, à l'ouverture ou si l'on était
+  // déjà en bas ; sinon (lecture de l'historique) un bouton « Nouveau message » apparaît.
+  useEffect(() => {
+    const last = data?.at(-1);
+    if (!endRef.current || !last) return;
+    const first = lastIdRef.current === null;
+    if (last.id === lastIdRef.current) return;
+    lastIdRef.current = last.id;
+    if (first || last.fromMe || nearBottomRef.current) scrollToBottom();
+    else setUnseen(true);
   }, [data]);
 
   if (isLoading) {
@@ -88,7 +119,7 @@ export function MessageThread({ userId, conversationId, otherName }: MessageThre
                     message.fromMe
                       ? "rounded-br-md bg-primary text-primary-foreground"
                       : "panel-2 rounded-bl-md text-foreground",
-                    message.status === "blocked" && "opacity-60",
+                    message.status !== "delivered" && "opacity-60",
                   )}
                 >
                   <span className="sr-only">{message.fromMe ? "Vous : " : `${otherName} : `}</span>
@@ -96,6 +127,7 @@ export function MessageThread({ userId, conversationId, otherName }: MessageThre
                 </p>
                 <span className="mt-0.5 text-[10px] text-muted-foreground">
                   <time dateTime={message.createdAt}>{timeFormat.format(date)}</time>
+                  {message.status === "sending" ? <span> · Envoi…</span> : null}
                   {message.status === "blocked" ? (
                     <span className="text-destructive">
                       {" "}
@@ -109,6 +141,16 @@ export function MessageThread({ userId, conversationId, otherName }: MessageThre
         })}
       </ol>
       <div ref={endRef} />
+      {unseen ? (
+        <button
+          type="button"
+          onClick={scrollToBottom}
+          className="sticky bottom-44 z-40 mx-auto mt-2 flex items-center gap-1.5 rounded-full bg-primary px-4 py-1.5 text-xs font-medium text-primary-foreground shadow-lg"
+        >
+          <ArrowDown className="size-3.5" aria-hidden />
+          Nouveau message
+        </button>
+      ) : null}
     </>
   );
 }

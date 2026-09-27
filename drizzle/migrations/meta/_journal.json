@@ -148,6 +148,13 @@
       "when": 1790503200000,
       "tag": "0020_phase4_enregistrer_message",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1790506800000,
+      "tag": "0021_phase4_messages_direct",
+      "breakpoints": true
     }
   ]
 }

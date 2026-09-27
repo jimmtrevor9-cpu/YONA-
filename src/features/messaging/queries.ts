@@ -180,13 +180,50 @@ export interface ThreadMessage {
   id: string;
   content: string;
   fromMe: boolean;
-  /** « blocked » : message retenu par la modération (visible seulement par son auteur). */
-  status: "delivered" | "blocked";
+  /**
+   * « blocked » : message retenu par la modération (visible seulement par son auteur) ;
+   * « sending » : message de la personne connectée en cours d'envoi (affiché tout de suite).
+   */
+  status: "delivered" | "blocked" | "sending";
   createdAt: string;
+}
+
+/** Ligne de la table `messages` telle que lue par l'application (ou reçue en direct). */
+export interface MessageRow {
+  id: string;
+  sender_id: string;
+  content: string;
+  status: string;
+  created_at: string;
 }
 
 /** Nombre maximal de messages chargés (les plus récents). */
 export const THREAD_PAGE_SIZE = 200;
+
+export function toThreadMessage(row: MessageRow, userId: string): ThreadMessage {
+  return {
+    id: row.id,
+    content: row.content,
+    fromMe: row.sender_id === userId,
+    status: row.status === "blocked" ? "blocked" : "delivered",
+    createdAt: row.created_at,
+  };
+}
+
+/**
+ * Ajoute (ou remplace, même identifiant) un message dans un fil, en gardant l'ordre
+ * chronologique. `replaceId` retire en plus un message provisoire (« sending »).
+ */
+export function mergeThreadMessage(
+  list: ThreadMessage[] | undefined,
+  message: ThreadMessage,
+  replaceId?: string,
+): ThreadMessage[] {
+  const rest = (list ?? []).filter((m) => m.id !== message.id && m.id !== replaceId);
+  return [...rest, message].sort(
+    (a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id),
+  );
+}
 
 /**
  * Messages d'une conversation, du plus ancien au plus récent (les 200 derniers).
@@ -205,15 +242,7 @@ export const conversationMessagesQuery = (userId: string, conversationId: string
         .order("created_at", { ascending: false })
         .limit(THREAD_PAGE_SIZE);
       if (error) throw error;
-      return (data ?? [])
-        .map((m) => ({
-          id: m.id,
-          content: m.content,
-          fromMe: m.sender_id === userId,
-          status: m.status === "blocked" ? ("blocked" as const) : ("delivered" as const),
-          createdAt: m.created_at,
-        }))
-        .reverse();
+      return (data ?? []).map((m) => toThreadMessage(m, userId)).reverse();
     },
     staleTime: 10 * 1000,
   });

@@ -21,7 +21,7 @@ interface MessageComposerProps {
   otherName: string;
   /**
    * Envoi du texte (déjà nettoyé des espaces de début et de fin). Renvoie `true` si le
-   * message est parti : le champ et le brouillon sont alors vidés ; sinon le texte reste.
+   * message est parti : le brouillon est alors effacé ; sinon le texte revient dans le champ.
    */
   onSend: (text: string) => Promise<boolean>;
 }
@@ -56,12 +56,16 @@ export function MessageComposer({
     if (sendingRef.current || !isMessageSendable(text)) return;
     sendingRef.current = true;
     setSending(true);
+    // Le champ se vide aussitôt (le message s'affiche dans le fil) ; si l'envoi échoue, le
+    // texte est remis dans le champ.
+    const draft = text;
+    setText("");
+    let sent = false;
     try {
-      if (await onSend(normalizeMessage(text))) {
-        setText("");
-        saveDraft(userId, conversationId, "");
-      }
+      sent = await onSend(normalizeMessage(draft));
     } finally {
+      if (sent) saveDraft(userId, conversationId, "");
+      else setText((current) => current || draft);
       sendingRef.current = false;
       setSending(false);
       textareaRef.current?.focus();
