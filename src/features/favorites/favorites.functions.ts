@@ -5,6 +5,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 export const FAVORITE_ERRORS = {
   unavailable: "Ce profil n'est plus disponible.",
+  self: "Vous ne pouvez pas ajouter votre propre profil à vos favoris.",
 } as const;
 
 const favoriteInput = z.object({
@@ -24,6 +25,9 @@ export const addFavorite = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data) => favoriteInput.parse(data))
   .handler(async ({ data, context }) => {
+    // La base refuse aussi (contrainte `favorites_no_self`) ; ce contrôle donne un message
+    // clair. Les identifiants sont comparés sous leur forme canonique (minuscules).
+    if (data.profileId === context.userId.toLowerCase()) throw new Error(FAVORITE_ERRORS.self);
     const { error } = await context.supabase
       .from("favorites")
       .insert({ user_id: context.userId, favorite_user_id: data.profileId });
