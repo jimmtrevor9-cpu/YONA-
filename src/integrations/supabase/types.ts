@@ -1036,6 +1036,16 @@ export type Database = {
     }
     Functions: {
       can_browse_profiles: { Args: never; Returns: boolean }
+      confirm_payment: {
+        Args: {
+          _amount: number
+          _currency: string
+          _payment_id: string
+          _provider: string
+          _provider_transaction_id: string
+        }
+        Returns: Database["public"]["Enums"]["payment_status"]
+      }
       consume_ai_quota: { Args: { _feature?: string }; Returns: Json }
       consume_free_message: {
         Args: { _conversation_id: string }

@@ -12,6 +12,7 @@ import { useAuth } from "@/features/auth/AuthProvider";
 import { conversationQuery } from "@/features/messaging/queries";
 import { CONVERSATION_UNLOCK, formatDays, formatUsdShort } from "@/features/monetization/rules";
 import {
+  confirmTestPayment,
   getPaymentAvailability,
   startUnlockPayment,
   unlockPaymentErrorMessage,
@@ -51,6 +52,10 @@ function UnlockPaymentPage() {
   const start = useServerFn(startUnlockPayment);
   const payment = useMutation({
     mutationFn: () => start({ data: { conversationId } }),
+  });
+  const confirmTest = useServerFn(confirmTestPayment);
+  const confirmation = useMutation({
+    mutationFn: (paymentId: string) => confirmTest({ data: { paymentId } }),
   });
   const name = data?.firstName ?? "Membre";
 
@@ -146,8 +151,20 @@ function UnlockPaymentPage() {
                     Aucun paiement ne peut être effectué pour le moment. Revenez bientôt.
                   </p>
                 </div>
+              ) : confirmation.isSuccess ? (
+                <div
+                  className="space-y-2 text-center"
+                  data-testid="payment-confirmed"
+                  role="status"
+                >
+                  <Check className="mx-auto size-6 text-gold" aria-hidden />
+                  <p className="text-sm font-medium text-foreground">Paiement confirmé.</p>
+                  <p className="text-xs text-muted-foreground">
+                    Votre paiement de {PRICE} a bien été enregistré.
+                  </p>
+                </div>
               ) : payment.isSuccess ? (
-                <div className="space-y-2 text-center" data-testid="payment-pending" role="status">
+                <div className="space-y-3 text-center" data-testid="payment-pending" role="status">
                   <LockOpen className="mx-auto size-6 text-gold" aria-hidden />
                   <p className="text-sm font-medium text-foreground">
                     Paiement créé, en attente de confirmation.
@@ -155,6 +172,24 @@ function UnlockPaymentPage() {
                   <p className="text-xs text-muted-foreground">
                     La conversation sera débloquée dès que le paiement sera confirmé.
                   </p>
+                  {payment.data.testMode ? (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="w-full border border-gold/40"
+                      disabled={confirmation.isPending}
+                      onClick={() => confirmation.mutate(payment.data.paymentId)}
+                    >
+                      {confirmation.isPending
+                        ? "Confirmation…"
+                        : "Confirmer le paiement de test (aucun argent réel)"}
+                    </Button>
+                  ) : null}
+                  {confirmation.isError ? (
+                    <p className="text-xs text-destructive" role="alert">
+                      {unlockPaymentErrorMessage(confirmation.error)}
+                    </p>
+                  ) : null}
                 </div>
               ) : (
                 <>
