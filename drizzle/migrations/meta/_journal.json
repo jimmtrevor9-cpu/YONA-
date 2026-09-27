@@ -253,6 +253,13 @@
       "when": 1790557200000,
       "tag": "0035_phase6_empecher_stockage",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1790560800000,
+      "tag": "0036_phase6_enforcement_serveur",
+      "breakpoints": true
     }
   ]
 }
