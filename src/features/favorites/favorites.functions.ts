@@ -28,11 +28,14 @@ export const addFavorite = createServerFn({ method: "POST" })
       .from("favorites")
       .insert({ user_id: context.userId, favorite_user_id: data.profileId });
     if (error) {
+      // Déjà en favori (autre onglet, double clic…) : la contrainte d'unicité de la base
+      // garantit un seul favori par couple ; rien n'est écrit une seconde fois.
+      if (error.code === "23505") return { profileId: data.profileId, alreadyFavorite: true };
       // Règle d'accès non respectée (profil masqué, suspendu, bloqué…).
       if (error.code === "42501") throw new Error(FAVORITE_ERRORS.unavailable);
       throw error;
     }
-    return { profileId: data.profileId, favorite: true };
+    return { profileId: data.profileId, alreadyFavorite: false };
   });
 
 /**
@@ -45,13 +48,14 @@ export const removeFavorite = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data) => favoriteInput.parse(data))
   .handler(async ({ data, context }) => {
-    const { error } = await context.supabase
+    const { data: removed, error } = await context.supabase
       .from("favorites")
       .delete()
       .eq("user_id", context.userId)
-      .eq("favorite_user_id", data.profileId);
+      .eq("favorite_user_id", data.profileId)
+      .select("id");
     if (error) throw error;
-    return { profileId: data.profileId, favorite: false };
+    return { profileId: data.profileId, wasFavorite: (removed ?? []).length > 0 };
   });
 
 /** Message à afficher pour une erreur de favori. */

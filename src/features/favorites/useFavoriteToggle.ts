@@ -19,9 +19,11 @@ export function useFavoriteToggle(userId: string) {
   const { queryKey } = myFavoriteIdsQuery(userId);
 
   const mutation = useMutation({
-    mutationFn: async ({ profileId, favorite }: ToggleVariables): Promise<void> => {
-      if (favorite) await add({ data: { profileId } });
-      else await remove({ data: { profileId } });
+    // `changed` vaut false si l'état était déjà le bon côté serveur (autre onglet, double
+    // clic) : rien n'est écrit deux fois.
+    mutationFn: async ({ profileId, favorite }: ToggleVariables): Promise<boolean> => {
+      if (favorite) return !(await add({ data: { profileId } })).alreadyFavorite;
+      return (await remove({ data: { profileId } })).wasFavorite;
     },
     onMutate: async ({ profileId, favorite }) => {
       await queryClient.cancelQueries({ queryKey });
@@ -34,8 +36,15 @@ export function useFavoriteToggle(userId: string) {
       });
       return { previous };
     },
-    onSuccess: (_result, { favorite }) =>
-      toast.success(favorite ? "Ajouté à vos favoris." : "Retiré de vos favoris."),
+    onSuccess: (changed, { favorite }) => {
+      if (!changed)
+        toast.info(
+          favorite
+            ? "Ce profil est déjà dans vos favoris."
+            : "Ce profil n'était déjà plus dans vos favoris.",
+        );
+      else toast.success(favorite ? "Ajouté à vos favoris." : "Retiré de vos favoris.");
+    },
     onError: (error, _variables, context) => {
       queryClient.setQueryData(queryKey, context?.previous);
       toast.error(favoriteErrorMessage(error));
