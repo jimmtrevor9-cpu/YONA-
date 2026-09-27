@@ -14,6 +14,8 @@ export interface MessageQuota {
   unlockedBy: string | null;
   /** Fin de la période débloquée (date ISO). */
   unlockExpiresAt: string | null;
+  /** Fin du dernier déblocage terminé (quand aucun n'est en cours). */
+  lastUnlockExpiredAt: string | null;
 }
 
 /**
@@ -38,6 +40,7 @@ export const messageQuotaQuery = (userId: string, conversationId: string) =>
         unlocked: row.unlocked,
         unlockedBy: row.unlocked_by,
         unlockExpiresAt: row.unlock_expires_at,
+        lastUnlockExpiredAt: row.last_unlock_expired_at,
       };
     },
     staleTime: 30 * 1000,
@@ -49,4 +52,29 @@ export function remainingLabel(remaining: number): string {
   return remaining === 1
     ? "1 message gratuit restant dans cette conversation"
     : `${remaining} messages gratuits restants dans cette conversation`;
+}
+
+const dateTimeFormat = new Intl.DateTimeFormat("fr-FR", {
+  weekday: "long",
+  day: "numeric",
+  month: "long",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
+/** « mardi 30 septembre à 17:58 » (heure locale de la personne). */
+export function formatUnlockDate(iso: string): string {
+  return dateTimeFormat.format(new Date(iso));
+}
+
+/** Temps restant avant la fin : « 2 j 5 h », « 5 h 12 min », « 45 min », « moins d'1 min ». */
+export function formatRemaining(iso: string, now = Date.now()): string {
+  const minutes = Math.floor((new Date(iso).getTime() - now) / 60000);
+  if (minutes < 1) return "moins d'1 min";
+  const days = Math.floor(minutes / 1440);
+  const hours = Math.floor((minutes % 1440) / 60);
+  const mins = minutes % 60;
+  if (days > 0) return hours > 0 ? `${days} j ${hours} h` : `${days} j`;
+  if (hours > 0) return mins > 0 ? `${hours} h ${mins} min` : `${hours} h`;
+  return `${mins} min`;
 }

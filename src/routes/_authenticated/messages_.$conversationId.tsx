@@ -172,7 +172,12 @@ function ConversationPage() {
             </section>
 
             {quota?.unlocked ? (
-              <UnlockedBanner byMe={quota.unlockedBy === user?.id} otherName={name} />
+              <UnlockedBanner
+                byMe={quota.unlockedBy === user?.id}
+                otherName={name}
+                expiresAt={quota.unlockExpiresAt}
+                onExpire={() => void refreshQuota()}
+              />
             ) : null}
 
             <section
@@ -200,7 +205,11 @@ function ConversationPage() {
             />
 
             {quota?.exhausted && !quota.unlocked ? (
-              <UnlockOffer conversationId={conversationId} otherName={name} />
+              <UnlockOffer
+                conversationId={conversationId}
+                otherName={name}
+                expiredAt={quota.lastUnlockExpiredAt}
+              />
             ) : null}
           </>
         )}

@@ -1106,6 +1106,7 @@ export type Database = {
         Args: { _conversation_id: string }
         Returns: {
           exhausted: boolean
+          last_unlock_expired_at: string | null
           quota_limit: number
           remaining: number
           unlock_expires_at: string | null
