@@ -286,18 +286,16 @@ const listen = async (tag, conversationId) => {
   const client = createClient(API, KEY, { auth: { persistSession: false } });
   await client.auth.signInWithPassword({ email: emails[tag], password: PWD });
   const got = [];
-  const channel = client
-    .channel(`test-${tag}-${Date.now()}`)
-    .on(
-      "postgres_changes",
-      {
-        event: "INSERT",
-        schema: "public",
-        table: "messages",
-        filter: `conversation_id=eq.${conversationId}`,
-      },
-      (p) => got.push(p.new.content),
-    );
+  const channel = client.channel(`test-${tag}-${Date.now()}`).on(
+    "postgres_changes",
+    {
+      event: "INSERT",
+      schema: "public",
+      table: "messages",
+      filter: `conversation_id=eq.${conversationId}`,
+    },
+    (p) => got.push(p.new.content),
+  );
   await new Promise((res) => channel.subscribe((s) => s === "SUBSCRIBED" && res()));
   return { client, got };
 };
