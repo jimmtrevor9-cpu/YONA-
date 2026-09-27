@@ -6,6 +6,8 @@ export interface MessageQuota {
   used: number;
   limit: number;
   remaining: number;
+  /** Quota gratuit épuisé (signal du serveur) : déclenche l'offre de déblocage. */
+  exhausted: boolean;
 }
 
 /**
@@ -22,7 +24,12 @@ export const messageQuotaQuery = (userId: string, conversationId: string) =>
       if (error) throw error;
       const row = data?.[0];
       if (!row) throw new Error("Quota indisponible.");
-      return { used: row.used, limit: row.quota_limit, remaining: row.remaining };
+      return {
+        used: row.used,
+        limit: row.quota_limit,
+        remaining: row.remaining,
+        exhausted: row.exhausted,
+      };
     },
     staleTime: 30 * 1000,
   });

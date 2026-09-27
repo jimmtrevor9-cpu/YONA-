@@ -1095,6 +1095,7 @@ export type Database = {
       get_message_quota: {
         Args: { _conversation_id: string }
         Returns: {
+          exhausted: boolean
           quota_limit: number
           remaining: number
           used: number
