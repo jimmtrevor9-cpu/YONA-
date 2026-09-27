@@ -88,7 +88,8 @@ const openConv = async (page, c) => {
 };
 const field = (page) => page.getByLabel(/^Votre message à /);
 
-const button = (page) => page.getByRole("button", { name: /^(Envoyer le message|Envoi du message…)$/ });
+const button = (page) =>
+  page.getByRole("button", { name: /^(Envoyer le message|Envoi du message…)$/ });
 const infoToast = (page) =>
   page
     .locator("[data-sonner-toast]")
