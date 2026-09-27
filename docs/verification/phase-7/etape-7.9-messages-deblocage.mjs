@@ -1,5 +1,5 @@
-// YONA — Phase 5 / Étape 7.8 — Vérification de l'application du déblocage à la conversation.
-// Usage : PLAYWRIGHT_ROOT="$(npm root -g)" node docs/verification/phase-7/etape-7.8-appliquer-deblocage.mjs
+// YONA — Phase 5 / Étape 7.9 — Vérification des messages autorisés pendant le déblocage.
+// Usage : PLAYWRIGHT_ROOT="$(npm root -g)" node docs/verification/phase-7/etape-7.9-messages-deblocage.mjs
 import { execFileSync } from "node:child_process";
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
@@ -37,12 +37,12 @@ const check = (name, pass, detail = "") => {
 };
 
 // ---------- Comptes de test temporaires ----------
-sql("delete from auth.users where email like 'test-u78-%@example.test';");
+sql("delete from auth.users where email like 'test-u79-%@example.test';");
 const stamp = Date.now();
-const PWD = "TestU78!2026";
+const PWD = "TestU79!2026";
 const emails = {};
 const mk = (tag, gender, name) => {
-  const e = `test-u78-${tag}-${stamp}@example.test`;
+  const e = `test-u79-${tag}-${stamp}@example.test`;
   emails[tag] = e;
   sql(
     `insert into auth.users (instance_id,id,aud,role,email,encrypted_password,email_confirmed_at,raw_app_meta_data,raw_user_meta_data,created_at,updated_at,confirmation_token,recovery_token,email_change_token_new,email_change) values ('00000000-0000-0000-0000-000000000000',gen_random_uuid(),'authenticated','authenticated','${e}',crypt('${PWD}',gen_salt('bf')),now(),'{"provider":"email","providers":["email"]}','{"first_name":"${name}"}',now(),now(),'','','','');
@@ -216,137 +216,103 @@ const settleQuota = async (p) => {
   await p.waitForTimeout(600);
 };
 for (let i = 1; i <= 3; i++) await send("v", cA, `Paul ${i}`);
-for (let i = 1; i <= 3; i++) await send("a", cA, `Grace ${i}`);
+await send("a", cA, "Grace 1");
 
-// A. Avant
+// A. Avant : quota appliqué
+check(
+  "Avant déblocage : 4e message de Paul refusé",
+  (await send("v", cA, "Refusé")).text.includes("free_limit_reached"),
+);
+
+// B. Pendant le déblocage (payé par Paul)
+await unlock("v", cA, "tx-79");
 const pv = await login("v");
 await openConv(pv, cA);
 await settleQuota(pv);
 check(
-  "Avant déblocage : pas de bandeau, offre affichée (quota épuisé)",
-  (await banner(pv).count()) === 0 && (await waitOffer(pv, true)),
+  "Écran : « Conversation débloquée : messages illimités », champ ouvert",
+  ((await pv.getByTestId("message-quota").textContent()) ?? "").trim() ===
+    "Conversation débloquée : messages illimités" && (await field(pv).isEnabled()),
 );
-let q = await quota("v", cA);
+for (let i = 1; i <= 3; i++) {
+  await field(pv).fill(`Illimité ${i}`);
+  await button(pv).click();
+  await waitCount(cA, 4 + i);
+}
 check(
-  "Serveur : non débloquée",
-  q.unlocked === false && q.unlocked_by === null && q.unlock_expires_at === null,
+  "3 messages envoyés depuis l'application au-delà du quota : acceptés et affichés",
+  count(cA) === "7" && (await pv.getByText("Illimité 3").count()) >= 1,
+);
+let ok = 0;
+for (let i = 1; i <= 15; i++) if ((await send("v", cA, `Série ${i}`)).status === 200) ok++;
+check("15 messages de plus : tous acceptés", ok === 15 && count(cA) === "22");
+const burst = await Promise.all(
+  Array.from({ length: 10 }, (_, i) => send("v", cA, `Simultané ${i}`)),
+);
+check(
+  "10 messages envoyés en même temps : tous acceptés",
+  burst.every((r) => r.status === 200) && count(cA) === "32",
+);
+check("Compteur gratuit de Paul inchangé pendant le déblocage (3)", used(cA, "v") === "3");
+ok = 0;
+for (let i = 2; i <= 6; i++) if ((await send("a", cA, `Grace ${i}`)).status === 200) ok++;
+check("Grace (qui n'a pas payé) : messages illimités aussi (5 acceptés)", ok === 5);
+check("Compteur gratuit de Grace préservé (toujours 1 utilisé)", used(cA, "a") === "1");
+
+// C. Les autres règles s'appliquent toujours
+check(
+  "Numéro de téléphone : toujours refusé",
+  (await send("v", cA, "06 12 34 56 78")).text.includes("phone_number_detected"),
+);
+check(
+  "Message vide : toujours refusé",
+  (await send("v", cA, "   ")).text.includes("message_empty"),
+);
+check(
+  "Personne extérieure : toujours refusée",
+  (await send("c", cA, "Intrus")).text.includes("conversation_unavailable"),
+);
+sql(`insert into public.blocks (blocker_id, blocked_id) values ('${id.a}','${id.v}')`);
+check(
+  "Blocage : envoi refusé malgré le déblocage",
+  (await send("v", cA, "Bloqué")).text.includes("conversation_unavailable"),
+);
+sql(`delete from public.blocks where blocker_id='${id.a}'`);
+for (let i = 1; i <= 3; i++) await send("v", cB, `Ruth ${i}`);
+check(
+  "Autre conversation de Paul (non débloquée) : quota toujours appliqué",
+  (await send("v", cB, "Ruth 4")).text.includes("free_limit_reached"),
 );
 
-// B. Paul débloque ; appliqué aux deux participants
-await unlock("v", cA, "tx-paul");
-q = await quota("v", cA);
-const qa = await quota("a", cA);
-check(
-  "Serveur, pour Paul : débloquée, payée par Paul",
-  q.unlocked === true && q.unlocked_by === id.v,
-  JSON.stringify(q),
+// D. Fin du déblocage (période terminée, simulée)
+sql(
+  `update public.conversation_unlocks set starts_at = now() - interval '4 days', expires_at = now() - interval '1 day' where conversation_id='${cA}'`,
 );
 check(
-  "Serveur, pour Grace : débloquée, payée par Paul (même conversation)",
-  qa.unlocked === true && qa.unlocked_by === id.v,
+  "Déblocage terminé : Paul (3 utilisés) de nouveau refusé",
+  (await send("v", cA, "Après")).text.includes("free_limit_reached"),
 );
-const hours = (iso) => (new Date(iso).getTime() - Date.now()) / 3600000;
 check(
-  "Fin de période : dans 3 jours (≈ 72 h)",
-  Math.abs(hours(q.unlock_expires_at) - 72) < 0.1 && q.unlock_expires_at === qa.unlock_expires_at,
+  "Grace : ses 2 messages gratuits restants sont utilisables",
+  (await send("a", cA, "Grace après 1")).status === 200 &&
+    (await send("a", cA, "Grace après 2")).status === 200 &&
+    (await send("a", cA, "Grace après 3")).text.includes("free_limit_reached"),
 );
 await pv.reload({ waitUntil: "networkidle" });
 await openConv(pv, cA);
 await settleQuota(pv);
-check(
-  "Paul : bandeau « Conversation débloquée — Débloquée par vous, pour vous deux. »",
-  ((await banner(pv).textContent()) ?? "")
-    .replace(/\s+/g, " ")
-    .includes("Conversation débloquéeDébloquée par vous, pour vous deux."),
-);
-check("Paul : l'offre de paiement disparaît", (await offer(pv).count()) === 0);
-const pa = await login("a");
-await openConv(pa, cA);
-await settleQuota(pa);
-check(
-  "Grace : bandeau « Débloquée par Qpaul, pour vous deux. »",
-  ((await banner(pa).textContent()) ?? "").includes("Débloquée par Qpaul, pour vous deux."),
-);
-check("Grace (quota épuisé elle aussi) : pas d'offre de paiement", (await offer(pa).count()) === 0);
-// Depuis l'étape 7.9, l'envoi est autorisé pendant le déblocage.
-check(
-  "Pendant le déblocage : envoi accepté malgré le quota épuisé (étape 7.9)",
-  (await send("v", cA, "Message pendant le déblocage")).status === 200,
-);
-
-// C. Portée du déblocage
-check(
-  "Autre conversation de Paul : non débloquée, pas de bandeau",
-  (await quota("v", cB)).unlocked === false,
-);
-await openConv(pv, cB);
-await settleQuota(pv);
-check("… et aucun bandeau à l'écran", (await banner(pv).count()) === 0);
-let r = await api("c", "rpc/get_message_quota", "POST", { _conversation_id: cA });
-check(
-  "Personne extérieure : aucune information (conversation indisponible)",
-  r.text.includes("conversation_unavailable"),
-);
-r = await startPayment("a", cA);
-check(
-  "Nouveau paiement pour une conversation déjà débloquée : refusé",
-  r.text.includes("unlock_already_active"),
-);
-await pa.goto(`${BASE}/messages/${cA}/debloquer`, { waitUntil: "networkidle" });
-await pa.getByRole("button", { name: "Payer 1 USD" }).click();
-await pa
-  .getByText("Cette conversation est déjà débloquée.")
-  .waitFor({ timeout: 8000 })
-  .catch(() => {});
-check(
-  "Écran de paiement : « Cette conversation est déjà débloquée. »",
-  (await pa.getByText("Cette conversation est déjà débloquée.").count()) === 1,
-);
-
-// D. Déblocages à la suite ; déblocage annulé
-sql(
-  `insert into public.likes (sender_id, receiver_id) values ('${id.a}','${id.c}'), ('${id.c}','${id.a}');`,
-);
-const cD = conv("a", "c");
-const p1 = (await startPayment("a", cD)).json;
-const p2 = (await startPayment("c", cD)).json;
-await Promise.all([
-  service("confirm_payment", {
-    _payment_id: p1,
-    _provider: "test",
-    _provider_transaction_id: "tx-d1",
-    _amount: 100,
-    _currency: "USD",
-  }),
-  service("confirm_payment", {
-    _payment_id: p2,
-    _provider: "test",
-    _provider_transaction_id: "tx-d2",
-    _amount: 100,
-    _currency: "USD",
-  }),
-]);
-q = await quota("c", cD);
-check(
-  "Deux déblocages à la suite : fin de période dans 6 jours (≈ 144 h)",
-  q.unlocked && Math.abs(hours(q.unlock_expires_at) - 144) < 0.1,
-  q.unlock_expires_at,
-);
-sql(`update public.conversation_unlocks set status='cancelled' where conversation_id='${cD}'`);
-check("Déblocages annulés : plus débloquée", (await quota("c", cD)).unlocked === false);
+check("Écran de Paul après la fin : champ de nouveau fermé", await field(pv).isDisabled());
 check("Aucune erreur JavaScript", jsErrors.length === 0, jsErrors.join(" | "));
 await browser.close();
 
 // ---------- Nettoyage ----------
-sql("delete from auth.users where email like 'test-u78-%@example.test';");
+sql("delete from auth.users where email like 'test-u79-%@example.test';");
 check(
-  "Nettoyage : comptes, conversations, paiements et déblocages supprimés",
-  sql("select count(*) from auth.users where email like 'test-u78-%'") === "0" &&
-    sql(
-      `select count(*) from public.conversation_unlocks where conversation_id in ('${cA}','${cB}','${cD}')`,
-    ) === "0",
+  "Nettoyage : comptes, conversations, messages, paiements et déblocages supprimés",
+  sql("select count(*) from auth.users where email like 'test-u79-%'") === "0" &&
+    sql(`select count(*) from public.messages where conversation_id in ('${cA}','${cB}')`) === "0",
 );
 
-const ok = results.filter(Boolean).length;
-console.log(`\n${ok}/${results.length} vérifications réussies`);
-process.exit(ok === results.length ? 0 : 1);
+const okN = results.filter(Boolean).length;
+console.log(`\n${okN}/${results.length} vérifications réussies`);
+process.exit(okN === results.length ? 0 : 1);

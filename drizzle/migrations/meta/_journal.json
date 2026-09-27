@@ -295,6 +295,13 @@
       "when": 1790578800000,
       "tag": "0041_phase7_appliquer_deblocage",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1790582400000,
+      "tag": "0042_phase7_messages_pendant_deblocage",
+      "breakpoints": true
     }
   ]
 }

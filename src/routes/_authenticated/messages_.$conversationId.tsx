@@ -194,6 +194,7 @@ function ConversationPage() {
               otherName={name}
               onSend={sendMessage}
               remaining={quota?.remaining ?? null}
+              unlocked={quota?.unlocked ?? false}
               notice={sendNotice}
               onTextChange={() => setSendNotice(null)}
             />

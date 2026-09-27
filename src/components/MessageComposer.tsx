@@ -27,6 +27,8 @@ interface MessageComposerProps {
   onSend: (text: string) => Promise<boolean>;
   /** Messages gratuits restants (`null` : pas encore connu). À 0, l'écriture est fermée. */
   remaining?: number | null;
+  /** Conversation débloquée : messages illimités (le quota gratuit ne s'applique pas). */
+  unlocked?: boolean;
   /** Explication d'un refus (ex. numéro de téléphone), affichée sous le champ. */
   notice?: string | null;
   /** Appelé à chaque modification du texte (sert à effacer l'explication). */
@@ -40,6 +42,7 @@ export function MessageComposer({
   otherName,
   onSend,
   remaining = null,
+  unlocked = false,
   notice = null,
   onTextChange,
 }: MessageComposerProps) {
@@ -59,7 +62,7 @@ export function MessageComposer({
 
   const length = text.length;
   const atLimit = length >= MESSAGE_MAX_LENGTH;
-  const exhausted = remaining !== null && remaining <= 0;
+  const exhausted = !unlocked && remaining !== null && remaining <= 0;
   const canSend = isMessageSendable(text) && !sending && !exhausted;
   const quotaId = useId();
   const noticeId = useId();
@@ -182,7 +185,7 @@ export function MessageComposer({
             exhausted ? "font-medium text-destructive" : "text-muted-foreground",
           )}
         >
-          {remainingLabel(remaining)}
+          {unlocked ? "Conversation débloquée : messages illimités" : remainingLabel(remaining)}
         </div>
       ) : null}
     </form>
