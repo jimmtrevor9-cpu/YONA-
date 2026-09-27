@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Eye, EyeOff } from "lucide-react";
+import { ChevronRight, Eye, EyeOff, Star } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -13,6 +13,8 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/features/auth/AuthProvider";
+import { favoritesCountLabel } from "@/features/favorites/labels";
+import { myFavoriteIdsQuery } from "@/features/favorites/queries";
 import {
   BIO_MAX_LENGTH,
   FIRST_NAME_MAX_LENGTH,
@@ -47,6 +49,7 @@ function ProfilePage() {
   const userId = user?.id ?? "";
   const queryClient = useQueryClient();
   const { data, isLoading } = useQuery({ ...myProfileQuery(userId), enabled: !!userId });
+  const { data: favoriteIds } = useQuery({ ...myFavoriteIdsQuery(userId), enabled: !!userId });
 
   const [firstName, setFirstName] = useState("");
   const [birthDate, setBirthDate] = useState("");
@@ -127,6 +130,23 @@ function ProfilePage() {
                 </p>
               </div>
             ) : null}
+
+            <Link
+              to="/favoris"
+              className="panel-2 flex items-center gap-3 p-4 transition-colors hover:bg-surface-2"
+              data-testid="favorites-link"
+            >
+              <Star className="size-4 shrink-0 text-gold-soft" aria-hidden />
+              <span className="flex-1">
+                <span className="block text-sm font-medium text-foreground">Mes favoris</span>
+                {favoriteIds ? (
+                  <span className="block text-xs text-muted-foreground">
+                    {favoritesCountLabel(favoriteIds.size)}
+                  </span>
+                ) : null}
+              </span>
+              <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+            </Link>
 
             <ProfilePhotos userId={userId} />
 

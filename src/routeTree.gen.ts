@@ -16,6 +16,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as RegisterRouteImport } from './routes/register'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as AuthenticatedDiscoverRouteImport } from './routes/_authenticated/discover'
+import { Route as AuthenticatedFavorisRouteImport } from './routes/_authenticated/favoris'
 import { Route as AuthenticatedMatchesRouteImport } from './routes/_authenticated/matches'
 import { Route as AuthenticatedMessagesRouteImport } from './routes/_authenticated/messages'
 import { Route as AuthenticatedOnboardingRouteImport } from './routes/_authenticated/onboarding'
@@ -57,6 +58,11 @@ const ResetPasswordRoute = ResetPasswordRouteImport.update({
 const AuthenticatedDiscoverRoute = AuthenticatedDiscoverRouteImport.update({
   id: '/discover',
   path: '/discover',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedFavorisRoute = AuthenticatedFavorisRouteImport.update({
+  id: '/favoris',
+  path: '/favoris',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedMatchesRoute = AuthenticatedMatchesRouteImport.update({
@@ -110,6 +116,7 @@ export interface FileRoutesByFullPath {
   '/register': typeof RegisterRoute
   '/reset-password': typeof ResetPasswordRoute
   '/discover': typeof AuthenticatedDiscoverRoute
+  '/favoris': typeof AuthenticatedFavorisRoute
   '/matches': typeof AuthenticatedMatchesRoute
   '/messages': typeof AuthenticatedMessagesRoute
   '/onboarding': typeof AuthenticatedOnboardingRoute
@@ -126,6 +133,7 @@ export interface FileRoutesByTo {
   '/register': typeof RegisterRoute
   '/reset-password': typeof ResetPasswordRoute
   '/discover': typeof AuthenticatedDiscoverRoute
+  '/favoris': typeof AuthenticatedFavorisRoute
   '/matches': typeof AuthenticatedMatchesRoute
   '/messages': typeof AuthenticatedMessagesRoute
   '/onboarding': typeof AuthenticatedOnboardingRoute
@@ -144,6 +152,7 @@ export interface FileRoutesById {
   '/register': typeof RegisterRoute
   '/reset-password': typeof ResetPasswordRoute
   '/_authenticated/discover': typeof AuthenticatedDiscoverRoute
+  '/_authenticated/favoris': typeof AuthenticatedFavorisRoute
   '/_authenticated/matches': typeof AuthenticatedMatchesRoute
   '/_authenticated/messages': typeof AuthenticatedMessagesRoute
   '/_authenticated/onboarding': typeof AuthenticatedOnboardingRoute
@@ -162,6 +171,7 @@ export interface FileRouteTypes {
     | '/register'
     | '/reset-password'
     | '/discover'
+    | '/favoris'
     | '/matches'
     | '/messages'
     | '/onboarding'
@@ -178,6 +188,7 @@ export interface FileRouteTypes {
     | '/register'
     | '/reset-password'
     | '/discover'
+    | '/favoris'
     | '/matches'
     | '/messages'
     | '/onboarding'
@@ -195,6 +206,7 @@ export interface FileRouteTypes {
     | '/register'
     | '/reset-password'
     | '/_authenticated/discover'
+    | '/_authenticated/favoris'
     | '/_authenticated/matches'
     | '/_authenticated/messages'
     | '/_authenticated/onboarding'
@@ -265,6 +277,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDiscoverRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/favoris': {
+      id: '/_authenticated/favoris'
+      path: '/favoris'
+      fullPath: '/favoris'
+      preLoaderRoute: typeof AuthenticatedFavorisRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/matches': {
       id: '/_authenticated/matches'
       path: '/matches'
@@ -326,6 +345,7 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedDiscoverRoute: typeof AuthenticatedDiscoverRoute
+  AuthenticatedFavorisRoute: typeof AuthenticatedFavorisRoute
   AuthenticatedMatchesRoute: typeof AuthenticatedMatchesRoute
   AuthenticatedMessagesRoute: typeof AuthenticatedMessagesRoute
   AuthenticatedOnboardingRoute: typeof AuthenticatedOnboardingRoute
@@ -338,6 +358,7 @@ interface AuthenticatedRouteRouteChildren {
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedDiscoverRoute: AuthenticatedDiscoverRoute,
+  AuthenticatedFavorisRoute: AuthenticatedFavorisRoute,
   AuthenticatedMatchesRoute: AuthenticatedMatchesRoute,
   AuthenticatedMessagesRoute: AuthenticatedMessagesRoute,
   AuthenticatedOnboardingRoute: AuthenticatedOnboardingRoute,
