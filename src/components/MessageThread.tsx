@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLiveConversation } from "@/features/messaging/live";
+import { useMarkConversationRead } from "@/features/messaging/unread";
 import { conversationMessagesQuery } from "@/features/messaging/queries";
 import { cn } from "@/lib/utils";
 
@@ -40,6 +41,9 @@ export function MessageThread({ userId, conversationId, otherName }: MessageThre
     // Sans connexion en direct, les nouveaux messages sont recherchés toutes les 10 s.
     refetchInterval: live ? false : 10 * 1000,
   });
+  const lastIncomingId =
+    [...(data ?? [])].reverse().find((m) => !m.fromMe && m.status === "delivered")?.id ?? null;
+  useMarkConversationRead(userId, conversationId, lastIncomingId, !!data);
   const endRef = useRef<HTMLDivElement>(null);
   const lastIdRef = useRef<string | null>(null);
   const nearBottomRef = useRef(true);

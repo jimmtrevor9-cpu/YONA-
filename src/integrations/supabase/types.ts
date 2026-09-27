@@ -141,6 +141,39 @@ export type Database = {
           },
         ]
       }
+      conversation_reads: {
+        Row: {
+          conversation_id: string
+          last_read_at: string
+          user_id: string
+        }
+        Insert: {
+          conversation_id: string
+          last_read_at?: string
+          user_id: string
+        }
+        Update: {
+          conversation_id?: string
+          last_read_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversation_reads_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversation_reads_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       conversation_unlocks: {
         Row: {
           amount: number
@@ -1059,9 +1092,20 @@ export type Database = {
         Args: { _conversation_id: string; _user_id: string }
         Returns: boolean
       }
+      get_unread_counts: {
+        Args: never
+        Returns: {
+          conversation_id: string
+          unread: number
+        }[]
+      }
       has_mutual_like: { Args: { _other: string }; Returns: boolean }
       is_discoverable_profile: { Args: { _user_id: string }; Returns: boolean }
       is_premium: { Args: { _user_id: string }; Returns: boolean }
+      mark_conversation_read: {
+        Args: { _conversation_id: string }
+        Returns: string
+      }
       record_profile_visit: {
         Args: { _visited_user_id: string }
         Returns: undefined

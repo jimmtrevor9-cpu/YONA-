@@ -8,7 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { myConversationsQuery } from "@/features/messaging/queries";
+import { unreadBadge, unreadCountsQuery, unreadLabel } from "@/features/messaging/unread";
 import { APP_NAME } from "@/lib/config";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/messages")({
   head: () => ({
@@ -43,6 +45,10 @@ function MessagesPage() {
     ...myConversationsQuery(user?.id ?? ""),
     enabled: !!user?.id,
   });
+  const { data: unreadCounts } = useQuery({
+    ...unreadCountsQuery(user?.id ?? ""),
+    enabled: !!user?.id,
+  });
 
   return (
     <div className="min-h-screen bg-background pb-24">
@@ -64,12 +70,16 @@ function MessagesPage() {
             {data.map((conversation) => {
               const name = conversation.firstName ?? "Membre";
               const last = conversation.lastMessage;
+              const unread = unreadCounts?.[conversation.conversationId] ?? 0;
+              const unreadId = `non-lus-${conversation.conversationId}`;
               return (
                 <li key={conversation.conversationId}>
                   <Link
                     to="/messages/$conversationId"
                     params={{ conversationId: conversation.conversationId }}
                     aria-label={`Ouvrir la conversation avec ${name}`}
+                    aria-describedby={unread > 0 ? unreadId : undefined}
+                    data-unread={unread}
                     className="panel gold-thread flex items-center gap-4 p-4 transition-colors hover:bg-surface-2"
                   >
                     <Avatar className="size-12 ring-1 ring-gold/20">
@@ -96,11 +106,28 @@ function MessagesPage() {
                           {formatActivity(conversation.activityAt)}
                         </time>
                       </div>
-                      <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                        {last
-                          ? `${last.fromMe ? "Vous : " : ""}${last.content}`
-                          : `Nouveau Match : dites bonjour à ${name} !`}
-                      </p>
+                      <div className="mt-0.5 flex items-center gap-2">
+                        <p
+                          className={cn(
+                            "min-w-0 flex-1 truncate text-xs",
+                            unread > 0 ? "font-semibold text-foreground" : "text-muted-foreground",
+                          )}
+                        >
+                          {last
+                            ? `${last.fromMe ? "Vous : " : ""}${last.content}`
+                            : `Nouveau Match : dites bonjour à ${name} !`}
+                        </p>
+                        {unread > 0 ? (
+                          <span
+                            id={unreadId}
+                            className="shrink-0 rounded-full bg-gold px-1.5 text-[10px] font-semibold leading-4 text-primary-foreground"
+                            data-testid="unread-count"
+                          >
+                            {unreadBadge(unread)}
+                            <span className="sr-only"> — {unreadLabel(unread)}</span>
+                          </span>
+                        ) : null}
+                      </div>
                     </div>
                   </Link>
                 </li>
