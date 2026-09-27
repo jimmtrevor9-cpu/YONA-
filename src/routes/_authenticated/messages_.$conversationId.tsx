@@ -3,6 +3,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
 
 import { AppHeader } from "@/components/AppHeader";
+import { MessageComposer } from "@/components/MessageComposer";
 import { MessageThread } from "@/components/MessageThread";
 import { BottomNav } from "@/components/BottomNav";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -25,7 +26,7 @@ export const Route = createFileRoute("/_authenticated/messages_/$conversationId"
   component: ConversationPage,
 });
 
-/** Page d'une conversation : en-tête et fil des messages. */
+/** Page d'une conversation : en-tête, fil des messages et champ de saisie. */
 function ConversationPage() {
   const { conversationId } = Route.useParams();
   const { user } = useAuth();
@@ -102,6 +103,13 @@ function ConversationPage() {
                 otherName={name}
               />
             </section>
+
+            <MessageComposer
+              key={data.conversationId}
+              userId={user?.id ?? ""}
+              conversationId={data.conversationId}
+              otherName={name}
+            />
           </>
         )}
       </main>

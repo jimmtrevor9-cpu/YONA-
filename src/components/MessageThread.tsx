@@ -38,7 +38,8 @@ export function MessageThread({ userId, conversationId, otherName }: MessageThre
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    endRef.current?.scrollIntoView({ block: "end" });
+    // Tout en bas de la page : dernier message visible juste au-dessus du champ de saisie.
+    if (endRef.current) window.scrollTo({ top: document.documentElement.scrollHeight });
   }, [data]);
 
   if (isLoading) {
