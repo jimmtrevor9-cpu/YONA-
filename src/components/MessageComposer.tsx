@@ -11,6 +11,7 @@ import {
   readDraft,
   saveDraft,
 } from "@/features/messaging/composer";
+import { remainingLabel } from "@/features/messaging/quota";
 import { cn } from "@/lib/utils";
 
 const numberFormat = new Intl.NumberFormat("fr-FR");
@@ -24,6 +25,8 @@ interface MessageComposerProps {
    * message est parti : le brouillon est alors effacé ; sinon le texte revient dans le champ.
    */
   onSend: (text: string) => Promise<boolean>;
+  /** Messages gratuits restants (`null` : pas encore connu). À 0, l'écriture est fermée. */
+  remaining?: number | null;
 }
 
 /** Champ de saisie et bouton « Envoyer » d'un message. */
@@ -32,6 +35,7 @@ export function MessageComposer({
   conversationId,
   otherName,
   onSend,
+  remaining = null,
 }: MessageComposerProps) {
   const [text, setText] = useState(() => readDraft(userId, conversationId));
   const [sending, setSending] = useState(false);
@@ -49,11 +53,13 @@ export function MessageComposer({
 
   const length = text.length;
   const atLimit = length >= MESSAGE_MAX_LENGTH;
-  const canSend = isMessageSendable(text) && !sending;
+  const exhausted = remaining !== null && remaining <= 0;
+  const canSend = isMessageSendable(text) && !sending && !exhausted;
+  const quotaId = useId();
 
   async function send() {
     // Un seul envoi à la fois (double clic, Ctrl+Entrée répété).
-    if (sendingRef.current || !isMessageSendable(text)) return;
+    if (sendingRef.current || exhausted || !isMessageSendable(text)) return;
     sendingRef.current = true;
     setSending(true);
     // Le champ se vide aussitôt (le message s'affiche dans le fil) ; si l'envoi échoue, le
@@ -92,12 +98,13 @@ export function MessageComposer({
           rows={1}
           maxLength={MESSAGE_MAX_LENGTH}
           readOnly={sending}
+          disabled={exhausted}
           value={text}
           onChange={(e) => {
             setText(e.target.value);
             saveDraft(userId, conversationId, e.target.value);
           }}
-          placeholder={`Écrivez à ${otherName}…`}
+          placeholder={exhausted ? "Messages gratuits utilisés" : `Écrivez à ${otherName}…`}
           autoComplete="off"
           enterKeyHint="enter"
           onKeyDown={(e) => {
@@ -107,7 +114,11 @@ export function MessageComposer({
               void send();
             }
           }}
-          aria-describedby={length >= MESSAGE_COUNTER_FROM ? counterId : undefined}
+          aria-describedby={
+            [length >= MESSAGE_COUNTER_FROM ? counterId : "", remaining !== null ? quotaId : ""]
+              .filter(Boolean)
+              .join(" ") || undefined
+          }
           className="max-h-40 min-h-10 resize-none rounded-2xl bg-background/60"
         />
         <Button
@@ -137,6 +148,19 @@ export function MessageComposer({
           {numberFormat.format(length)} / {numberFormat.format(MESSAGE_MAX_LENGTH)}
           {atLimit ? " — limite atteinte" : ""}
         </p>
+      ) : null}
+      {remaining !== null ? (
+        <div
+          id={quotaId}
+          aria-live="polite"
+          data-testid="message-quota"
+          className={cn(
+            "text-center text-[11px]",
+            exhausted ? "font-medium text-destructive" : "text-muted-foreground",
+          )}
+        >
+          {remainingLabel(remaining)}
+        </div>
       ) : null}
     </form>
   );

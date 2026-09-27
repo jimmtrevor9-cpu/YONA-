@@ -188,7 +188,10 @@ check(
 );
 check(
   "Compteur annoncé aux lecteurs d'écran (lié au champ)",
-  (await field(pv).getAttribute("aria-describedby")) === (await counter.getAttribute("id")),
+  // Depuis l'étape 5.6, le champ est aussi lié au décompte des messages restants.
+  ((await field(pv).getAttribute("aria-describedby")) ?? "")
+    .split(" ")
+    .includes((await counter.getAttribute("id")) ?? "§"),
 );
 
 // C. Brouillon

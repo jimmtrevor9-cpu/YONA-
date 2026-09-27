@@ -19,6 +19,7 @@ import {
   mergeThreadMessage,
   type ThreadMessage,
 } from "@/features/messaging/queries";
+import { messageQuotaQuery } from "@/features/messaging/quota";
 import { isConversationGoneError, sendMessageErrorMessage } from "@/features/messaging/send";
 import { APP_NAME } from "@/lib/config";
 
@@ -39,13 +40,21 @@ export const Route = createFileRoute("/_authenticated/messages_/$conversationId"
 function ConversationPage() {
   const { conversationId } = Route.useParams();
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const { data, isLoading, isError } = useQuery({
     ...conversationQuery(user?.id ?? "", conversationId),
     enabled: !!user?.id,
   });
   const name = data?.firstName ?? "Membre";
+  const { data: quota } = useQuery({
+    ...messageQuotaQuery(user?.id ?? "", conversationId),
+    enabled: !!user?.id && !!data,
+  });
+  const refreshQuota = () =>
+    queryClient.invalidateQueries({
+      queryKey: messageQuotaQuery(user?.id ?? "", conversationId).queryKey,
+    });
 
-  const queryClient = useQueryClient();
   const send = useServerFn(sendMessageFn);
 
   // Envoi : le message s'affiche tout de suite (« Envoi… »), puis est remplacé par le
@@ -77,10 +86,12 @@ function ConversationPage() {
         ),
       );
       void queryClient.invalidateQueries({ queryKey: ["conversations", "mine"] });
+      void refreshQuota();
       return true;
     } catch (error) {
       queryClient.setQueryData(queryKey, (list) => list?.filter((m) => m.id !== pending.id));
       toast.error(sendMessageErrorMessage(error));
+      void refreshQuota();
       if (isConversationGoneError(error)) {
         void queryClient.invalidateQueries({ queryKey: ["conversations"] });
       }
@@ -162,6 +173,7 @@ function ConversationPage() {
               conversationId={data.conversationId}
               otherName={name}
               onSend={sendMessage}
+              remaining={quota?.remaining ?? null}
             />
           </>
         )}

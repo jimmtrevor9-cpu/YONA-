@@ -1,5 +1,5 @@
-// YONA — Phase 5 / Étape 5.5 — Vérification du blocage du quatrième message.
-// Usage : PLAYWRIGHT_ROOT="$(npm root -g)" node docs/verification/phase-5/etape-5.5-bloquer-quatrieme-message.mjs
+// YONA — Phase 5 / Étape 5.6 — Vérification de l'affichage des messages restants.
+// Usage : PLAYWRIGHT_ROOT="$(npm root -g)" node docs/verification/phase-5/etape-5.6-messages-restants.mjs
 import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
 
@@ -36,12 +36,12 @@ const check = (name, pass, detail = "") => {
 };
 
 // ---------- Comptes de test temporaires ----------
-sql("delete from auth.users where email like 'test-q55-%@example.test';");
+sql("delete from auth.users where email like 'test-q56-%@example.test';");
 const stamp = Date.now();
-const PWD = "TestQ55!2026";
+const PWD = "TestQ56!2026";
 const emails = {};
 const mk = (tag, gender, name) => {
-  const e = `test-q55-${tag}-${stamp}@example.test`;
+  const e = `test-q56-${tag}-${stamp}@example.test`;
   emails[tag] = e;
   sql(
     `insert into auth.users (instance_id,id,aud,role,email,encrypted_password,email_confirmed_at,raw_app_meta_data,raw_user_meta_data,created_at,updated_at,confirmation_token,recovery_token,email_change_token_new,email_change) values ('00000000-0000-0000-0000-000000000000',gen_random_uuid(),'authenticated','authenticated','${e}',crypt('${PWD}',gen_salt('bf')),now(),'{"provider":"email","providers":["email"]}','{"first_name":"${name}"}',now(),now(),'','','','');
@@ -143,127 +143,133 @@ const toastText = async (p) => {
   ).trim();
 };
 
-// A. Quatrième message depuis l'application
+const quotaText = async (p) => {
+  const q = p.getByTestId("message-quota");
+  for (let i = 0; i < 50 && (await q.count()) === 0; i++) await p.waitForTimeout(100);
+  return ((await q.textContent().catch(() => "")) ?? "").trim();
+};
+const waitQuota = async (p, expected) => {
+  let t = "";
+  for (let i = 0; i < 60; i++) {
+    t = await quotaText(p);
+    if (t === expected) return t;
+    await p.waitForTimeout(100);
+  }
+  return t;
+};
+const L3 = "3 messages gratuits restants dans cette conversation";
+const L2 = "2 messages gratuits restants dans cette conversation";
+const L1 = "1 message gratuit restant dans cette conversation";
+const L0 = "Vous avez utilisé vos 3 messages gratuits dans cette conversation.";
+
+// A. Décompte affiché
 const pv = await login("v");
 await openConv(pv, cA);
-for (let i = 1; i <= 2; i++) {
-  await field(pv).fill(`Message ${i}`);
-  await button(pv).click();
-  await waitCount(cA, i);
-}
-// Depuis l'étape 5.6, le champ se ferme à 0 message restant : le 3e message part d'un
-// autre appareil, la page de Paul (qui affiche encore 1 restant) tente donc un 4e envoi
-// que seul le serveur peut refuser.
-await send("v", cA, "Message 3 (autre appareil)");
-check("3 messages envoyés : compteur de Paul à 3", used(cA, "v") === "3" && count(cA) === "3");
-const lastAt = sql(`select last_message_at from public.conversations where id='${cA}'`);
-const pa = await login("a");
-await openConv(pa, cA);
-await field(pv).fill("Quatrième message");
+check(
+  "Ouverture : « 3 messages gratuits restants dans cette conversation »",
+  (await waitQuota(pv, L3)) === L3,
+);
+check(
+  "Texte lié au champ pour les lecteurs d'écran",
+  ((await field(pv).getAttribute("aria-describedby")) ?? "").includes(
+    (await pv.getByTestId("message-quota").getAttribute("id")) ?? "§",
+  ),
+);
+await field(pv).fill("Message 1");
 await button(pv).click();
-const msg = await toastText(pv);
+check("Après le 1er message : « 2 messages gratuits restants… »", (await waitQuota(pv, L2)) === L2);
+await field(pv).fill("Message 2");
+await button(pv).click();
+check("Après le 2e : « 1 message gratuit restant… » (singulier)", (await waitQuota(pv, L1)) === L1);
+await field(pv).fill("Message 3");
+await button(pv).click();
 check(
-  "4ᵉ message : refusé avec « Vous avez utilisé vos 3 messages gratuits… »",
-  msg.includes(LIMIT_MSG),
-  msg,
-);
-await pv.waitForTimeout(800);
-check(
-  "Message non enregistré (ni délivré, ni stocké) ; compteur toujours 3",
-  count(cA) === "3" &&
-    sql(`select count(*) from public.messages where content='Quatrième message'`) === "0" &&
-    used(cA, "v") === "3",
+  "Après le 3e : « Vous avez utilisé vos 3 messages gratuits… »",
+  (await waitQuota(pv, L0)) === L0,
 );
 check(
-  "Le message provisoire disparaît du fil ; le texte revient dans le champ",
-  (await pv
-    .locator("ol[aria-label=Messages] > li")
-    .filter({ hasText: "Quatrième message" })
-    .count()) === 0 && (await field(pv).inputValue()) === "Quatrième message",
+  "À 0 : message en rouge, champ et bouton désactivés, texte d'aide adapté",
+  ((await pv.getByTestId("message-quota").getAttribute("class")) ?? "").includes(
+    "text-destructive",
+  ) &&
+    (await field(pv).isDisabled()) &&
+    (await button(pv).isDisabled()) &&
+    (await field(pv).getAttribute("placeholder")) === "Messages gratuits utilisés",
 );
-check(
-  "Date du dernier message de la conversation inchangée",
-  sql(`select last_message_at from public.conversations where id='${cA}'`) === lastAt,
-);
-await pa.waitForTimeout(1500);
-check(
-  "Grace ne reçoit rien : elle voit toujours 3 messages (pas 4)",
-  (await pa.getByText("Quatrième message").count()) === 0 &&
-    (await api("a", `messages?select=id&conversation_id=eq.${cA}`)).json?.length === 3,
-);
+check("Compteur serveur cohérent (3 utilisés)", used(cA, "v") === "3" && count(cA) === "3");
+
+// B. Persistance, autre appareil, autre personne, autre conversation
 await pv.reload({ waitUntil: "networkidle" });
 await openConv(pv, cA);
 check(
-  "Après rechargement : toujours 3 messages ; champ fermé (décompte à 0, étape 5.6)",
-  (await pv.locator("ol[aria-label=Messages] > li[data-from=me]").count()) === 3 &&
-    (await field(pv).isDisabled()),
+  "Après rechargement : toujours « utilisé vos 3 messages » et champ fermé",
+  (await waitQuota(pv, L0)) === L0 && (await field(pv).isDisabled()),
 );
-await pv.getByTestId("message-composer").evaluate((f) => f.requestSubmit());
-await pv.waitForTimeout(800);
-const msg2 = await pv
-  .locator("[data-sonner-toast]")
-  .filter({ hasText: "Votre message n'a pas été envoyé" })
-  .count();
+const pv2 = await login("v");
+await openConv(pv2, cA);
+check("Autre appareil : même décompte (gardé par le serveur)", (await waitQuota(pv2, L0)) === L0);
+const pa = await login("a");
+await openConv(pa, cA);
 check(
-  "Envoi forcé du formulaire fermé : rien ne part (aucun appel, aucun message)",
-  msg2 === 0 && count(cA) === "3",
+  "Grace : ses propres 3 messages restants (indépendant de Paul)",
+  (await waitQuota(pa, L3)) === L3 && (await field(pa).isEnabled()),
+);
+await openConv(pv, cB);
+check("Paul, autre conversation : « 3 restants »", (await waitQuota(pv, L3)) === L3);
+
+// C. Refus après un envoi depuis un autre onglet
+await openConv(pv, cB);
+await send("v", cB, "Depuis ailleurs 1");
+await send("v", cB, "Depuis ailleurs 2");
+await send("v", cB, "Depuis ailleurs 3");
+await field(pv).fill("Onglet resté ouvert");
+await button(pv).click();
+await pv.waitForTimeout(1500);
+check(
+  "Onglet resté ouvert sur « 3 restants » : envoi refusé par le serveur, puis décompte mis à jour (0)",
+  (await waitQuota(pv, L0)) === L0 &&
+    count(cB) === "3" &&
+    (await field(pv).inputValue()) === "Onglet resté ouvert",
 );
 
-// B. Appels directs
-let r = await send("v", cA, "Appel direct");
+// D. Sécurité
+let r = await api("c", "rpc/get_message_quota", "POST", { _conversation_id: cA });
 check(
-  "Appel direct à la base : refus « free_limit_reached »",
-  r.text.includes("free_limit_reached") && count(cA) === "3",
-);
-const tries = await Promise.all(
-  Array.from({ length: 5 }, (_, i) => send("v", cA, `Insistance ${i}`)),
-);
-check(
-  "5 essais de plus en même temps : tous refusés, compteur 3",
-  tries.every((x) => x.text.includes("free_limit_reached")) &&
-    count(cA) === "3" &&
-    used(cA, "v") === "3",
-);
-r = await send("a", cA, "Grace peut écrire");
-check("Grace (0 message utilisé) peut toujours écrire", r.status === 200 && used(cA, "a") === "1");
-r = await send("v", cB, "Paul écrit à Ruth");
-check(
-  "Paul peut toujours écrire dans une autre conversation",
-  r.status === 200 && used(cB, "v") === "1",
-);
-sql(`update public.conversations set status='closed' where id='${cA}'`);
-r = await send("v", cA, "Fermée et quota atteint");
-check(
-  "Conversation fermée ET quota atteint : « conversation indisponible » (prioritaire)",
+  "Un tiers ne peut pas lire le quota de la conversation",
   r.text.includes("conversation_unavailable"),
 );
-sql(`update public.conversations set status='open' where id='${cA}'`);
-
-// C. Envois simultanés depuis 0
-sql(
-  `insert into public.likes (sender_id, receiver_id) values ('${id.c}','${id.a}'), ('${id.a}','${id.c}');`,
-);
-const cC = conv("c", "a");
-const burst = await Promise.all(
-  Array.from({ length: 6 }, (_, i) => send("c", cC, `Simultané ${i}`)),
-);
-const okCount = burst.filter((x) => x.status === 200).length;
-const refused = burst.filter((x) => x.text.includes("free_limit_reached")).length;
+r = await api(null, "rpc/get_message_quota", "POST", { _conversation_id: cA });
+check("Sans connexion : refusé", r.status >= 400, String(r.status));
+r = await api("a", "rpc/get_message_quota", "POST", { _conversation_id: cA });
 check(
-  "6 messages partis en même temps : exactement 3 acceptés, 3 refusés, compteur 3",
-  okCount === 3 && refused === 3 && count(cC) === "3" && used(cC, "c") === "3",
-  `${okCount} acceptés / ${refused} refusés`,
+  "Chacun ne lit que son propre quota (Grace : 0 utilisé)",
+  r.json?.[0]?.used === 0 && r.json?.[0]?.remaining === 3,
+);
+
+// E. Petit écran
+const small = await (await browser.newContext({ viewport: { width: 320, height: 700 } })).newPage();
+small.on("pageerror", (e) => jsErrors.push(String(e).slice(0, 120)));
+await small.goto(`${BASE}/login`, { waitUntil: "networkidle" });
+await small.fill("#email", emails.v);
+await small.fill("#password", PWD);
+await small.click("button[type=submit]");
+await small.waitForURL(/\/discover$/, { timeout: 8000 });
+await openConv(small, cA);
+await waitQuota(small, L0);
+check(
+  "Petit écran (320 px) : message lisible, sans débordement",
+  !(await small.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)),
 );
 check("Aucune erreur JavaScript", jsErrors.length === 0, jsErrors.join(" | "));
 await browser.close();
 
 // ---------- Nettoyage ----------
-sql("delete from auth.users where email like 'test-q55-%@example.test';");
+sql("delete from auth.users where email like 'test-q56-%@example.test';");
 check(
   "Nettoyage : comptes, conversations, messages et compteurs supprimés",
-  sql("select count(*) from auth.users where email like 'test-q55-%'") === "0" &&
+  sql("select count(*) from auth.users where email like 'test-q56-%'") === "0" &&
     sql(
-      `select count(*) from public.conversation_user_usage where conversation_id in ('${cA}','${cB}','${cC}')`,
+      `select count(*) from public.conversation_user_usage where conversation_id in ('${cA}','${cB}')`,
     ) === "0",
 );
 
