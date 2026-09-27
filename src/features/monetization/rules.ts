@@ -53,6 +53,15 @@ export function formatUsd(amountInCents: number): string {
   );
 }
 
+/** Prix court en USD (« 1 USD », « 1,50 USD ») à partir d'un montant en cents. */
+export function formatUsdShort(amountInCents: number): string {
+  const value = amountInCents / 100;
+  const text = Number.isInteger(value)
+    ? String(value)
+    : new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 2 }).format(value);
+  return `${text} ${CURRENCY_LABEL}`;
+}
+
 /** Conservé pour l'affichage des montants historiques en FCFA. */
 export function formatFcfa(amount: number): string {
   return `${new Intl.NumberFormat("fr-FR").format(amount)} ${LEGACY_CURRENCY_LABEL}`;
