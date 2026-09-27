@@ -35,9 +35,28 @@ export const addFavorite = createServerFn({ method: "POST" })
     return { profileId: data.profileId, favorite: true };
   });
 
+/**
+ * Retire un profil des favoris de la personne connectée. La règle d'accès de la base ne
+ * laisse retirer que ses propres favoris ; le retrait reste possible même si le profil
+ * est depuis masqué, suspendu ou bloqué. Retirer un profil qui n'est pas (ou plus) en
+ * favori ne fait rien.
+ */
+export const removeFavorite = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data) => favoriteInput.parse(data))
+  .handler(async ({ data, context }) => {
+    const { error } = await context.supabase
+      .from("favorites")
+      .delete()
+      .eq("user_id", context.userId)
+      .eq("favorite_user_id", data.profileId);
+    if (error) throw error;
+    return { profileId: data.profileId, favorite: false };
+  });
+
 /** Message à afficher pour une erreur de favori. */
 export function favoriteErrorMessage(error: unknown): string {
   const message = error instanceof Error ? error.message : undefined;
   if (message && (Object.values(FAVORITE_ERRORS) as string[]).includes(message)) return message;
-  return "Le favori n'a pas pu être enregistré. Vérifiez votre connexion et réessayez.";
+  return "Le favori n'a pas pu être mis à jour. Vérifiez votre connexion et réessayez.";
 }
