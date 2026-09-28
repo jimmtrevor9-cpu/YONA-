@@ -1,3 +1,5 @@
+import { queryOptions } from "@tanstack/react-query";
+
 import { supabase } from "@/integrations/supabase/client";
 
 /** Niveaux de présence renvoyés par la fonction serveur `get_presence` (jamais d'horodatage exact). */
@@ -39,3 +41,12 @@ export async function markOffline() {
   const { error } = await supabase.rpc("mark_offline");
   if (error) throw error;
 }
+
+/** Statut de présence d'un membre, actualisé chaque minute tant qu'il est affiché. */
+export const presenceQuery = (userId: string) =>
+  queryOptions({
+    queryKey: ["presence", userId],
+    queryFn: () => getPresence(userId),
+    staleTime: 30 * 1000,
+    refetchInterval: 60 * 1000,
+  });

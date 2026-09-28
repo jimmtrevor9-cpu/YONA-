@@ -6,6 +6,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { AppHeader } from "@/components/AppHeader";
+import { PresenceBadge } from "@/components/PresenceBadge";
 import { MessageComposer } from "@/components/MessageComposer";
 import { MessageThread } from "@/components/MessageThread";
 import { UnlockedBanner } from "@/components/UnlockedBanner";
@@ -161,6 +162,7 @@ function ConversationPage() {
                 <h2 className="truncate font-display text-lg font-semibold text-foreground">
                   {name}
                 </h2>
+                <PresenceBadge userId={data.userId} />
                 <Link
                   to="/matches/$matchId"
                   params={{ matchId: data.matchId }}

@@ -6,6 +6,7 @@ import { useState } from "react";
 import { AppHeader } from "@/components/AppHeader";
 import { BottomNav } from "@/components/BottomNav";
 import { FavoriteButton } from "@/components/FavoriteButton";
+import { PresenceBadge } from "@/components/PresenceBadge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/features/auth/AuthProvider";
@@ -135,6 +136,7 @@ function MatchProfilePage() {
                   className="-mr-2"
                 />
               </div>
+              <PresenceBadge userId={data.userId} />
               {place ? (
                 <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <MapPin className="size-3.5" aria-hidden />
