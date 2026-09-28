@@ -372,6 +372,13 @@
       "when": 1790618400000,
       "tag": "0052_phase10_derniere_activite",
       "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1790622000000,
+      "tag": "0053_phase10_actualiser_activite",
+      "breakpoints": true
     }
   ]
 }
