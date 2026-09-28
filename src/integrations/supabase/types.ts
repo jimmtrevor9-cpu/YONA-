@@ -1135,10 +1135,18 @@ export type Database = {
       is_discoverable_profile: { Args: { _user_id: string }; Returns: boolean }
       is_premium: { Args: { _user_id: string }; Returns: boolean }
       mark_offline: { Args: never; Returns: undefined }
+      list_search_countries: {
+        Args: never
+        Returns: {
+          country: string
+          profiles: number
+        }[]
+      }
       mark_conversation_read: {
         Args: { _conversation_id: string }
         Returns: string
       }
+      normalize_place: { Args: { _value: string }; Returns: string }
       record_profile_visit: {
         Args: { _visited_user_id: string }
         Returns: boolean

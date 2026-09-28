@@ -15,11 +15,16 @@ import {
   EMPTY_SEARCH_FORM,
   SEARCH_MAX_AGE,
   SEARCH_MIN_AGE,
+  SEARCH_PLACE_MAX_LENGTH,
   buildSearchFilters,
   type SearchFilters,
   type SearchForm,
 } from "@/features/search/filters";
-import { searchDefaultsQuery, searchProfilesQuery } from "@/features/search/queries";
+import {
+  searchCountriesQuery,
+  searchDefaultsQuery,
+  searchProfilesQuery,
+} from "@/features/search/queries";
 import { APP_NAME } from "@/lib/config";
 
 export const Route = createFileRoute("/_authenticated/search")({
@@ -56,6 +61,11 @@ function SearchPage() {
     setForm((current) => ({ ...current, gender }));
     setFilters((current) => ({ ...current, gender }));
   }, [defaults]);
+
+  const { data: countries } = useQuery({
+    ...searchCountriesQuery(user?.id ?? ""),
+    enabled: !!user?.id,
+  });
 
   const { data, isLoading, isError } = useQuery({
     ...searchProfilesQuery(user?.id ?? "", filters),
@@ -116,6 +126,23 @@ function SearchPage() {
               </div>
             </div>
           </fieldset>
+          <div className="space-y-2">
+            <Label htmlFor="country">Pays</Label>
+            <Input
+              id="country"
+              list="search-countries"
+              autoComplete="off"
+              maxLength={SEARCH_PLACE_MAX_LENGTH}
+              value={form.country}
+              onChange={(e) => update("country", e.target.value)}
+              placeholder="Tous les pays"
+            />
+            <datalist id="search-countries" data-testid="search-countries">
+              {(countries ?? []).map((country) => (
+                <option key={country} value={country} />
+              ))}
+            </datalist>
+          </div>
           <div className="space-y-2">
             <Label htmlFor="city">Ville</Label>
             <Input

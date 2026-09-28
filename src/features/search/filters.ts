@@ -9,6 +9,7 @@ export interface SearchFilters {
   min_age?: number;
   max_age?: number;
   gender?: Gender;
+  country?: string;
   city?: string;
 }
 
@@ -17,10 +18,20 @@ export interface SearchForm {
   minAge: string;
   maxAge: string;
   gender: Gender | "";
+  country: string;
   city: string;
 }
 
-export const EMPTY_SEARCH_FORM: SearchForm = { minAge: "", maxAge: "", gender: "", city: "" };
+export const EMPTY_SEARCH_FORM: SearchForm = {
+  minAge: "",
+  maxAge: "",
+  gender: "",
+  country: "",
+  city: "",
+};
+
+/** Longueur maximale d'un pays ou d'une ville (identique au profil). */
+export const SEARCH_PLACE_MAX_LENGTH = 100;
 
 function parseAge(value: string): number | undefined | null {
   const trimmed = value.trim();
@@ -45,12 +56,17 @@ export function buildSearchFilters(
   if (minAge !== undefined && maxAge !== undefined && minAge > maxAge) {
     return { error: "L'âge minimum ne peut pas dépasser l'âge maximum." };
   }
+  const country = form.country.trim().replace(/\s+/g, " ");
+  if (country.length > SEARCH_PLACE_MAX_LENGTH) {
+    return { error: `Le pays ne peut pas dépasser ${SEARCH_PLACE_MAX_LENGTH} caractères.` };
+  }
   const city = form.city.trim();
   return {
     filters: {
       ...(minAge !== undefined ? { min_age: minAge } : {}),
       ...(maxAge !== undefined ? { max_age: maxAge } : {}),
       ...(form.gender ? { gender: form.gender } : {}),
+      ...(country ? { country } : {}),
       ...(city ? { city } : {}),
     },
   };

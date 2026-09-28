@@ -37,3 +37,15 @@ export const searchDefaultsQuery = (userId: string) =>
     },
     staleTime: 5 * 60 * 1000,
   });
+
+/** Pays renseignés par les profils visibles (aide à la saisie du filtre pays). */
+export const searchCountriesQuery = (userId: string) =>
+  queryOptions({
+    queryKey: ["profiles", "search-countries", userId],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("list_search_countries");
+      if (error) throw error;
+      return (data ?? []).map((row) => row.country);
+    },
+    staleTime: 5 * 60 * 1000,
+  });

@@ -38,12 +38,14 @@ par les fichiers de `supabase/migrations/`, appliqués **dans l'ordre**
   npx supabase db push
   ```
 
-Résultat attendu : 22 tables (toutes protégées par RLS), 50 fonctions, 66 règles
+Résultat attendu : 22 tables (toutes protégées par RLS), 52 fonctions, 66 règles
 d'accès, bucket `photos` privé (JPG, PNG, WebP, 5 Mo max) avec 4 règles d'accès, et la
 tâche planifiée `yona-expirer-deblocages` (extension pg_cron, toutes les 5 minutes).
 Si l'hébergeur ne propose pas pg_cron, la migration continue quand même : l'expiration
 des déblocages reste exacte (par date) ; seul le statut « expiré » de l'historique n'est
 alors mis à jour que par un appel à `expire_conversation_unlocks()`.
+La recherche utilise l'extension `unaccent` (installée par les migrations, disponible sur
+Supabase) pour comparer les pays et villes sans tenir compte des accents.
 
 ### Paiement (déblocage à 1 USD)
 
