@@ -358,6 +358,13 @@
       "when": 1790611200000,
       "tag": "0050_phase9_visiteurs_premium",
       "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1790614800000,
+      "tag": "0051_phase9_visiteurs_reserve_premium",
+      "breakpoints": true
     }
   ]
 }

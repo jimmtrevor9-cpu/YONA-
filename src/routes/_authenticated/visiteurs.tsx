@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { Lock } from "lucide-react";
 
 import { AppHeader } from "@/components/AppHeader";
 import { BottomNav } from "@/components/BottomNav";
@@ -102,7 +103,18 @@ function VisitorsPage() {
               Personne n'a encore visité votre profil.
             </p>
           )
-        ) : null}
+        ) : (
+          <div className="panel-2 flex items-start gap-3 p-4" data-testid="visitors-locked">
+            <Lock className="mt-0.5 size-4 shrink-0 text-gold-soft" aria-hidden />
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-foreground">Réservé aux membres Premium</p>
+              <p className="text-xs text-muted-foreground">
+                Avec Premium, découvrez qui a visité votre profil. L'abonnement Premium sera bientôt
+                disponible.
+              </p>
+            </div>
+          </div>
+        )}
       </main>
       <BottomNav />
     </div>

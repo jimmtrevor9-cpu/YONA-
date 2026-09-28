@@ -22,8 +22,9 @@ export interface ProfileVisitors {
 
 /**
  * « Qui a visité mon profil » : réservé aux membres Premium. La base
- * (`get_profile_visitors`) vérifie l'abonnement et ne renvoie que les visiteurs encore
- * visibles, sans blocage.
+ * (`get_profile_visitors`) vérifie l'abonnement (refus `premium_required` sinon) et ne
+ * renvoie que les visiteurs encore visibles, sans blocage. Un membre gratuit ne reçoit
+ * aucune information.
  */
 export const profileVisitorsQuery = (userId: string) =>
   queryOptions({
@@ -36,6 +37,8 @@ export const profileVisitorsQuery = (userId: string) =>
       if (premium !== true) return { premium: false, visitors: [] };
 
       const { data: rows, error } = await supabase.rpc("get_profile_visitors");
+      // Abonnement expiré entre les deux lectures : la base refuse (réservé Premium).
+      if (error?.message.includes("premium_required")) return { premium: false, visitors: [] };
       if (error) throw error;
       if (!rows?.length) return { premium: true, visitors: [] };
 

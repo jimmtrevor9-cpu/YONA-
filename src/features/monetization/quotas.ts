@@ -108,7 +108,7 @@ export async function recordProfileVisit(visitedUserId: string): Promise<boolean
   return data === true;
 }
 
-/** « Qui a visité mon profil » — réservé Premium (filtré côté serveur). */
+/** « Qui a visité mon profil » — réservé Premium (refus `premium_required` côté serveur). */
 export async function listProfileVisitors() {
   const { data, error } = await supabase.rpc("get_profile_visitors");
   if (error) throw error;

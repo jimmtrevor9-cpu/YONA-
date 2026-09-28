@@ -204,7 +204,6 @@ const rpcs = [
     { _conversation_id: "00000000-0000-4000-8000-000000000000" },
   ],
   ["quotas.ts:101 — record_profile_visit", A, "record_profile_visit", { _visited_user_id: B.id }],
-  ["quotas.ts:109 — get_profile_visitors (B, gratuit)", B, "get_profile_visitors", undefined],
 ];
 for (const [label, u, fn, args] of rpcs) {
   const r = await u.c.rpc(fn, args);
@@ -227,6 +226,14 @@ check(
   "quotas.ts:94 — get_favorited_by (B, gratuit) : refusée « premium_required »",
   !!favoritedBy.error && /premium_required/.test(favoritedBy.error.message) && !favoritedBy.data,
   favoritedBy.error?.message ?? JSON.stringify(favoritedBy.data),
+);
+// Depuis l'étape 9.5, « qui a visité mon profil » est explicitement refusé aux membres
+// gratuits (aucune information transmise).
+const visitors = await B.c.rpc("get_profile_visitors");
+check(
+  "quotas.ts:109 — get_profile_visitors (B, gratuit) : refusée « premium_required »",
+  !!visitors.error && /premium_required/.test(visitors.error.message) && !visitors.data,
+  visitors.error?.message ?? JSON.stringify(visitors.data),
 );
 noErr(
   "quotas.ts:76 — retirer le favori",
