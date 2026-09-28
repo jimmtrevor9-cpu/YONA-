@@ -344,6 +344,13 @@
       "when": 1790604000000,
       "tag": "0048_phase9_enregistrer_visite",
       "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1790607600000,
+      "tag": "0049_phase9_limiter_visites",
+      "breakpoints": true
     }
   ]
 }
