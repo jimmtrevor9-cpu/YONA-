@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ChevronRight, Eye, EyeOff, Star } from "lucide-react";
+import { ChevronRight, Eye, EyeOff, Footprints, Star } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -144,6 +144,21 @@ function ProfilePage() {
                     {favoritesCountLabel(favoriteIds.size)}
                   </span>
                 ) : null}
+              </span>
+              <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+            </Link>
+
+            <Link
+              to="/visiteurs"
+              className="panel-2 flex items-center gap-3 p-4 transition-colors hover:bg-surface-2"
+              data-testid="visitors-link"
+            >
+              <Footprints className="size-4 shrink-0 text-gold-soft" aria-hidden />
+              <span className="flex-1">
+                <span className="block text-sm font-medium text-foreground">Mes visiteurs</span>
+                <span className="block text-xs text-muted-foreground">
+                  Qui a consulté votre profil
+                </span>
               </span>
               <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
             </Link>

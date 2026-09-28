@@ -22,6 +22,7 @@ import { Route as AuthenticatedMessagesRouteImport } from './routes/_authenticat
 import { Route as AuthenticatedOnboardingRouteImport } from './routes/_authenticated/onboarding'
 import { Route as AuthenticatedProfileRouteImport } from './routes/_authenticated/profile'
 import { Route as AuthenticatedSearchRouteImport } from './routes/_authenticated/search'
+import { Route as AuthenticatedVisiteursRouteImport } from './routes/_authenticated/visiteurs'
 import { Route as AuthenticatedMatchesMatchIdRouteImport } from './routes/_authenticated/matches_.$matchId'
 import { Route as AuthenticatedMessagesConversationIdRouteImport } from './routes/_authenticated/messages_.$conversationId'
 import { Route as AuthenticatedMessagesConversationIdDebloquerRouteImport } from './routes/_authenticated/messages_.$conversationId_.debloquer'
@@ -90,6 +91,11 @@ const AuthenticatedSearchRoute = AuthenticatedSearchRouteImport.update({
   path: '/search',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedVisiteursRoute = AuthenticatedVisiteursRouteImport.update({
+  id: '/visiteurs',
+  path: '/visiteurs',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedMatchesMatchIdRoute =
   AuthenticatedMatchesMatchIdRouteImport.update({
     id: '/matches_/$matchId',
@@ -122,6 +128,7 @@ export interface FileRoutesByFullPath {
   '/onboarding': typeof AuthenticatedOnboardingRoute
   '/profile': typeof AuthenticatedProfileRoute
   '/search': typeof AuthenticatedSearchRoute
+  '/visiteurs': typeof AuthenticatedVisiteursRoute
   '/matches/$matchId': typeof AuthenticatedMatchesMatchIdRoute
   '/messages/$conversationId': typeof AuthenticatedMessagesConversationIdRoute
   '/messages/$conversationId/debloquer': typeof AuthenticatedMessagesConversationIdDebloquerRoute
@@ -139,6 +146,7 @@ export interface FileRoutesByTo {
   '/onboarding': typeof AuthenticatedOnboardingRoute
   '/profile': typeof AuthenticatedProfileRoute
   '/search': typeof AuthenticatedSearchRoute
+  '/visiteurs': typeof AuthenticatedVisiteursRoute
   '/matches/$matchId': typeof AuthenticatedMatchesMatchIdRoute
   '/messages/$conversationId': typeof AuthenticatedMessagesConversationIdRoute
   '/messages/$conversationId/debloquer': typeof AuthenticatedMessagesConversationIdDebloquerRoute
@@ -158,6 +166,7 @@ export interface FileRoutesById {
   '/_authenticated/onboarding': typeof AuthenticatedOnboardingRoute
   '/_authenticated/profile': typeof AuthenticatedProfileRoute
   '/_authenticated/search': typeof AuthenticatedSearchRoute
+  '/_authenticated/visiteurs': typeof AuthenticatedVisiteursRoute
   '/_authenticated/matches_/$matchId': typeof AuthenticatedMatchesMatchIdRoute
   '/_authenticated/messages_/$conversationId': typeof AuthenticatedMessagesConversationIdRoute
   '/_authenticated/messages_/$conversationId_/debloquer': typeof AuthenticatedMessagesConversationIdDebloquerRoute
@@ -177,6 +186,7 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/profile'
     | '/search'
+    | '/visiteurs'
     | '/matches/$matchId'
     | '/messages/$conversationId'
     | '/messages/$conversationId/debloquer'
@@ -194,6 +204,7 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/profile'
     | '/search'
+    | '/visiteurs'
     | '/matches/$matchId'
     | '/messages/$conversationId'
     | '/messages/$conversationId/debloquer'
@@ -212,6 +223,7 @@ export interface FileRouteTypes {
     | '/_authenticated/onboarding'
     | '/_authenticated/profile'
     | '/_authenticated/search'
+    | '/_authenticated/visiteurs'
     | '/_authenticated/matches_/$matchId'
     | '/_authenticated/messages_/$conversationId'
     | '/_authenticated/messages_/$conversationId_/debloquer'
@@ -319,6 +331,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSearchRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/visiteurs': {
+      id: '/_authenticated/visiteurs'
+      path: '/visiteurs'
+      fullPath: '/visiteurs'
+      preLoaderRoute: typeof AuthenticatedVisiteursRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/matches_/$matchId': {
       id: '/_authenticated/matches_/$matchId'
       path: '/matches/$matchId'
@@ -351,6 +370,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedOnboardingRoute: typeof AuthenticatedOnboardingRoute
   AuthenticatedProfileRoute: typeof AuthenticatedProfileRoute
   AuthenticatedSearchRoute: typeof AuthenticatedSearchRoute
+  AuthenticatedVisiteursRoute: typeof AuthenticatedVisiteursRoute
   AuthenticatedMatchesMatchIdRoute: typeof AuthenticatedMatchesMatchIdRoute
   AuthenticatedMessagesConversationIdRoute: typeof AuthenticatedMessagesConversationIdRoute
   AuthenticatedMessagesConversationIdDebloquerRoute: typeof AuthenticatedMessagesConversationIdDebloquerRoute
@@ -364,6 +384,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedOnboardingRoute: AuthenticatedOnboardingRoute,
   AuthenticatedProfileRoute: AuthenticatedProfileRoute,
   AuthenticatedSearchRoute: AuthenticatedSearchRoute,
+  AuthenticatedVisiteursRoute: AuthenticatedVisiteursRoute,
   AuthenticatedMatchesMatchIdRoute: AuthenticatedMatchesMatchIdRoute,
   AuthenticatedMessagesConversationIdRoute:
     AuthenticatedMessagesConversationIdRoute,
