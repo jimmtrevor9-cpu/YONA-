@@ -323,6 +323,13 @@
       "when": 1790593200000,
       "tag": "0045_phase8_enregistrer_favori",
       "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1790596800000,
+      "tag": "0046_phase8_qui_ma_favorise",
+      "breakpoints": true
     }
   ]
 }

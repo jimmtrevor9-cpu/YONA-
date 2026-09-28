@@ -1072,7 +1072,11 @@ export type Database = {
       get_favorited_by: {
         Args: never
         Returns: {
-          created_at: string
+          birth_date: string | null
+          city: string | null
+          country: string | null
+          favorited_at: string
+          first_name: string | null
           user_id: string
         }[]
       }

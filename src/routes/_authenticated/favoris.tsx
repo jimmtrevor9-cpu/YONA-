@@ -1,18 +1,23 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { MapPin } from "lucide-react";
 
 import { AppHeader } from "@/components/AppHeader";
 import { BottomNav } from "@/components/BottomNav";
-import { FavoriteButton } from "@/components/FavoriteButton";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { FavoriteMemberCard } from "@/components/FavoriteMemberCard";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/features/auth/AuthProvider";
-import { favoritesCountLabel, unavailableFavoritesLabel } from "@/features/favorites/labels";
-import { myFavoriteIdsQuery, myFavoritesQuery } from "@/features/favorites/queries";
+import {
+  favoritedByCountLabel,
+  favoritesCountLabel,
+  unavailableFavoritesLabel,
+} from "@/features/favorites/labels";
+import {
+  favoritedByQuery,
+  myFavoriteIdsQuery,
+  myFavoritesQuery,
+} from "@/features/favorites/queries";
 import { useFavoriteToggle } from "@/features/favorites/useFavoriteToggle";
-import { computeAge } from "@/features/profiles/queries";
 import { APP_NAME } from "@/lib/config";
 
 export const Route = createFileRoute("/_authenticated/favoris")({
@@ -30,7 +35,7 @@ export const Route = createFileRoute("/_authenticated/favoris")({
   component: FavoritesPage,
 });
 
-const addedOn = new Intl.DateTimeFormat("fr-FR", {
+const dayFormat = new Intl.DateTimeFormat("fr-FR", {
   day: "numeric",
   month: "long",
   year: "numeric",
@@ -77,68 +82,39 @@ function FavoritesPage() {
                   {favoritesCountLabel(favorites.length)}
                 </p>
                 <ul className="space-y-3" aria-label="Liste de vos favoris">
-                  {favorites.map((item) => {
-                    const age = computeAge(item.birthDate);
-                    const place = [item.city, item.country].filter(Boolean).join(", ");
-                    const name = item.firstName ?? "Membre";
-                    return (
-                      <li
-                        key={item.userId}
-                        className="panel gold-thread flex items-center gap-4 p-4"
-                        data-testid="favorite-item"
-                      >
-                        <Avatar className="size-14 ring-1 ring-gold/20">
-                          {item.photoUrl ? (
-                            <AvatarImage
-                              src={item.photoUrl}
-                              alt={`Photo de ${name}`}
-                              className="object-cover"
-                            />
+                  {favorites.map((item) => (
+                    <FavoriteMemberCard
+                      key={item.userId}
+                      testId="favorite-item"
+                      firstName={item.firstName}
+                      birthDate={item.birthDate}
+                      city={item.city}
+                      country={item.country}
+                      photoUrl={item.photoUrl}
+                      details={
+                        <>
+                          Ajouté le {dayFormat.format(new Date(item.favoritedAt))}
+                          {item.matchId ? (
+                            <>
+                              {" · "}
+                              <Link
+                                to="/matches/$matchId"
+                                params={{ matchId: item.matchId }}
+                                className="text-gold-soft underline-offset-2 hover:underline"
+                              >
+                                Voir le profil
+                              </Link>
+                            </>
                           ) : null}
-                          <AvatarFallback className="bg-accent font-display text-lg text-gold-soft">
-                            {name.charAt(0).toUpperCase()}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="min-w-0 flex-1">
-                          <h2 className="truncate font-display text-lg font-semibold text-foreground">
-                            {name}
-                            {age ? (
-                              <span className="text-muted-foreground"> · {age} ans</span>
-                            ) : null}
-                          </h2>
-                          {place ? (
-                            <p className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-muted-foreground">
-                              <MapPin className="size-3.5 shrink-0" aria-hidden />
-                              {place}
-                            </p>
-                          ) : null}
-                          <p className="mt-1 text-[11px] text-muted-foreground">
-                            Ajouté le {addedOn.format(new Date(item.favoritedAt))}
-                            {item.matchId ? (
-                              <>
-                                {" · "}
-                                <Link
-                                  to="/matches/$matchId"
-                                  params={{ matchId: item.matchId }}
-                                  className="text-gold-soft underline-offset-2 hover:underline"
-                                >
-                                  Voir le profil
-                                </Link>
-                              </>
-                            ) : null}
-                          </p>
-                        </div>
-                        <FavoriteButton
-                          name={name}
-                          isFavorite={favoriteIds?.has(item.userId) ?? true}
-                          isPending={favorite.pendingId === item.userId}
-                          onToggle={() =>
-                            favorite.toggle(item.userId, favoriteIds?.has(item.userId) ?? true)
-                          }
-                        />
-                      </li>
-                    );
-                  })}
+                        </>
+                      }
+                      isFavorite={favoriteIds?.has(item.userId) ?? true}
+                      isFavoritePending={favorite.pendingId === item.userId}
+                      onToggleFavorite={() =>
+                        favorite.toggle(item.userId, favoriteIds?.has(item.userId) ?? true)
+                      }
+                    />
+                  ))}
                 </ul>
               </>
             ) : null}
@@ -158,8 +134,73 @@ function FavoritesPage() {
             </Button>
           </div>
         )}
+
+        <FavoritedBySection userId={userId} favoriteIds={favoriteIds} favorite={favorite} />
       </main>
       <BottomNav />
     </div>
+  );
+}
+
+/** « Ils vous ont mis en favori » : réservé aux membres Premium. */
+function FavoritedBySection({
+  userId,
+  favoriteIds,
+  favorite,
+}: {
+  userId: string;
+  favoriteIds: Set<string> | undefined;
+  favorite: ReturnType<typeof useFavoriteToggle>;
+}) {
+  const { data, isLoading, isError } = useQuery({
+    ...favoritedByQuery(userId),
+    enabled: !!userId,
+  });
+  if (isLoading || !data?.premium) return null;
+
+  return (
+    <section
+      className="space-y-3 pt-4"
+      aria-labelledby="favorited-by-title"
+      data-testid="favorited-by"
+    >
+      <p id="favorited-by-title" className="eyebrow">
+        Ils vous ont mis en favori
+      </p>
+      {isError ? (
+        <p className="text-sm text-destructive">
+          Cette liste n'a pas pu être chargée. Réessayez dans un instant.
+        </p>
+      ) : data.members.length > 0 ? (
+        <>
+          <p className="text-sm text-muted-foreground" data-testid="favorited-by-count">
+            {favoritedByCountLabel(data.members.length)}
+          </p>
+          <ul className="space-y-3" aria-label="Membres qui vous ont mis en favori">
+            {data.members.map((member) => (
+              <FavoriteMemberCard
+                key={member.userId}
+                testId="favorited-by-item"
+                firstName={member.firstName}
+                birthDate={member.birthDate}
+                city={member.city}
+                country={member.country}
+                photoUrl={member.photoUrl}
+                details={<>Vous a ajouté le {dayFormat.format(new Date(member.favoritedAt))}</>}
+                isFavorite={favoriteIds?.has(member.userId) ?? false}
+                isFavoritePending={favorite.pendingId === member.userId}
+                onToggleFavorite={() =>
+                  favorite.toggle(member.userId, favoriteIds?.has(member.userId) ?? false)
+                }
+              />
+            ))}
+          </ul>
+        </>
+      ) : (
+        <p className="panel p-5 text-sm text-muted-foreground" data-testid="favorited-by-empty">
+          Personne ne vous a encore mis en favori.
+        </p>
+      )}
+    </section>
   );
 }

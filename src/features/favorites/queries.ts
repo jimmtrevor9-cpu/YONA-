@@ -116,3 +116,76 @@ export const myFavoritesQuery = (userId: string) =>
     },
     staleTime: 30 * 1000,
   });
+
+export interface FavoritedByMember {
+  userId: string;
+  favoritedAt: string;
+  firstName: string | null;
+  birthDate: string | null;
+  city: string | null;
+  country: string | null;
+  /** Lien temporaire vers la photo principale validée (bucket privé), s'il y en a une. */
+  photoUrl: string | null;
+}
+
+export interface FavoritedBy {
+  /** Abonnement Premium actif (vérifié par la base, `is_premium`). */
+  premium: boolean;
+  members: FavoritedByMember[];
+}
+
+/**
+ * « Qui m'a mis en favori » : réservé aux membres Premium. La base (`get_favorited_by`)
+ * vérifie l'abonnement et ne renvoie que les membres encore visibles, sans blocage.
+ */
+export const favoritedByQuery = (userId: string) =>
+  queryOptions({
+    queryKey: ["favorites", "by", userId],
+    queryFn: async (): Promise<FavoritedBy> => {
+      const { data: premium, error: premiumError } = await supabase.rpc("is_premium", {
+        _user_id: userId,
+      });
+      if (premiumError) throw premiumError;
+      if (premium !== true) return { premium: false, members: [] };
+
+      const { data: rows, error } = await supabase.rpc("get_favorited_by");
+      if (error) throw error;
+      if (!rows?.length) return { premium: true, members: [] };
+
+      const urls = new Map<string, string>();
+      const { data: photos, error: photosError } = await supabase
+        .from("photos")
+        .select("user_id, storage_path")
+        .in(
+          "user_id",
+          rows.map((row) => row.user_id),
+        )
+        .eq("is_primary", true)
+        .eq("status", "approved");
+      if (photosError) throw photosError;
+      if (photos?.length) {
+        const { data: signed } = await supabase.storage.from("photos").createSignedUrls(
+          photos.map((p) => p.storage_path),
+          60 * 60,
+        );
+        photos.forEach((p, i) => {
+          const url = signed?.[i]?.signedUrl;
+          if (url) urls.set(p.user_id, url);
+        });
+      }
+
+      return {
+        premium: true,
+        members: rows.map((row) => ({
+          userId: row.user_id,
+          favoritedAt: row.favorited_at,
+          firstName: row.first_name,
+          birthDate: row.birth_date,
+          city: row.city,
+          country: row.country,
+          photoUrl: urls.get(row.user_id) ?? null,
+        })),
+      };
+    },
+    staleTime: 30 * 1000,
+  });
