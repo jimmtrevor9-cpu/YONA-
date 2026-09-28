@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { Lock } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { AppHeader } from "@/components/AppHeader";
@@ -20,6 +21,8 @@ import {
 import {
   EMPTY_SEARCH_FORM,
   SEARCH_MAX_AGE,
+  SEARCH_ACTIVE_DAYS,
+  SEARCH_ACTIVE_LABELS,
   SEARCH_DISTANCES,
   SEARCH_FAMILY_PROJECT_MAX_LENGTH,
   SEARCH_MIN_AGE,
@@ -31,6 +34,7 @@ import {
 import { myLocationQuery } from "@/features/profiles/location";
 import {
   isLocationRequired,
+  searchPremiumQuery,
   searchCitiesQuery,
   searchCountriesQuery,
   searchDefaultsQuery,
@@ -88,6 +92,12 @@ function SearchPage() {
   // Recherche par distance : autour de la position enregistrée sur le profil.
   const { data: myLocation } = useQuery({
     ...myLocationQuery(user?.id ?? ""),
+    enabled: !!user?.id,
+  });
+
+  // Filtres avancés : réservés aux membres Premium.
+  const { data: premium } = useQuery({
+    ...searchPremiumQuery(user?.id ?? ""),
     enabled: !!user?.id,
   });
 
@@ -297,6 +307,41 @@ function SearchPage() {
             maxLength={300}
             userId={user?.id ?? ""}
           />
+          <fieldset
+            className="space-y-2 border-t border-border pt-4"
+            data-testid="advanced-filters"
+          >
+            <legend className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+              Filtres avancés
+              <span className="rounded-full bg-accent px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gold-soft">
+                Premium
+              </span>
+            </legend>
+            <Label htmlFor="activeWithinDays">Activité récente</Label>
+            <select
+              id="activeWithinDays"
+              value={form.activeWithinDays}
+              disabled={!premium}
+              onChange={(e) => update("activeWithinDays", e.target.value)}
+              className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm text-foreground disabled:opacity-60"
+            >
+              <option value="">Tous les membres</option>
+              {SEARCH_ACTIVE_DAYS.map((days) => (
+                <option key={days} value={String(days)}>
+                  {SEARCH_ACTIVE_LABELS[days]}
+                </option>
+              ))}
+            </select>
+            {!premium ? (
+              <p
+                className="flex items-center gap-1.5 text-xs text-muted-foreground"
+                data-testid="advanced-filters-locked"
+              >
+                <Lock className="size-3 shrink-0 text-gold-soft" aria-hidden />
+                Réservé aux membres Premium. L'abonnement Premium sera bientôt disponible.
+              </p>
+            ) : null}
+          </fieldset>
           {formError ? (
             <p className="text-sm text-destructive" role="alert" data-testid="search-error">
               {formError}

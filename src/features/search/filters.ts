@@ -20,7 +20,17 @@ export interface SearchFilters {
   relationship_goal?: string;
   family_project?: string;
   interests?: string[];
+  active_within_days?: SearchActiveDays;
 }
+
+/** Filtre avancé Premium « Actif récemment » : périodes acceptées par le serveur. */
+export const SEARCH_ACTIVE_DAYS = [1, 7, 30] as const;
+export type SearchActiveDays = (typeof SEARCH_ACTIVE_DAYS)[number];
+export const SEARCH_ACTIVE_LABELS: Record<SearchActiveDays, string> = {
+  1: "Actifs dans les dernières 24 heures",
+  7: "Actifs cette semaine",
+  30: "Actifs ce mois-ci",
+};
 
 /** Rayons de recherche proposés (les seuls acceptés par le serveur). */
 export const SEARCH_DISTANCES = [5, 10, 25, 50, 100, 250, 500] as const;
@@ -41,6 +51,7 @@ export interface SearchForm {
   relationshipGoal: string;
   familyProject: string;
   interests: string;
+  activeWithinDays: string;
 }
 
 export const EMPTY_SEARCH_FORM: SearchForm = {
@@ -57,6 +68,7 @@ export const EMPTY_SEARCH_FORM: SearchForm = {
   relationshipGoal: "",
   familyProject: "",
   interests: "",
+  activeWithinDays: "",
 };
 
 /** Nombre de centres d'intérêt recherchés à la fois (accepté par le serveur). */
@@ -135,6 +147,10 @@ export function buildSearchFilters(
   if (interests.error !== undefined) {
     return { error: interests.error };
   }
+  const activeDays = form.activeWithinDays ? Number(form.activeWithinDays) : undefined;
+  if (activeDays !== undefined && !(SEARCH_ACTIVE_DAYS as readonly number[]).includes(activeDays)) {
+    return { error: "Choisissez une période d'activité proposée." };
+  }
   return {
     filters: {
       ...(minAge !== undefined ? { min_age: minAge } : {}),
@@ -150,6 +166,7 @@ export function buildSearchFilters(
       ...(relationshipGoal ? { relationship_goal: relationshipGoal } : {}),
       ...(familyProject ? { family_project: familyProject } : {}),
       ...(interests.items.length ? { interests: interests.items } : {}),
+      ...(activeDays !== undefined ? { active_within_days: activeDays as SearchActiveDays } : {}),
     },
   };
 }

@@ -92,3 +92,15 @@ export const searchValuesQuery = (userId: string, field: SearchValueField) =>
     },
     staleTime: 5 * 60 * 1000,
   });
+
+/** Abonnement Premium actif de la personne connectée (vérifié par la base). */
+export const searchPremiumQuery = (userId: string) =>
+  queryOptions({
+    queryKey: ["profiles", "search-premium", userId],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("is_premium", { _user_id: userId });
+      if (error) throw error;
+      return data === true;
+    },
+    staleTime: 60 * 1000,
+  });
