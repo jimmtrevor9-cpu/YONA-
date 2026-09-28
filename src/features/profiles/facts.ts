@@ -14,3 +14,6 @@ export const MARITAL_STATUS_LABELS: Record<MaritalStatus, string> = {
 export function isMaritalStatus(value: string | null | undefined): value is MaritalStatus {
   return (MARITAL_STATUSES as readonly string[]).includes(value ?? "");
 }
+
+/** Nombre d'enfants accepté par la base (seulement si le membre a des enfants). */
+export const CHILDREN_COUNT_MAX = 20;

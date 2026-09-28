@@ -237,6 +237,19 @@ function SearchPage() {
               ))}
             </select>
           </div>
+          <div className="space-y-2">
+            <Label htmlFor="searchChildren">Enfants</Label>
+            <select
+              id="searchChildren"
+              value={form.children}
+              onChange={(e) => update("children", e.target.value as SearchForm["children"])}
+              className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm text-foreground"
+            >
+              <option value="">Indifférent</option>
+              <option value="without">Sans enfant</option>
+              <option value="with">Avec enfants</option>
+            </select>
+          </div>
           {formError ? (
             <p className="text-sm text-destructive" role="alert" data-testid="search-error">
               {formError}

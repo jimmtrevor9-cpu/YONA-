@@ -15,6 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/features/auth/AuthProvider";
 import {
+  CHILDREN_COUNT_MAX,
   MARITAL_STATUSES,
   MARITAL_STATUS_LABELS,
   isMaritalStatus,
@@ -65,6 +66,8 @@ function ProfilePage() {
   const [profession, setProfession] = useState("");
   const [bio, setBio] = useState("");
   const [maritalStatus, setMaritalStatus] = useState<MaritalStatus | "">("");
+  const [hasChildren, setHasChildren] = useState<"" | "yes" | "no">("");
+  const [childrenCount, setChildrenCount] = useState("");
 
   useEffect(() => {
     if (!data) return;
@@ -75,6 +78,8 @@ function ProfilePage() {
     setProfession(data.profession ?? "");
     setBio(data.bio ?? "");
     setMaritalStatus(isMaritalStatus(data.marital_status) ? data.marital_status : "");
+    setHasChildren(data.has_children === true ? "yes" : data.has_children === false ? "no" : "");
+    setChildrenCount(data.children_count ? String(data.children_count) : "");
   }, [data]);
 
   const save = useMutation({
@@ -89,6 +94,8 @@ function ProfilePage() {
           profession: profession.trim() || null,
           bio: bio.trim() || null,
           marital_status: maritalStatus || null,
+          has_children: hasChildren === "" ? null : hasChildren === "yes",
+          children_count: hasChildren === "yes" && childrenCount ? Number(childrenCount) : null,
         })
         .eq("user_id", userId);
       if (error) throw error;
@@ -188,6 +195,20 @@ function ProfilePage() {
                   toast.error(error);
                   return;
                 }
+                if (
+                  hasChildren === "yes" &&
+                  childrenCount &&
+                  !(
+                    /^\d+$/.test(childrenCount) &&
+                    Number(childrenCount) >= 1 &&
+                    Number(childrenCount) <= CHILDREN_COUNT_MAX
+                  )
+                ) {
+                  toast.error(
+                    `Le nombre d'enfants doit être compris entre 1 et ${CHILDREN_COUNT_MAX}.`,
+                  );
+                  return;
+                }
                 save.mutate();
               }}
             >
@@ -262,6 +283,34 @@ function ProfilePage() {
                     </option>
                   ))}
                 </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label htmlFor="hasChildren">Enfants</Label>
+                  <select
+                    id="hasChildren"
+                    value={hasChildren}
+                    onChange={(e) => setHasChildren(e.target.value as "" | "yes" | "no")}
+                    className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm text-foreground"
+                  >
+                    <option value="">Non précisé</option>
+                    <option value="no">Pas d'enfant</option>
+                    <option value="yes">J'ai des enfants</option>
+                  </select>
+                </div>
+                {hasChildren === "yes" ? (
+                  <div className="space-y-2">
+                    <Label htmlFor="childrenCount">Combien ? (facultatif)</Label>
+                    <Input
+                      id="childrenCount"
+                      inputMode="numeric"
+                      maxLength={2}
+                      value={childrenCount}
+                      onChange={(e) => setChildrenCount(e.target.value)}
+                    />
+                  </div>
+                ) : null}
               </div>
 
               <div className="space-y-2">

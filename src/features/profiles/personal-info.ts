@@ -55,6 +55,9 @@ export function personalInfoServerError(message: string | undefined): string | n
   if (m.includes("profiles_bio_length")) {
     return `La présentation est limitée à ${BIO_MAX_LENGTH} caractères.`;
   }
+  if (m.includes("profiles_children_check")) {
+    return "Le nombre d'enfants doit être compris entre 1 et 20.";
+  }
   if (m.includes("profiles_marital_status_check")) {
     return "Choisissez une situation matrimoniale proposée.";
   }

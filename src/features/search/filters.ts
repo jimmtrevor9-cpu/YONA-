@@ -14,6 +14,7 @@ export interface SearchFilters {
   city?: string;
   max_distance_km?: SearchDistance;
   marital_status?: MaritalStatus[];
+  has_children?: boolean;
 }
 
 /** Rayons de recherche proposés (les seuls acceptés par le serveur). */
@@ -29,6 +30,7 @@ export interface SearchForm {
   city: string;
   distance: string;
   maritalStatus: MaritalStatus | "";
+  children: "" | "with" | "without";
 }
 
 export const EMPTY_SEARCH_FORM: SearchForm = {
@@ -39,6 +41,7 @@ export const EMPTY_SEARCH_FORM: SearchForm = {
   city: "",
   distance: "",
   maritalStatus: "",
+  children: "",
 };
 
 /** Longueur maximale d'un pays ou d'une ville (identique au profil). */
@@ -91,6 +94,7 @@ export function buildSearchFilters(
       ...(city ? { city } : {}),
       ...(distance !== undefined ? { max_distance_km: distance as SearchDistance } : {}),
       ...(form.maritalStatus ? { marital_status: [form.maritalStatus] } : {}),
+      ...(form.children ? { has_children: form.children === "with" } : {}),
     },
   };
 }
