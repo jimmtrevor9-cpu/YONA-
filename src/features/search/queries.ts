@@ -79,7 +79,7 @@ export const searchCitiesQuery = (userId: string, country: string) =>
   });
 
 /** Critères texte du profil chrétien proposant des suggestions (valeurs publiques). */
-export type SearchValueField = "denomination" | "faith_commitment";
+export type SearchValueField = "denomination" | "faith_commitment" | "interests";
 
 /** Valeurs réellement renseignées par les profils visibles (aide à la saisie). */
 export const searchValuesQuery = (userId: string, field: SearchValueField) =>

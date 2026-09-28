@@ -16,9 +16,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/features/auth/AuthProvider";
 import {
   CHILDREN_COUNT_MAX,
+  INTERESTS_MAX,
   MARITAL_STATUSES,
   MARITAL_STATUS_LABELS,
   isMaritalStatus,
+  parseInterests,
   type MaritalStatus,
 } from "@/features/profiles/facts";
 import { favoritesCountLabel } from "@/features/favorites/labels";
@@ -68,6 +70,7 @@ function ProfilePage() {
   const [maritalStatus, setMaritalStatus] = useState<MaritalStatus | "">("");
   const [hasChildren, setHasChildren] = useState<"" | "yes" | "no">("");
   const [childrenCount, setChildrenCount] = useState("");
+  const [interests, setInterests] = useState("");
 
   useEffect(() => {
     if (!data) return;
@@ -80,6 +83,7 @@ function ProfilePage() {
     setMaritalStatus(isMaritalStatus(data.marital_status) ? data.marital_status : "");
     setHasChildren(data.has_children === true ? "yes" : data.has_children === false ? "no" : "");
     setChildrenCount(data.children_count ? String(data.children_count) : "");
+    setInterests((data.interests ?? []).join(", "));
   }, [data]);
 
   const save = useMutation({
@@ -96,6 +100,7 @@ function ProfilePage() {
           marital_status: maritalStatus || null,
           has_children: hasChildren === "" ? null : hasChildren === "yes",
           children_count: hasChildren === "yes" && childrenCount ? Number(childrenCount) : null,
+          interests: parseInterests(interests).items ?? [],
         })
         .eq("user_id", userId);
       if (error) throw error;
@@ -209,6 +214,11 @@ function ProfilePage() {
                   );
                   return;
                 }
+                const parsedInterests = parseInterests(interests);
+                if (parsedInterests.error !== undefined) {
+                  toast.error(parsedInterests.error);
+                  return;
+                }
                 save.mutate();
               }}
             >
@@ -311,6 +321,20 @@ function ProfilePage() {
                     />
                   </div>
                 ) : null}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="interests">Centres d'intérêt</Label>
+                <Input
+                  id="interests"
+                  value={interests}
+                  onChange={(e) => setInterests(e.target.value)}
+                  placeholder="Musique, randonnée, lecture…"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Séparés par des virgules, {INTERESTS_MAX} au plus. Ils sont visibles sur votre
+                  profil.
+                </p>
               </div>
 
               <div className="space-y-2">

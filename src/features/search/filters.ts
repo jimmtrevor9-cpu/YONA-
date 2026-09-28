@@ -1,5 +1,5 @@
 import type { Gender } from "@/features/profiles/discovery";
-import { isMaritalStatus, type MaritalStatus } from "@/features/profiles/facts";
+import { isMaritalStatus, parseInterests, type MaritalStatus } from "@/features/profiles/facts";
 
 /** Âges acceptés par la recherche (vérifiés aussi par le serveur). */
 export const SEARCH_MIN_AGE = 18;
@@ -19,6 +19,7 @@ export interface SearchFilters {
   faith_commitment?: string;
   relationship_goal?: string;
   family_project?: string;
+  interests?: string[];
 }
 
 /** Rayons de recherche proposés (les seuls acceptés par le serveur). */
@@ -39,6 +40,7 @@ export interface SearchForm {
   faithCommitment: string;
   relationshipGoal: string;
   familyProject: string;
+  interests: string;
 }
 
 export const EMPTY_SEARCH_FORM: SearchForm = {
@@ -54,7 +56,11 @@ export const EMPTY_SEARCH_FORM: SearchForm = {
   faithCommitment: "",
   relationshipGoal: "",
   familyProject: "",
+  interests: "",
 };
+
+/** Nombre de centres d'intérêt recherchés à la fois (accepté par le serveur). */
+export const SEARCH_INTERESTS_MAX = 5;
 
 /** Longueur maximale du projet familial (identique aux préférences). */
 export const SEARCH_FAMILY_PROJECT_MAX_LENGTH = 200;
@@ -125,6 +131,10 @@ export function buildSearchFilters(
       error: `Le projet familial ne peut pas dépasser ${SEARCH_FAMILY_PROJECT_MAX_LENGTH} caractères.`,
     };
   }
+  const interests = parseInterests(form.interests, SEARCH_INTERESTS_MAX);
+  if (interests.error !== undefined) {
+    return { error: interests.error };
+  }
   return {
     filters: {
       ...(minAge !== undefined ? { min_age: minAge } : {}),
@@ -139,6 +149,7 @@ export function buildSearchFilters(
       ...(faithCommitment ? { faith_commitment: faithCommitment } : {}),
       ...(relationshipGoal ? { relationship_goal: relationshipGoal } : {}),
       ...(familyProject ? { family_project: familyProject } : {}),
+      ...(interests.items.length ? { interests: interests.items } : {}),
     },
   };
 }

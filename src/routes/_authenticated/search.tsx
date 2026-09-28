@@ -287,6 +287,16 @@ function SearchPage() {
             maxLength={SEARCH_FAMILY_PROJECT_MAX_LENGTH}
             userId={user?.id ?? ""}
           />
+          <SearchTextField
+            id="searchInterests"
+            label="Centres d'intérêt"
+            value={form.interests}
+            onChange={(value) => update("interests", value)}
+            placeholder="Musique, randonnée… (5 au plus, séparés par des virgules)"
+            suggestionsFor="interests"
+            maxLength={300}
+            userId={user?.id ?? ""}
+          />
           {formError ? (
             <p className="text-sm text-destructive" role="alert" data-testid="search-error">
               {formError}
