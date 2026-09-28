@@ -21,3 +21,19 @@ export const searchProfilesQuery = (userId: string, filters: SearchFilters) =>
     },
     staleTime: 60 * 1000,
   });
+
+/** Sexe recherché enregistré dans les préférences (valeur de départ de la recherche). */
+export const searchDefaultsQuery = (userId: string) =>
+  queryOptions({
+    queryKey: ["profiles", "search-defaults", userId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("preferences")
+        .select("preferred_gender")
+        .eq("user_id", userId)
+        .maybeSingle();
+      if (error) throw error;
+      return { gender: data?.preferred_gender ?? null };
+    },
+    staleTime: 5 * 60 * 1000,
+  });

@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { AppHeader } from "@/components/AppHeader";
 import { BottomNav } from "@/components/BottomNav";
@@ -19,7 +19,7 @@ import {
   type SearchFilters,
   type SearchForm,
 } from "@/features/search/filters";
-import { searchProfilesQuery } from "@/features/search/queries";
+import { searchDefaultsQuery, searchProfilesQuery } from "@/features/search/queries";
 import { APP_NAME } from "@/lib/config";
 
 export const Route = createFileRoute("/_authenticated/search")({
@@ -42,9 +42,24 @@ function SearchPage() {
   const update = <K extends keyof SearchForm>(key: K, value: SearchForm[K]) =>
     setForm((current) => ({ ...current, [key]: value }));
 
+  // Sexe recherché : part des préférences enregistrées (modifiable, « Indifférent » possible).
+  const { data: defaults, isLoading: defaultsLoading } = useQuery({
+    ...searchDefaultsQuery(user?.id ?? ""),
+    enabled: !!user?.id,
+  });
+  const defaultsApplied = useRef(false);
+  useEffect(() => {
+    if (!defaults || defaultsApplied.current) return;
+    defaultsApplied.current = true;
+    if (!defaults.gender) return;
+    const gender = defaults.gender;
+    setForm((current) => ({ ...current, gender }));
+    setFilters((current) => ({ ...current, gender }));
+  }, [defaults]);
+
   const { data, isLoading, isError } = useQuery({
     ...searchProfilesQuery(user?.id ?? "", filters),
-    enabled: !!user?.id,
+    enabled: !!user?.id && !defaultsLoading,
   });
 
   return (
@@ -111,7 +126,7 @@ function SearchPage() {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="gender">Je cherche</Label>
+            <Label htmlFor="gender">Sexe — je cherche</Label>
             <select
               id="gender"
               value={form.gender}
