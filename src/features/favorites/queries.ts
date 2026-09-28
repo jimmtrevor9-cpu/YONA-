@@ -136,7 +136,8 @@ export interface FavoritedBy {
 
 /**
  * « Qui m'a mis en favori » : réservé aux membres Premium. La base (`get_favorited_by`)
- * vérifie l'abonnement et ne renvoie que les membres encore visibles, sans blocage.
+ * vérifie l'abonnement (refus `premium_required` sinon) et ne renvoie que les membres
+ * encore visibles, sans blocage. Un membre gratuit ne reçoit aucune information.
  */
 export const favoritedByQuery = (userId: string) =>
   queryOptions({
@@ -149,6 +150,8 @@ export const favoritedByQuery = (userId: string) =>
       if (premium !== true) return { premium: false, members: [] };
 
       const { data: rows, error } = await supabase.rpc("get_favorited_by");
+      // Abonnement expiré entre les deux lectures : la base refuse (réservé Premium).
+      if (error?.message.includes("premium_required")) return { premium: false, members: [] };
       if (error) throw error;
       if (!rows?.length) return { premium: true, members: [] };
 

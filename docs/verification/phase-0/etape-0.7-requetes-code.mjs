@@ -204,7 +204,6 @@ const rpcs = [
     { _conversation_id: "00000000-0000-4000-8000-000000000000" },
   ],
   ["quotas.ts:101 — record_profile_visit", A, "record_profile_visit", { _visited_user_id: B.id }],
-  ["quotas.ts:94 — get_favorited_by (B, gratuit)", B, "get_favorited_by", undefined],
   ["quotas.ts:109 — get_profile_visitors (B, gratuit)", B, "get_profile_visitors", undefined],
 ];
 for (const [label, u, fn, args] of rpcs) {
@@ -220,6 +219,14 @@ check(
   "consume_free_message (retirée du code) : refusée aux membres",
   !!consume.error && /permission denied/.test(consume.error.message),
   consume.error?.message ?? "",
+);
+// Depuis l'étape 8.9, « qui m'a mis en favori » est explicitement refusé aux membres
+// gratuits (aucune information transmise).
+const favoritedBy = await B.c.rpc("get_favorited_by");
+check(
+  "quotas.ts:94 — get_favorited_by (B, gratuit) : refusée « premium_required »",
+  !!favoritedBy.error && /premium_required/.test(favoritedBy.error.message) && !favoritedBy.data,
+  favoritedBy.error?.message ?? JSON.stringify(favoritedBy.data),
 );
 noErr(
   "quotas.ts:76 — retirer le favori",

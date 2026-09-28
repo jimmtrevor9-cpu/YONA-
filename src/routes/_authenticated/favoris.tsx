@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { Lock } from "lucide-react";
 
 import { AppHeader } from "@/components/AppHeader";
 import { BottomNav } from "@/components/BottomNav";
@@ -156,7 +157,31 @@ function FavoritedBySection({
     ...favoritedByQuery(userId),
     enabled: !!userId,
   });
-  if (isLoading || !data?.premium) return null;
+  if (isLoading || !data) return null;
+
+  if (!data.premium) {
+    return (
+      <section
+        className="space-y-3 pt-4"
+        aria-labelledby="favorited-by-title"
+        data-testid="favorited-by-locked"
+      >
+        <p id="favorited-by-title" className="eyebrow">
+          Ils vous ont mis en favori
+        </p>
+        <div className="panel-2 flex items-start gap-3 p-4">
+          <Lock className="mt-0.5 size-4 shrink-0 text-gold-soft" aria-hidden />
+          <div className="space-y-1">
+            <p className="text-sm font-medium text-foreground">Réservé aux membres Premium</p>
+            <p className="text-xs text-muted-foreground">
+              Avec Premium, découvrez qui vous a mis en favori. L'abonnement Premium sera bientôt
+              disponible.
+            </p>
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section

@@ -330,6 +330,13 @@
       "when": 1790596800000,
       "tag": "0046_phase8_qui_ma_favorise",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1790600400000,
+      "tag": "0047_phase8_favoris_reserve_premium",
+      "breakpoints": true
     }
   ]
 }

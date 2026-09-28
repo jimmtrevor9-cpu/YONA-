@@ -89,7 +89,7 @@ export async function listMyFavorites() {
   return data ?? [];
 }
 
-/** « Qui m'a ajouté en favori » — réservé Premium (filtré côté serveur). */
+/** « Qui m'a ajouté en favori » — réservé Premium (refus `premium_required` côté serveur). */
 export async function listFavoritedBy() {
   const { data, error } = await supabase.rpc("get_favorited_by");
   if (error) throw error;
