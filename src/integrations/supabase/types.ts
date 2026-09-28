@@ -1084,6 +1084,11 @@ export type Database = {
       get_profile_visitors: {
         Args: never
         Returns: {
+          birth_date: string | null
+          city: string | null
+          country: string | null
+          first_name: string | null
+          visit_count: number
           visited_at: string
           visitor_id: string
         }[]
