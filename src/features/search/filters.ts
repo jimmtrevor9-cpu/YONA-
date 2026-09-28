@@ -1,4 +1,5 @@
 import type { Gender } from "@/features/profiles/discovery";
+import { isMaritalStatus, type MaritalStatus } from "@/features/profiles/facts";
 
 /** Âges acceptés par la recherche (vérifiés aussi par le serveur). */
 export const SEARCH_MIN_AGE = 18;
@@ -12,6 +13,7 @@ export interface SearchFilters {
   country?: string;
   city?: string;
   max_distance_km?: SearchDistance;
+  marital_status?: MaritalStatus[];
 }
 
 /** Rayons de recherche proposés (les seuls acceptés par le serveur). */
@@ -26,6 +28,7 @@ export interface SearchForm {
   country: string;
   city: string;
   distance: string;
+  maritalStatus: MaritalStatus | "";
 }
 
 export const EMPTY_SEARCH_FORM: SearchForm = {
@@ -35,6 +38,7 @@ export const EMPTY_SEARCH_FORM: SearchForm = {
   country: "",
   city: "",
   distance: "",
+  maritalStatus: "",
 };
 
 /** Longueur maximale d'un pays ou d'une ville (identique au profil). */
@@ -75,6 +79,9 @@ export function buildSearchFilters(
   if (distance !== undefined && !(SEARCH_DISTANCES as readonly number[]).includes(distance)) {
     return { error: "Choisissez une distance proposée." };
   }
+  if (form.maritalStatus && !isMaritalStatus(form.maritalStatus)) {
+    return { error: "Choisissez une situation matrimoniale proposée." };
+  }
   return {
     filters: {
       ...(minAge !== undefined ? { min_age: minAge } : {}),
@@ -83,6 +90,7 @@ export function buildSearchFilters(
       ...(country ? { country } : {}),
       ...(city ? { city } : {}),
       ...(distance !== undefined ? { max_distance_km: distance as SearchDistance } : {}),
+      ...(form.maritalStatus ? { marital_status: [form.maritalStatus] } : {}),
     },
   };
 }

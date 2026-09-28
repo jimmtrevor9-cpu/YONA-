@@ -14,6 +14,12 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/features/auth/AuthProvider";
+import {
+  MARITAL_STATUSES,
+  MARITAL_STATUS_LABELS,
+  isMaritalStatus,
+  type MaritalStatus,
+} from "@/features/profiles/facts";
 import { favoritesCountLabel } from "@/features/favorites/labels";
 import { myFavoriteIdsQuery } from "@/features/favorites/queries";
 import {
@@ -58,6 +64,7 @@ function ProfilePage() {
   const [country, setCountry] = useState("");
   const [profession, setProfession] = useState("");
   const [bio, setBio] = useState("");
+  const [maritalStatus, setMaritalStatus] = useState<MaritalStatus | "">("");
 
   useEffect(() => {
     if (!data) return;
@@ -67,6 +74,7 @@ function ProfilePage() {
     setCountry(data.country ?? "");
     setProfession(data.profession ?? "");
     setBio(data.bio ?? "");
+    setMaritalStatus(isMaritalStatus(data.marital_status) ? data.marital_status : "");
   }, [data]);
 
   const save = useMutation({
@@ -80,6 +88,7 @@ function ProfilePage() {
           country: country.trim() || null,
           profession: profession.trim() || null,
           bio: bio.trim() || null,
+          marital_status: maritalStatus || null,
         })
         .eq("user_id", userId);
       if (error) throw error;
@@ -236,6 +245,23 @@ function ProfilePage() {
                   value={profession}
                   onChange={(e) => setProfession(e.target.value)}
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="maritalStatus">Situation matrimoniale</Label>
+                <select
+                  id="maritalStatus"
+                  value={maritalStatus}
+                  onChange={(e) => setMaritalStatus(e.target.value as MaritalStatus | "")}
+                  className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm text-foreground"
+                >
+                  <option value="">Non précisée</option>
+                  {MARITAL_STATUSES.map((status) => (
+                    <option key={status} value={status}>
+                      {MARITAL_STATUS_LABELS[status]}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="space-y-2">

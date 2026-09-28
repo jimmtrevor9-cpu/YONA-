@@ -55,6 +55,9 @@ export function personalInfoServerError(message: string | undefined): string | n
   if (m.includes("profiles_bio_length")) {
     return `La présentation est limitée à ${BIO_MAX_LENGTH} caractères.`;
   }
+  if (m.includes("profiles_marital_status_check")) {
+    return "Choisissez une situation matrimoniale proposée.";
+  }
   if (m.includes("profiles_city_length") || m.includes("profiles_country_length")) {
     return `La ville et le pays sont limités à ${PLACE_MAX_LENGTH} caractères.`;
   }

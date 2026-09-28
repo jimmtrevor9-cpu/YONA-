@@ -12,6 +12,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/features/auth/AuthProvider";
 import type { Gender } from "@/features/profiles/discovery";
 import {
+  MARITAL_STATUSES,
+  MARITAL_STATUS_LABELS,
+  type MaritalStatus,
+} from "@/features/profiles/facts";
+import {
   EMPTY_SEARCH_FORM,
   SEARCH_MAX_AGE,
   SEARCH_DISTANCES,
@@ -215,6 +220,22 @@ function SearchPage() {
                 .
               </p>
             ) : null}
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="searchMaritalStatus">Situation matrimoniale</Label>
+            <select
+              id="searchMaritalStatus"
+              value={form.maritalStatus}
+              onChange={(e) => update("maritalStatus", e.target.value as MaritalStatus | "")}
+              className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm text-foreground"
+            >
+              <option value="">Indifférente</option>
+              {MARITAL_STATUSES.map((status) => (
+                <option key={status} value={status}>
+                  {MARITAL_STATUS_LABELS[status]}
+                </option>
+              ))}
+            </select>
           </div>
           {formError ? (
             <p className="text-sm text-destructive" role="alert" data-testid="search-error">
