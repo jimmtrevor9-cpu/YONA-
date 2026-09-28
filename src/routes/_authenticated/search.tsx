@@ -21,6 +21,7 @@ import {
   EMPTY_SEARCH_FORM,
   SEARCH_MAX_AGE,
   SEARCH_DISTANCES,
+  SEARCH_FAMILY_PROJECT_MAX_LENGTH,
   SEARCH_MIN_AGE,
   SEARCH_PLACE_MAX_LENGTH,
   buildSearchFilters,
@@ -275,6 +276,15 @@ function SearchPage() {
             value={form.relationshipGoal}
             onChange={(value) => update("relationshipGoal", value)}
             placeholder="Mariage, relation sérieuse…"
+            userId={user?.id ?? ""}
+          />
+          <SearchTextField
+            id="searchFamilyProject"
+            label="Projet familial"
+            value={form.familyProject}
+            onChange={(value) => update("familyProject", value)}
+            placeholder="Fonder une famille, avoir des enfants…"
+            maxLength={SEARCH_FAMILY_PROJECT_MAX_LENGTH}
             userId={user?.id ?? ""}
           />
           {formError ? (

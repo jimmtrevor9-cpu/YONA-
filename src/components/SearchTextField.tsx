@@ -14,6 +14,7 @@ interface SearchTextFieldProps {
   /** Suggestions tirées des valeurs réellement renseignées (champs publics seulement). */
   suggestionsFor?: SearchValueField;
   userId: string;
+  maxLength?: number;
 }
 
 /** Critère texte de la recherche (« contient »), avec suggestions éventuelles. */
@@ -25,6 +26,7 @@ export function SearchTextField({
   placeholder,
   suggestionsFor,
   userId,
+  maxLength = SEARCH_TEXT_MAX_LENGTH,
 }: SearchTextFieldProps) {
   const { data: suggestions } = useQuery({
     ...searchValuesQuery(userId, suggestionsFor ?? "denomination"),
@@ -38,7 +40,7 @@ export function SearchTextField({
         id={id}
         list={listId}
         autoComplete="off"
-        maxLength={SEARCH_TEXT_MAX_LENGTH}
+        maxLength={maxLength}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
