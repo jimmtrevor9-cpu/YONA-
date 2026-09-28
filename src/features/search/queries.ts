@@ -49,3 +49,21 @@ export const searchCountriesQuery = (userId: string) =>
     },
     staleTime: 5 * 60 * 1000,
   });
+
+/**
+ * Villes renseignées par les profils visibles (aide à la saisie du filtre ville),
+ * limitées au pays saisi s'il y en a un.
+ */
+export const searchCitiesQuery = (userId: string, country: string) =>
+  queryOptions({
+    queryKey: ["profiles", "search-cities", userId, country],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc(
+        "list_search_cities",
+        country ? { _country: country } : {},
+      );
+      if (error) throw error;
+      return (data ?? []).map((row) => row.city);
+    },
+    staleTime: 5 * 60 * 1000,
+  });

@@ -60,7 +60,10 @@ export function buildSearchFilters(
   if (country.length > SEARCH_PLACE_MAX_LENGTH) {
     return { error: `Le pays ne peut pas dépasser ${SEARCH_PLACE_MAX_LENGTH} caractères.` };
   }
-  const city = form.city.trim();
+  const city = form.city.trim().replace(/\s+/g, " ");
+  if (city.length > SEARCH_PLACE_MAX_LENGTH) {
+    return { error: `La ville ne peut pas dépasser ${SEARCH_PLACE_MAX_LENGTH} caractères.` };
+  }
   return {
     filters: {
       ...(minAge !== undefined ? { min_age: minAge } : {}),

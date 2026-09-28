@@ -21,6 +21,7 @@ import {
   type SearchForm,
 } from "@/features/search/filters";
 import {
+  searchCitiesQuery,
   searchCountriesQuery,
   searchDefaultsQuery,
   searchProfilesQuery,
@@ -64,6 +65,13 @@ function SearchPage() {
 
   const { data: countries } = useQuery({
     ...searchCountriesQuery(user?.id ?? ""),
+    enabled: !!user?.id,
+  });
+
+  // Suggestions de villes : celles du pays saisi (texte court, pour ne pas multiplier les appels).
+  const countryForCities = form.country.trim().length >= 2 ? form.country.trim() : "";
+  const { data: cities } = useQuery({
+    ...searchCitiesQuery(user?.id ?? "", countryForCities),
     enabled: !!user?.id,
   });
 
@@ -147,10 +155,18 @@ function SearchPage() {
             <Label htmlFor="city">Ville</Label>
             <Input
               id="city"
+              list="search-cities"
+              autoComplete="off"
+              maxLength={SEARCH_PLACE_MAX_LENGTH}
               value={form.city}
               onChange={(e) => update("city", e.target.value)}
-              placeholder="Libreville"
+              placeholder="Toutes les villes"
             />
+            <datalist id="search-cities" data-testid="search-cities">
+              {(cities ?? []).map((city) => (
+                <option key={city} value={city} />
+              ))}
+            </datalist>
           </div>
           <div className="space-y-2">
             <Label htmlFor="gender">Sexe — je cherche</Label>
