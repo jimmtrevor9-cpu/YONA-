@@ -16,6 +16,7 @@ export interface SearchFilters {
   marital_status?: MaritalStatus[];
   has_children?: boolean;
   denomination?: string;
+  faith_commitment?: string;
 }
 
 /** Rayons de recherche proposés (les seuls acceptés par le serveur). */
@@ -33,6 +34,7 @@ export interface SearchForm {
   maritalStatus: MaritalStatus | "";
   children: "" | "with" | "without";
   denomination: string;
+  faithCommitment: string;
 }
 
 export const EMPTY_SEARCH_FORM: SearchForm = {
@@ -45,6 +47,7 @@ export const EMPTY_SEARCH_FORM: SearchForm = {
   maritalStatus: "",
   children: "",
   denomination: "",
+  faithCommitment: "",
 };
 
 /** Longueur maximale d'un critère texte du profil chrétien (identique au profil). */
@@ -95,6 +98,12 @@ export function buildSearchFilters(
   if (denomination.length > SEARCH_TEXT_MAX_LENGTH) {
     return { error: `La dénomination ne peut pas dépasser ${SEARCH_TEXT_MAX_LENGTH} caractères.` };
   }
+  const faithCommitment = form.faithCommitment.trim().replace(/\s+/g, " ");
+  if (faithCommitment.length > SEARCH_TEXT_MAX_LENGTH) {
+    return {
+      error: `L'engagement chrétien ne peut pas dépasser ${SEARCH_TEXT_MAX_LENGTH} caractères.`,
+    };
+  }
   return {
     filters: {
       ...(minAge !== undefined ? { min_age: minAge } : {}),
@@ -106,6 +115,7 @@ export function buildSearchFilters(
       ...(form.maritalStatus ? { marital_status: [form.maritalStatus] } : {}),
       ...(form.children ? { has_children: form.children === "with" } : {}),
       ...(denomination ? { denomination } : {}),
+      ...(faithCommitment ? { faith_commitment: faithCommitment } : {}),
     },
   };
 }

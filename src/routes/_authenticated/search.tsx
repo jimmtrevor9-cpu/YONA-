@@ -260,6 +260,15 @@ function SearchPage() {
             suggestionsFor="denomination"
             userId={user?.id ?? ""}
           />
+          <SearchTextField
+            id="searchFaithCommitment"
+            label="Engagement chrétien"
+            value={form.faithCommitment}
+            onChange={(value) => update("faithCommitment", value)}
+            placeholder="Tous"
+            suggestionsFor="faith_commitment"
+            userId={user?.id ?? ""}
+          />
           {formError ? (
             <p className="text-sm text-destructive" role="alert" data-testid="search-error">
               {formError}
