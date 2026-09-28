@@ -269,6 +269,14 @@ function SearchPage() {
             suggestionsFor="faith_commitment"
             userId={user?.id ?? ""}
           />
+          <SearchTextField
+            id="searchRelationshipGoal"
+            label="Objectif relationnel"
+            value={form.relationshipGoal}
+            onChange={(value) => update("relationshipGoal", value)}
+            placeholder="Mariage, relation sérieuse…"
+            userId={user?.id ?? ""}
+          />
           {formError ? (
             <p className="text-sm text-destructive" role="alert" data-testid="search-error">
               {formError}

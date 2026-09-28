@@ -17,6 +17,7 @@ export interface SearchFilters {
   has_children?: boolean;
   denomination?: string;
   faith_commitment?: string;
+  relationship_goal?: string;
 }
 
 /** Rayons de recherche proposés (les seuls acceptés par le serveur). */
@@ -35,6 +36,7 @@ export interface SearchForm {
   children: "" | "with" | "without";
   denomination: string;
   faithCommitment: string;
+  relationshipGoal: string;
 }
 
 export const EMPTY_SEARCH_FORM: SearchForm = {
@@ -48,6 +50,7 @@ export const EMPTY_SEARCH_FORM: SearchForm = {
   children: "",
   denomination: "",
   faithCommitment: "",
+  relationshipGoal: "",
 };
 
 /** Longueur maximale d'un critère texte du profil chrétien (identique au profil). */
@@ -104,6 +107,12 @@ export function buildSearchFilters(
       error: `L'engagement chrétien ne peut pas dépasser ${SEARCH_TEXT_MAX_LENGTH} caractères.`,
     };
   }
+  const relationshipGoal = form.relationshipGoal.trim().replace(/\s+/g, " ");
+  if (relationshipGoal.length > SEARCH_TEXT_MAX_LENGTH) {
+    return {
+      error: `L'objectif relationnel ne peut pas dépasser ${SEARCH_TEXT_MAX_LENGTH} caractères.`,
+    };
+  }
   return {
     filters: {
       ...(minAge !== undefined ? { min_age: minAge } : {}),
@@ -116,6 +125,7 @@ export function buildSearchFilters(
       ...(form.children ? { has_children: form.children === "with" } : {}),
       ...(denomination ? { denomination } : {}),
       ...(faithCommitment ? { faith_commitment: faithCommitment } : {}),
+      ...(relationshipGoal ? { relationship_goal: relationshipGoal } : {}),
     },
   };
 }
