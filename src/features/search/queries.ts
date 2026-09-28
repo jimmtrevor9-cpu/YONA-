@@ -77,3 +77,18 @@ export const searchCitiesQuery = (userId: string, country: string) =>
     },
     staleTime: 5 * 60 * 1000,
   });
+
+/** Critères texte du profil chrétien proposant des suggestions (valeurs publiques). */
+export type SearchValueField = "denomination";
+
+/** Valeurs réellement renseignées par les profils visibles (aide à la saisie). */
+export const searchValuesQuery = (userId: string, field: SearchValueField) =>
+  queryOptions({
+    queryKey: ["profiles", "search-values", userId, field],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("list_search_values", { _field: field });
+      if (error) throw error;
+      return (data ?? []).map((row) => row.value);
+    },
+    staleTime: 5 * 60 * 1000,
+  });

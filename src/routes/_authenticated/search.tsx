@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { AppHeader } from "@/components/AppHeader";
 import { BottomNav } from "@/components/BottomNav";
 import { ProfileCard } from "@/components/ProfileCard";
+import { SearchTextField } from "@/components/SearchTextField";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -250,6 +251,15 @@ function SearchPage() {
               <option value="with">Avec enfants</option>
             </select>
           </div>
+          <SearchTextField
+            id="searchDenomination"
+            label="Église / dénomination"
+            value={form.denomination}
+            onChange={(value) => update("denomination", value)}
+            placeholder="Toutes"
+            suggestionsFor="denomination"
+            userId={user?.id ?? ""}
+          />
           {formError ? (
             <p className="text-sm text-destructive" role="alert" data-testid="search-error">
               {formError}

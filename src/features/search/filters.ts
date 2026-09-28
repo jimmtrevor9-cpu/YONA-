@@ -15,6 +15,7 @@ export interface SearchFilters {
   max_distance_km?: SearchDistance;
   marital_status?: MaritalStatus[];
   has_children?: boolean;
+  denomination?: string;
 }
 
 /** Rayons de recherche proposés (les seuls acceptés par le serveur). */
@@ -31,6 +32,7 @@ export interface SearchForm {
   distance: string;
   maritalStatus: MaritalStatus | "";
   children: "" | "with" | "without";
+  denomination: string;
 }
 
 export const EMPTY_SEARCH_FORM: SearchForm = {
@@ -42,7 +44,11 @@ export const EMPTY_SEARCH_FORM: SearchForm = {
   distance: "",
   maritalStatus: "",
   children: "",
+  denomination: "",
 };
+
+/** Longueur maximale d'un critère texte du profil chrétien (identique au profil). */
+export const SEARCH_TEXT_MAX_LENGTH = 100;
 
 /** Longueur maximale d'un pays ou d'une ville (identique au profil). */
 export const SEARCH_PLACE_MAX_LENGTH = 100;
@@ -85,6 +91,10 @@ export function buildSearchFilters(
   if (form.maritalStatus && !isMaritalStatus(form.maritalStatus)) {
     return { error: "Choisissez une situation matrimoniale proposée." };
   }
+  const denomination = form.denomination.trim().replace(/\s+/g, " ");
+  if (denomination.length > SEARCH_TEXT_MAX_LENGTH) {
+    return { error: `La dénomination ne peut pas dépasser ${SEARCH_TEXT_MAX_LENGTH} caractères.` };
+  }
   return {
     filters: {
       ...(minAge !== undefined ? { min_age: minAge } : {}),
@@ -95,6 +105,7 @@ export function buildSearchFilters(
       ...(distance !== undefined ? { max_distance_km: distance as SearchDistance } : {}),
       ...(form.maritalStatus ? { marital_status: [form.maritalStatus] } : {}),
       ...(form.children ? { has_children: form.children === "with" } : {}),
+      ...(denomination ? { denomination } : {}),
     },
   };
 }

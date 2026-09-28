@@ -1183,6 +1183,13 @@ export type Database = {
           profiles: number
         }[]
       }
+      list_search_values: {
+        Args: { _field: string }
+        Returns: {
+          profiles: number
+          value: string
+        }[]
+      }
       mark_conversation_read: {
         Args: { _conversation_id: string }
         Returns: string
