@@ -6,6 +6,7 @@ import { toast } from "sonner";
 
 import { AppHeader } from "@/components/AppHeader";
 import { BottomNav } from "@/components/BottomNav";
+import { MyLocationPanel } from "@/components/MyLocationPanel";
 import { ProfilePhotos } from "@/components/ProfilePhotos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -253,6 +254,8 @@ function ProfilePage() {
                 {save.isPending ? "Enregistrement…" : "Enregistrer"}
               </Button>
             </form>
+
+            <MyLocationPanel userId={userId} />
 
             <p className="text-center text-[11px] text-muted-foreground">
               Préférences avancées et abonnement Premium arrivent en Phase 2.

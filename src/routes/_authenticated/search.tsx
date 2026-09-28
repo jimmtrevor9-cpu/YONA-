@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 
 import { AppHeader } from "@/components/AppHeader";
@@ -14,13 +14,16 @@ import type { Gender } from "@/features/profiles/discovery";
 import {
   EMPTY_SEARCH_FORM,
   SEARCH_MAX_AGE,
+  SEARCH_DISTANCES,
   SEARCH_MIN_AGE,
   SEARCH_PLACE_MAX_LENGTH,
   buildSearchFilters,
   type SearchFilters,
   type SearchForm,
 } from "@/features/search/filters";
+import { myLocationQuery } from "@/features/profiles/location";
 import {
+  isLocationRequired,
   searchCitiesQuery,
   searchCountriesQuery,
   searchDefaultsQuery,
@@ -75,7 +78,13 @@ function SearchPage() {
     enabled: !!user?.id,
   });
 
-  const { data, isLoading, isError } = useQuery({
+  // Recherche par distance : autour de la position enregistrée sur le profil.
+  const { data: myLocation } = useQuery({
+    ...myLocationQuery(user?.id ?? ""),
+    enabled: !!user?.id,
+  });
+
+  const { data, isLoading, isError, error } = useQuery({
     ...searchProfilesQuery(user?.id ?? "", filters),
     enabled: !!user?.id && !defaultsLoading,
   });
@@ -181,6 +190,32 @@ function SearchPage() {
               <option value="male">Un homme</option>
             </select>
           </div>
+          <div className="space-y-2">
+            <Label htmlFor="distance">Distance</Label>
+            <select
+              id="distance"
+              value={form.distance}
+              disabled={!myLocation}
+              onChange={(e) => update("distance", e.target.value)}
+              className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm text-foreground disabled:opacity-60"
+            >
+              <option value="">Toutes distances</option>
+              {SEARCH_DISTANCES.map((km) => (
+                <option key={km} value={String(km)}>
+                  À moins de {km} km
+                </option>
+              ))}
+            </select>
+            {!myLocation ? (
+              <p className="text-xs text-muted-foreground" data-testid="distance-hint">
+                Pour chercher par distance,{" "}
+                <Link to="/profile" className="text-gold-soft underline-offset-2 hover:underline">
+                  enregistrez votre position sur votre profil
+                </Link>
+                .
+              </p>
+            ) : null}
+          </div>
           {formError ? (
             <p className="text-sm text-destructive" role="alert" data-testid="search-error">
               {formError}
@@ -194,7 +229,11 @@ function SearchPage() {
         {isLoading ? (
           <Skeleton className="h-40 w-full rounded-2xl" />
         ) : isError ? (
-          <p className="text-sm text-destructive">La recherche a échoué. Réessayez.</p>
+          <p className="text-sm text-destructive" data-testid="search-failed">
+            {isLocationRequired(error)
+              ? "Enregistrez votre position sur votre profil pour chercher par distance."
+              : "La recherche a échoué. Réessayez."}
+          </p>
         ) : data && data.length > 0 ? (
           <div className="space-y-4" data-testid="search-results">
             {data.map((profile) => (

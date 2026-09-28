@@ -20,7 +20,17 @@ export const searchProfilesQuery = (userId: string, filters: SearchFilters) =>
       return data ?? [];
     },
     staleTime: 60 * 1000,
+    retry: (count, error) => !isLocationRequired(error) && count < 2,
   });
+
+/** Refus du serveur : la recherche par distance demande une position enregistrée. */
+export function isLocationRequired(error: unknown): boolean {
+  return (
+    error instanceof Object &&
+    "message" in error &&
+    String(error.message).includes("location_required")
+  );
+}
 
 /** Sexe recherché enregistré dans les préférences (valeur de départ de la recherche). */
 export const searchDefaultsQuery = (userId: string) =>

@@ -695,6 +695,35 @@ export type Database = {
           },
         ]
       }
+      profile_locations: {
+        Row: {
+          latitude: number
+          longitude: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          latitude: number
+          longitude: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          latitude?: number
+          longitude?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profile_locations_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profile_visits: {
         Row: {
           id: string
@@ -1051,6 +1080,7 @@ export type Database = {
         Args: { _conversation_id: string }
         Returns: Json
       }
+      clear_my_location: { Args: never; Returns: undefined }
       discover_profiles: {
         Args: { _limit?: number }
         Returns: {
@@ -1063,6 +1093,10 @@ export type Database = {
           interests: string[]
           user_id: string
         }[]
+      }
+      distance_km: {
+        Args: { _lat1: number; _lat2: number; _lng1: number; _lng2: number }
+        Returns: number
       }
       get_ai_quota: { Args: { _feature?: string }; Returns: Json }
       get_conversation_quota: {
@@ -1186,6 +1220,10 @@ export type Database = {
       start_conversation_unlock_payment: {
         Args: { _conversation_id: string; _provider: string }
         Returns: string
+      }
+      set_my_location: {
+        Args: { _latitude: number; _longitude: number }
+        Returns: undefined
       }
       touch_activity: { Args: never; Returns: boolean }
     }

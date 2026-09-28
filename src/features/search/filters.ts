@@ -11,7 +11,12 @@ export interface SearchFilters {
   gender?: Gender;
   country?: string;
   city?: string;
+  max_distance_km?: SearchDistance;
 }
+
+/** Rayons de recherche proposés (les seuls acceptés par le serveur). */
+export const SEARCH_DISTANCES = [5, 10, 25, 50, 100, 250, 500] as const;
+export type SearchDistance = (typeof SEARCH_DISTANCES)[number];
 
 /** Valeurs saisies dans le formulaire de recherche. */
 export interface SearchForm {
@@ -20,6 +25,7 @@ export interface SearchForm {
   gender: Gender | "";
   country: string;
   city: string;
+  distance: string;
 }
 
 export const EMPTY_SEARCH_FORM: SearchForm = {
@@ -28,6 +34,7 @@ export const EMPTY_SEARCH_FORM: SearchForm = {
   gender: "",
   country: "",
   city: "",
+  distance: "",
 };
 
 /** Longueur maximale d'un pays ou d'une ville (identique au profil). */
@@ -64,6 +71,10 @@ export function buildSearchFilters(
   if (city.length > SEARCH_PLACE_MAX_LENGTH) {
     return { error: `La ville ne peut pas dépasser ${SEARCH_PLACE_MAX_LENGTH} caractères.` };
   }
+  const distance = form.distance ? Number(form.distance) : undefined;
+  if (distance !== undefined && !(SEARCH_DISTANCES as readonly number[]).includes(distance)) {
+    return { error: "Choisissez une distance proposée." };
+  }
   return {
     filters: {
       ...(minAge !== undefined ? { min_age: minAge } : {}),
@@ -71,6 +82,7 @@ export function buildSearchFilters(
       ...(form.gender ? { gender: form.gender } : {}),
       ...(country ? { country } : {}),
       ...(city ? { city } : {}),
+      ...(distance !== undefined ? { max_distance_km: distance as SearchDistance } : {}),
     },
   };
 }

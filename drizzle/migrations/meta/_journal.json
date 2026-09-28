@@ -421,6 +421,13 @@
       "when": 1790643600000,
       "tag": "0059_phase11_filtre_ville",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1790647200000,
+      "tag": "0060_phase11_filtre_distance",
+      "breakpoints": true
     }
   ]
 }
