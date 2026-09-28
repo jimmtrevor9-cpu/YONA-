@@ -379,6 +379,13 @@
       "when": 1790622000000,
       "tag": "0053_phase10_actualiser_activite",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1790625600000,
+      "tag": "0054_phase10_statut_en_ligne",
+      "breakpoints": true
     }
   ]
 }

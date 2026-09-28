@@ -21,7 +21,21 @@ export async function touchActivity(): Promise<boolean> {
   return data === true;
 }
 
+/**
+ * Statut de présence d'un membre, calculé par le serveur (`get_presence`) :
+ * « En ligne » s'il est connecté et actif depuis moins de 3 minutes, puis « Actif
+ * récemment » (24 h), « Actif cette semaine » (7 jours), sinon « Actif il y a plusieurs
+ * jours ». « unknown » si aucune activité n'est connue ou si le statut n'est pas
+ * consultable (profil masqué, blocage…).
+ */
 export async function getPresence(userId: string): Promise<PresenceLevel> {
-  const { data } = await supabase.rpc("get_presence", { _user_id: userId });
+  const { data, error } = await supabase.rpc("get_presence", { _user_id: userId });
+  if (error) throw error;
   return (data as PresenceLevel | null) ?? "unknown";
+}
+
+/** À la déconnexion : la personne n'apparaît plus « en ligne ». */
+export async function markOffline() {
+  const { error } = await supabase.rpc("mark_offline");
+  if (error) throw error;
 }

@@ -1134,6 +1134,7 @@ export type Database = {
       has_mutual_like: { Args: { _other: string }; Returns: boolean }
       is_discoverable_profile: { Args: { _user_id: string }; Returns: boolean }
       is_premium: { Args: { _user_id: string }; Returns: boolean }
+      mark_offline: { Args: never; Returns: undefined }
       mark_conversation_read: {
         Args: { _conversation_id: string }
         Returns: string
