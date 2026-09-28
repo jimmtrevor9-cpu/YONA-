@@ -1143,6 +1143,19 @@ export type Database = {
         Args: { _visited_user_id: string }
         Returns: boolean
       }
+      search_profiles: {
+        Args: { _filters?: Json; _limit?: number }
+        Returns: {
+          bio: string | null
+          birth_date: string | null
+          city: string | null
+          country: string | null
+          first_name: string | null
+          gender: Database["public"]["Enums"]["gender"] | null
+          interests: string[]
+          user_id: string
+        }[]
+      }
       send_message: {
         Args: { _content: string; _conversation_id: string }
         Returns: {

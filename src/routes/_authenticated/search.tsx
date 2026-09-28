@@ -10,16 +10,25 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/features/auth/AuthProvider";
-import { discoverProfilesQuery, type Gender } from "@/features/profiles/discovery";
+import type { Gender } from "@/features/profiles/discovery";
+import {
+  EMPTY_SEARCH_FORM,
+  SEARCH_MAX_AGE,
+  SEARCH_MIN_AGE,
+  buildSearchFilters,
+  type SearchFilters,
+  type SearchForm,
+} from "@/features/search/filters";
+import { searchProfilesQuery } from "@/features/search/queries";
 import { APP_NAME } from "@/lib/config";
 
 export const Route = createFileRoute("/_authenticated/search")({
   head: () => ({
     meta: [
       { title: `Recherche — ${APP_NAME}` },
-      { name: "description", content: "Recherchez des profils par ville et par genre." },
+      { name: "description", content: "Recherchez des profils selon vos critères." },
       { property: "og:title", content: `Recherche — ${APP_NAME}` },
-      { property: "og:description", content: "Recherchez des profils par ville et par genre." },
+      { property: "og:description", content: "Recherchez des profils selon vos critères." },
     ],
   }),
   component: SearchPage,
@@ -27,12 +36,14 @@ export const Route = createFileRoute("/_authenticated/search")({
 
 function SearchPage() {
   const { user } = useAuth();
-  const [city, setCity] = useState("");
-  const [gender, setGender] = useState<Gender | "">("");
-  const [filters, setFilters] = useState<{ city?: string; gender?: Gender }>({});
+  const [form, setForm] = useState<SearchForm>(EMPTY_SEARCH_FORM);
+  const [filters, setFilters] = useState<SearchFilters>({});
+  const [formError, setFormError] = useState<string | null>(null);
+  const update = <K extends keyof SearchForm>(key: K, value: SearchForm[K]) =>
+    setForm((current) => ({ ...current, [key]: value }));
 
   const { data, isLoading, isError } = useQuery({
-    ...discoverProfilesQuery(user?.id ?? "", filters),
+    ...searchProfilesQuery(user?.id ?? "", filters),
     enabled: !!user?.id,
   });
 
@@ -42,20 +53,60 @@ function SearchPage() {
       <main className="mx-auto max-w-md space-y-5 px-5 py-6">
         <form
           className="panel gold-thread space-y-4 p-5"
+          data-testid="search-form"
+          noValidate
           onSubmit={(e) => {
             e.preventDefault();
-            setFilters({
-              ...(city.trim() ? { city: city.trim() } : {}),
-              ...(gender ? { gender } : {}),
-            });
+            const result = buildSearchFilters(form);
+            if (result.error !== undefined) {
+              setFormError(result.error);
+              return;
+            }
+            setFormError(null);
+            setFilters(result.filters);
           }}
         >
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium text-foreground">Âge</legend>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="minAge" className="text-xs text-muted-foreground">
+                  De (ans)
+                </Label>
+                <Input
+                  id="minAge"
+                  inputMode="numeric"
+                  min={SEARCH_MIN_AGE}
+                  max={SEARCH_MAX_AGE}
+                  value={form.minAge}
+                  onChange={(e) => update("minAge", e.target.value)}
+                  placeholder={String(SEARCH_MIN_AGE)}
+                  aria-invalid={!!formError}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="maxAge" className="text-xs text-muted-foreground">
+                  À (ans)
+                </Label>
+                <Input
+                  id="maxAge"
+                  inputMode="numeric"
+                  min={SEARCH_MIN_AGE}
+                  max={SEARCH_MAX_AGE}
+                  value={form.maxAge}
+                  onChange={(e) => update("maxAge", e.target.value)}
+                  placeholder={String(SEARCH_MAX_AGE)}
+                  aria-invalid={!!formError}
+                />
+              </div>
+            </div>
+          </fieldset>
           <div className="space-y-2">
             <Label htmlFor="city">Ville</Label>
             <Input
               id="city"
-              value={city}
-              onChange={(e) => setCity(e.target.value)}
+              value={form.city}
+              onChange={(e) => update("city", e.target.value)}
               placeholder="Libreville"
             />
           </div>
@@ -63,8 +114,8 @@ function SearchPage() {
             <Label htmlFor="gender">Je cherche</Label>
             <select
               id="gender"
-              value={gender}
-              onChange={(e) => setGender(e.target.value as Gender | "")}
+              value={form.gender}
+              onChange={(e) => update("gender", e.target.value as Gender | "")}
               className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm text-foreground"
             >
               <option value="">Indifférent</option>
@@ -72,6 +123,11 @@ function SearchPage() {
               <option value="male">Un homme</option>
             </select>
           </div>
+          {formError ? (
+            <p className="text-sm text-destructive" role="alert" data-testid="search-error">
+              {formError}
+            </p>
+          ) : null}
           <Button type="submit" className="w-full">
             Rechercher
           </Button>
@@ -82,13 +138,13 @@ function SearchPage() {
         ) : isError ? (
           <p className="text-sm text-destructive">La recherche a échoué. Réessayez.</p>
         ) : data && data.length > 0 ? (
-          <div className="space-y-4">
+          <div className="space-y-4" data-testid="search-results">
             {data.map((profile) => (
               <ProfileCard key={profile.user_id} profile={profile} />
             ))}
           </div>
         ) : (
-          <div className="panel p-6 text-center">
+          <div className="panel p-6 text-center" data-testid="search-empty">
             <p className="text-sm text-muted-foreground">Aucun profil ne correspond.</p>
           </div>
         )}
