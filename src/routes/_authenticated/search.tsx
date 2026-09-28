@@ -34,6 +34,7 @@ import {
 import { myLocationQuery } from "@/features/profiles/location";
 import {
   isLocationRequired,
+  isPremiumRequired,
   searchPremiumQuery,
   searchCitiesQuery,
   searchCountriesQuery,
@@ -100,6 +101,19 @@ function SearchPage() {
     ...searchPremiumQuery(user?.id ?? ""),
     enabled: !!user?.id,
   });
+
+  // Abonnement terminé : le filtre avancé n'est plus proposé ni envoyé.
+  useEffect(() => {
+    if (premium !== false) return;
+    setForm((current) =>
+      current.activeWithinDays ? { ...current, activeWithinDays: "" } : current,
+    );
+    setFilters((current) => {
+      if (current.active_within_days === undefined) return current;
+      const { active_within_days: _removed, ...rest } = current;
+      return rest;
+    });
+  }, [premium]);
 
   const { data, isLoading, isError, error } = useQuery({
     ...searchProfilesQuery(user?.id ?? "", filters),
@@ -358,7 +372,9 @@ function SearchPage() {
           <p className="text-sm text-destructive" data-testid="search-failed">
             {isLocationRequired(error)
               ? "Enregistrez votre position sur votre profil pour chercher par distance."
-              : "La recherche a échoué. Réessayez."}
+              : isPremiumRequired(error)
+                ? "Les filtres avancés sont réservés aux membres Premium."
+                : "La recherche a échoué. Réessayez."}
           </p>
         ) : data && data.length > 0 ? (
           <div className="space-y-4" data-testid="search-results">

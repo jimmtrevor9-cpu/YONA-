@@ -20,8 +20,17 @@ export const searchProfilesQuery = (userId: string, filters: SearchFilters) =>
       return data ?? [];
     },
     staleTime: 60 * 1000,
-    retry: (count, error) => !isLocationRequired(error) && count < 2,
+    retry: (count, error) => !isLocationRequired(error) && !isPremiumRequired(error) && count < 2,
   });
+
+/** Refus du serveur : filtre avancé réservé aux membres Premium. */
+export function isPremiumRequired(error: unknown): boolean {
+  return (
+    error instanceof Object &&
+    "message" in error &&
+    String(error.message).includes("premium_required")
+  );
+}
 
 /** Refus du serveur : la recherche par distance demande une position enregistrée. */
 export function isLocationRequired(error: unknown): boolean {
