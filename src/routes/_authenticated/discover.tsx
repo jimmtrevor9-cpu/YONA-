@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { AppHeader } from "@/components/AppHeader";
 import { MatchDialog } from "@/components/MatchDialog";
 import { BottomNav } from "@/components/BottomNav";
+import { ContactRequestButton } from "@/components/ContactRequestButton";
 import { ProfileCard } from "@/components/ProfileCard";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -172,6 +173,12 @@ function DiscoverPage() {
               isFavoritePending={favorite.pendingId === profile.user_id}
               onToggleFavorite={(profileId) =>
                 favorite.toggle(profileId, favoriteIds?.has(profileId) ?? false)
+              }
+              footer={
+                <ContactRequestButton
+                  receiverId={profile.user_id}
+                  receiverName={profile.first_name ?? "ce membre"}
+                />
               }
             />
           ))

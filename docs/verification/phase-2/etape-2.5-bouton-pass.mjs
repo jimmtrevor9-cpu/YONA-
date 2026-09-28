@@ -185,9 +185,14 @@ check(
 // G. Recherche et petit écran
 await page.goto(`${BASE}/search`, { waitUntil: "networkidle" });
 await page.waitForTimeout(1200);
+// Depuis l'étape 12.1, les cartes de la Recherche proposent « Demande de contact » :
+// seuls les boutons Passer / Like y restent absents.
 check(
-  "Page Recherche inchangée (aucun bouton sur les cartes)",
-  (await page.locator("article button").count()) === 0,
+  "Page Recherche : ni Passer ni Like sur les cartes",
+  (await page
+    .locator("article button")
+    .filter({ hasText: /^(Passer|Like|Aimé)$/ })
+    .count()) === 0,
 );
 const small = await login("w", 320);
 const smallBox = await small

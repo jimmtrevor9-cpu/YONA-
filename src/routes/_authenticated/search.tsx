@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { AppHeader } from "@/components/AppHeader";
 import { BottomNav } from "@/components/BottomNav";
+import { ContactRequestButton } from "@/components/ContactRequestButton";
 import { ProfileCard } from "@/components/ProfileCard";
 import { SearchTextField } from "@/components/SearchTextField";
 import { Button } from "@/components/ui/button";
@@ -379,7 +380,16 @@ function SearchPage() {
         ) : data && data.length > 0 ? (
           <div className="space-y-4" data-testid="search-results">
             {data.map((profile) => (
-              <ProfileCard key={profile.user_id} profile={profile} />
+              <ProfileCard
+                key={profile.user_id}
+                profile={profile}
+                footer={
+                  <ContactRequestButton
+                    receiverId={profile.user_id}
+                    receiverName={profile.first_name ?? "ce membre"}
+                  />
+                }
+              />
             ))}
           </div>
         ) : (

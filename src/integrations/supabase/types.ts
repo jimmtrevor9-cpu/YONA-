@@ -141,6 +141,51 @@ export type Database = {
           },
         ]
       }
+      contact_requests: {
+        Row: {
+          created_at: string
+          id: string
+          message: string | null
+          receiver_id: string
+          responded_at: string | null
+          sender_id: string
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          message?: string | null
+          receiver_id: string
+          responded_at?: string | null
+          sender_id: string
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          message?: string | null
+          receiver_id?: string
+          responded_at?: string | null
+          sender_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contact_requests_receiver_id_fkey"
+            columns: ["receiver_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contact_requests_sender_id_fkey"
+            columns: ["sender_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       conversation_reads: {
         Row: {
           conversation_id: string
@@ -1211,6 +1256,10 @@ export type Database = {
           interests: string[]
           user_id: string
         }[]
+      }
+      send_contact_request: {
+        Args: { _message?: string; _receiver_id: string }
+        Returns: Json
       }
       send_message: {
         Args: { _content: string; _conversation_id: string }

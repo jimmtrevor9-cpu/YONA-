@@ -62,7 +62,8 @@ for (let i = 0; i < 80 && (await page.locator("[data-sonner-toast]").count()) > 
   await page.waitForTimeout(100);
 await page.waitForTimeout(500);
 
-const card = (tag) => page.locator("article").filter({ hasText: `Like${tag}` });
+// Prénom suivi de « · âge » : évite qu'une autre carte (« Like » + « Demande de contact ») corresponde.
+const card = (tag) => page.locator("article").filter({ hasText: `Like${tag} ·` });
 const button = (tag) =>
   card(tag).getByRole("button", { name: /^(Liker le profil|Profil de .* aimé)/ });
 const toast = async () => {

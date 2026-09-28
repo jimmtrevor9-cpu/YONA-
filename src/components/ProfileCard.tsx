@@ -1,4 +1,5 @@
 import { Heart, LoaderCircle, MapPin, X } from "lucide-react";
+import type { ReactNode } from "react";
 
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { Button } from "@/components/ui/button";
@@ -26,6 +27,8 @@ interface ProfileCardProps {
   isFavorite?: boolean;
   isFavoritePending?: boolean;
   onToggleFavorite?: (profileId: string) => void;
+  /** Action complémentaire affichée en bas de la carte (demande de contact…). */
+  footer?: ReactNode;
 }
 
 /** Carte éditoriale d'un profil avec son action Like. */
@@ -39,6 +42,7 @@ export function ProfileCard({
   isFavorite = false,
   isFavoritePending = false,
   onToggleFavorite,
+  footer,
 }: ProfileCardProps) {
   const age = computeAge(profile.birth_date);
   const place = [profile.city, profile.country].filter(Boolean).join(", ");
@@ -119,6 +123,8 @@ export function ProfileCard({
           </Button>
         </div>
       ) : null}
+
+      {footer ? <div className="mt-3 flex justify-end">{footer}</div> : null}
     </article>
   );
 }

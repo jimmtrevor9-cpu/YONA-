@@ -38,7 +38,7 @@ par les fichiers de `supabase/migrations/`, appliqués **dans l'ordre**
   npx supabase db push
   ```
 
-Résultat attendu : 23 tables (toutes protégées par RLS), 58 fonctions, 67 règles
+Résultat attendu : 24 tables (toutes protégées par RLS), 59 fonctions, 68 règles
 d'accès, bucket `photos` privé (JPG, PNG, WebP, 5 Mo max) avec 4 règles d'accès, et la
 tâche planifiée `yona-expirer-deblocages` (extension pg_cron, toutes les 5 minutes).
 Si l'hébergeur ne propose pas pg_cron, la migration continue quand même : l'expiration
