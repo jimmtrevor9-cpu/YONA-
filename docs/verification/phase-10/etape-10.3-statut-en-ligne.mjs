@@ -21,6 +21,10 @@ const setSeen = (u, ago, online = true) =>
   sql(
     `update public.user_activity set last_seen_at = ${ago === null ? "null" : `now() - interval '${ago}'`}, is_online = ${online} where user_id='${id[u]}'`,
   );
+// Depuis l'étape 10.5, la présence des autres membres est réservée à Premium.
+sql(
+  `insert into public.subscriptions (user_id, status, starts_at, expires_at) values ('${id.v}', 'active', now() - interval '1 day', now() + interval '30 days')`,
+);
 const tv = await tokenOf(emails.v, PWD);
 const presence = async (token, u) =>
   (await rest(token, "rpc/get_presence", "POST", { _user_id: id[u] })).json;

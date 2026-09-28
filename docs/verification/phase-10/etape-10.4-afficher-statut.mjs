@@ -21,6 +21,10 @@ const setSeen = (ago, online) =>
     `update public.user_activity set last_seen_at = ${ago === null ? "null" : `now() - interval '${ago}'`}, is_online = ${online} where user_id='${id.m}'`,
   );
 
+// Depuis l'étape 10.5, la présence des autres membres est réservée à Premium.
+sql(
+  `insert into public.subscriptions (user_id, status, starts_at, expires_at) values ('${id.v}', 'active', now() - interval '1 day', now() + interval '30 days')`,
+);
 const { browser, jsErrors, login } = await openBrowser();
 const pm = await login(emails.m, PWD);
 await pm.waitForTimeout(1000);

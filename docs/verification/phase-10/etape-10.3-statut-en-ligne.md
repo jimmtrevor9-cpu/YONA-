@@ -57,3 +57,6 @@ Sinon, le statut est `unknown`.
 
 Type-check : 0 erreur · Build : réussi · Lint : 126 hors fichier généré (inchangé), 1 122
 au total (+1 ligne de type dans le fichier généré).
+
+> Depuis l'étape 10.5, le statut des autres membres est réservé à Premium : le membre
+> qui consulte est désormais Premium dans ce test (20/20).

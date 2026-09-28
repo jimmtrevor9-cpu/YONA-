@@ -386,6 +386,13 @@
       "when": 1790625600000,
       "tag": "0054_phase10_statut_en_ligne",
       "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1790629200000,
+      "tag": "0055_phase10_presence_premium",
+      "breakpoints": true
     }
   ]
 }

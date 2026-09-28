@@ -38,3 +38,6 @@ Une horloge simulée (Playwright `clock`) est utilisée pour la mise à jour aut
 
 Type-check : 0 erreur · Build : réussi · Lint : 126 hors fichier généré (inchangé, après
 la mise en forme d'une ligne du test), 1 122 au total.
+
+> Depuis l'étape 10.5, le statut des autres membres est réservé à Premium : le membre
+> qui consulte est désormais Premium dans ce test (12/12).

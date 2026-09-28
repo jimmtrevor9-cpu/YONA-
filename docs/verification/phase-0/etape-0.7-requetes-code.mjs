@@ -188,7 +188,6 @@ noErr("quotas.ts:86 — lister mes favoris", favs, `${favs.data?.length}`);
 const rpcs = [
   ["roles.ts:9 — has_role", A, "has_role", { _user_id: A.id, _role: "admin" }, false],
   ["presence.ts:17 — touch_activity", A, "touch_activity", undefined],
-  ["presence.ts:21 — get_presence", A, "get_presence", { _user_id: B.id }],
   ["quotas.ts:48 — get_ai_quota", A, "get_ai_quota", { _feature: "roi_salomon" }],
   ["quotas.ts:55 — consume_ai_quota", A, "consume_ai_quota", { _feature: "roi_salomon" }],
   [
@@ -218,6 +217,17 @@ check(
   "consume_free_message (retirée du code) : refusée aux membres",
   !!consume.error && /permission denied/.test(consume.error.message),
   consume.error?.message ?? "",
+);
+// Depuis l'étape 10.5, la présence des autres membres est réservée aux membres Premium.
+const presenceOther = await A.c.rpc("get_presence", { _user_id: B.id });
+check(
+  "presence.ts — get_presence (A gratuit, statut de B) : refusée « premium_required »",
+  !!presenceOther.error && /premium_required/.test(presenceOther.error.message),
+  presenceOther.error?.message ?? JSON.stringify(presenceOther.data),
+);
+noErr(
+  "presence.ts — get_presence (son propre statut)",
+  await A.c.rpc("get_presence", { _user_id: A.id }),
 );
 // Depuis l'étape 8.9, « qui m'a mis en favori » est explicitement refusé aux membres
 // gratuits (aucune information transmise).

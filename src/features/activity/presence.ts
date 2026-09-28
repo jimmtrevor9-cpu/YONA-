@@ -36,17 +36,38 @@ export async function getPresence(userId: string): Promise<PresenceLevel> {
   return (data as PresenceLevel | null) ?? "unknown";
 }
 
+/**
+ * Statut d'un autre membre, ou « locked » : la présence des autres membres est réservée
+ * aux membres Premium (refus `premium_required` du serveur, aucune information transmise).
+ */
+export type PresenceView = PresenceLevel | "locked";
+
+async function getPresenceView(userId: string): Promise<PresenceView> {
+  try {
+    return await getPresence(userId);
+  } catch (error) {
+    if (
+      error instanceof Object &&
+      "message" in error &&
+      String(error.message).includes("premium_required")
+    )
+      return "locked";
+    throw error;
+  }
+}
+
 /** À la déconnexion : la personne n'apparaît plus « en ligne ». */
 export async function markOffline() {
   const { error } = await supabase.rpc("mark_offline");
   if (error) throw error;
 }
 
-/** Statut de présence d'un membre, actualisé chaque minute tant qu'il est affiché. */
+/** Statut de présence d'un membre (ou « locked »), actualisé chaque minute tant qu'il est affiché. */
 export const presenceQuery = (userId: string) =>
   queryOptions({
     queryKey: ["presence", userId],
-    queryFn: () => getPresence(userId),
+    queryFn: () => getPresenceView(userId),
     staleTime: 30 * 1000,
-    refetchInterval: 60 * 1000,
+    // Statut réservé : rien à actualiser tant que la page reste affichée.
+    refetchInterval: (query) => (query.state.data === "locked" ? false : 60 * 1000),
   });
