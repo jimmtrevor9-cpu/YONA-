@@ -1158,7 +1158,7 @@ export type Database = {
         Args: { _conversation_id: string; _provider: string }
         Returns: string
       }
-      touch_activity: { Args: never; Returns: undefined }
+      touch_activity: { Args: never; Returns: boolean }
     }
     Enums: {
       account_status: "active" | "suspended" | "disabled" | "deleted"

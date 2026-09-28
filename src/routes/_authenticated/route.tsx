@@ -1,6 +1,7 @@
 import { createFileRoute, Navigate, Outlet } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 
+import { useActivityTracking } from "@/features/activity/useActivityTracking";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -18,6 +19,8 @@ export const Route = createFileRoute("/_authenticated")({
 function AuthenticatedLayout() {
   const { user, loading } = useAuth();
   const [verifiedUserId, setVerifiedUserId] = useState<string | null>(null);
+  // Dernière activité : enregistrée une fois le membre vérifié.
+  useActivityTracking(verifiedUserId);
 
   useEffect(() => {
     if (!user) return;

@@ -11,9 +11,14 @@ export const PRESENCE_LABELS: Record<PresenceLevel, string> = {
   unknown: "",
 };
 
-/** Signale l'activité de l'utilisateur courant (met à jour last_seen_at côté serveur). */
-export async function touchActivity() {
-  await supabase.rpc("touch_activity");
+/**
+ * Signale l'activité de la personne connectée (date fixée par le serveur). Renvoie `true`
+ * si elle a été enregistrée, `false` si le compte n'est pas actif.
+ */
+export async function touchActivity(): Promise<boolean> {
+  const { data, error } = await supabase.rpc("touch_activity");
+  if (error) throw error;
+  return data === true;
 }
 
 export async function getPresence(userId: string): Promise<PresenceLevel> {
