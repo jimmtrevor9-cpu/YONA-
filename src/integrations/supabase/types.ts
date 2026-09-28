@@ -1135,7 +1135,7 @@ export type Database = {
       }
       record_profile_visit: {
         Args: { _visited_user_id: string }
-        Returns: undefined
+        Returns: boolean
       }
       send_message: {
         Args: { _content: string; _conversation_id: string }

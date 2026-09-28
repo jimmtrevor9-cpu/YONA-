@@ -96,12 +96,16 @@ export async function listFavoritedBy() {
   return data ?? [];
 }
 
-/** Enregistre une visite de profil (ignorée si auto-visite, blocage ou doublon récent). */
-export async function recordProfileVisit(visitedUserId: string) {
-  const { error } = await supabase.rpc("record_profile_visit", {
+/**
+ * Enregistre une visite de profil. Renvoie `true` si elle a été enregistrée, `false` si
+ * elle est ignorée (soi-même, profil non visible, blocage, visite récente).
+ */
+export async function recordProfileVisit(visitedUserId: string): Promise<boolean> {
+  const { data, error } = await supabase.rpc("record_profile_visit", {
     _visited_user_id: visitedUserId,
   });
   if (error) throw error;
+  return data === true;
 }
 
 /** « Qui a visité mon profil » — réservé Premium (filtré côté serveur). */

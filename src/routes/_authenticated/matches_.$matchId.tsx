@@ -13,6 +13,7 @@ import { myFavoriteIdsQuery } from "@/features/favorites/queries";
 import { useFavoriteToggle } from "@/features/favorites/useFavoriteToggle";
 import { matchProfileQuery } from "@/features/matches/queries";
 import { computeAge } from "@/features/profiles/queries";
+import { useRecordProfileVisit } from "@/features/visits/useRecordProfileVisit";
 import { APP_NAME } from "@/lib/config";
 
 export const Route = createFileRoute("/_authenticated/matches_/$matchId")({
@@ -45,6 +46,7 @@ function MatchProfilePage() {
     ...matchProfileQuery(user?.id ?? "", matchId),
     enabled: !!user?.id,
   });
+  useRecordProfileVisit(data?.userId);
 
   const name = data?.firstName ?? "Profil";
   const age = computeAge(data?.birthDate ?? null);
