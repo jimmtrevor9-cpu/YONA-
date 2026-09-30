@@ -9,29 +9,31 @@ Dernière mise à jour : 2026-09-30
 | 0 à 11 | Environnement, inscription, Découvrir, Like/Pass, Match, messages, quota 3 messages, numéros, déblocage 1 USD, favoris, visites, présence, recherche | ✅ Terminé (travail précédent) |
 | 12 | Demandes de contact | ✅ Terminé (12.1 avant, 12.2 à 12.6 le 2026-09-30) |
 | 13 | Roi Salomon | ✅ Terminé (2026-09-30) |
-| 14 | Premium (page, paiement, badge, expiration) | ⏳ À faire |
-| 15 | Avantages Premium | ⏳ À faire |
-| 16 | Ice Breaker | ⏳ À faire |
-| 17 | Message Flash | ⏳ À faire |
-| 18 | Compatibilité | ⏳ À faire |
-| 19 | Notifications | ⏳ À faire |
-| 20 | Paramètres `/settings` | ⏳ À faire |
-| 21 | Blocage | ⏳ À faire |
-| 22 | Signalement | ⏳ À faire |
-| 23 | Administration `/admin` | ⏳ À faire |
+| 14 | Premium (page, paiement, badge, expiration) | ✅ Terminé et testé (46/46) |
+| 15 | Avantages Premium | ✅ Terminé et testé (50/50) |
+| 16 | Ice Breaker | ✅ Code terminé (test auto à écrire) |
+| 17 | Message Flash | ✅ Code terminé (test auto à écrire) |
+| 18 | Compatibilité | ✅ Code terminé (test auto à écrire) |
+| 19 | Notifications | 🟡 Code écrit, migration à appliquer et tester |
+| 20 | Paramètres `/settings` | 🟡 Code écrit, migration à appliquer et tester |
+| 21 | Blocage | 🟡 Code écrit, migration à appliquer et tester |
+| 22 | Signalement | 🟡 Code écrit, migration à appliquer et tester |
+| 23 | Administration `/admin` | 🟡 Code écrit, migration à appliquer et tester |
 | 24 | Sécurité finale | ⏳ À faire |
 | 25 | Tests | ⏳ À faire |
 | 26 | Validation finale + README | ⏳ À faire |
 
 ## Tâche en cours
 
-Phase 14 — Premium (page `/premium`, paiement mensuel/annuel, activation, badge, expiration).
+Vérifier les phases 19 à 23 sur une base locale (le conteneur a redémarré : Docker à relancer).
 
 ## Prochaine action précise
 
-Créer la migration `supabase/migrations/20260930120000_phase14_premium.sql`
-(`start_premium_payment`, activation de l'abonnement quand le paiement est confirmé,
-badge), puis la page `src/routes/_authenticated/premium.tsx`.
+1. Relancer Supabase local (`supabase start` dans `/home/claude/yona-local`).
+2. Appliquer dans l'ordre les migrations `20260930170000_phase19_notifications.sql`,
+   `20260930180000_phase20_parametres.sql`, `20260930190000_phase21_22_blocage_signalement.sql`,
+   `20260930200000_phase23_administration.sql` (+ copies drizzle 0077 à 0080).
+3. Écrire les tests `docs/verification/phase-16` à `phase-23`, corriger, puis phases 24 à 26.
 
 ## Décisions techniques
 
@@ -54,8 +56,21 @@ badge), puis la page `src/routes/_authenticated/premium.tsx`.
   discussion n'est pas enregistrée sur le serveur (gardée dans l'onglet). Si l'IA échoue,
   la question est rendue.
 
+- **Premium** : paiement unique (mensuel ou annuel), sans renouvellement automatique ; un
+  renouvellement s'ajoute après la période en cours. Stripe appelé en REST, confirmé par un
+  webhook signé (`/api/stripe-webhook`). Prestataire « test » par défaut.
+- **Compatibilité** : score calculé par des règles simples en SQL (dénomination, foi,
+  église, prière, valeurs, intérêts, objectif, famille, âge, pays), pas par l'IA.
+- **Boost** : 1 heure, une fois tous les 7 jours (Premium). Photos HD : 5 Mo en Premium,
+  2 Mo (réduites à 1280 px) sinon. Messages vocaux : 120 s max, Premium, stockage privé.
+- **Blocage** : ferme le Match et la conversation, annule les demandes, retire les favoris.
+- **Admin** : toutes les fonctions `admin_*` revérifient le rôle en base ; suspendre ou
+  bannir bloque aussi la connexion (Supabase Auth, fonction serveur).
+
 ## Problèmes connus
 
+- Non testé en réel : Stripe en ligne (testé avec un faux Stripe local), vraie clé
+  Anthropic, envoi d'e-mails (aucun service d'e-mail : la préférence est seulement enregistrée).
 - Paiement réel : pas encore choisi par le propriétaire (question posée : Stripe ou
   Mobile Money). En attendant : prestataire « test » (sans argent réel).
 - Lint : ~1 200 erreurs de mise en forme, presque toutes dans des fichiers générés

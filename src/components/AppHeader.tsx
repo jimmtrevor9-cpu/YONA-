@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { Crown } from "lucide-react";
 
+import { NotificationBell } from "@/components/NotificationBell";
 import { useSignOut } from "@/features/auth/useSignOut";
 import { APP_NAME } from "@/lib/config";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,7 @@ export function AppHeader({ title }: { title: string }) {
           <h1 className="truncate font-display text-lg font-semibold text-foreground">{title}</h1>
         </div>
         <div className="flex shrink-0 items-center gap-1">
+          <NotificationBell />
           <Button asChild variant="ghost" size="icon" className="size-9">
             <Link to="/roi-salomon" aria-label="Roi Salomon, votre conseiller" title="Roi Salomon">
               <Crown className="size-5 text-gold" aria-hidden />

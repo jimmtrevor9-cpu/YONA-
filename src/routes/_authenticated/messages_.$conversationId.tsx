@@ -6,16 +6,21 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { AppHeader } from "@/components/AppHeader";
+import { PremiumBadge } from "@/components/PremiumBadge";
+import { SafetyActions } from "@/components/SafetyActions";
 import { PresenceBadge } from "@/components/PresenceBadge";
+import { IceBreakerBar } from "@/components/IceBreakerBar";
 import { MessageComposer } from "@/components/MessageComposer";
 import { MessageThread } from "@/components/MessageThread";
 import { UnlockedBanner } from "@/components/UnlockedBanner";
 import { UnlockOffer } from "@/components/UnlockOffer";
+import { VoiceRecorder } from "@/components/VoiceRecorder";
 import { BottomNav } from "@/components/BottomNav";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/features/auth/AuthProvider";
+import { usePremiumBadges } from "@/features/premium/queries";
 import { sendMessage as sendMessageFn } from "@/features/messaging/messages.functions";
 import {
   conversationMessagesQuery,
@@ -56,6 +61,7 @@ function ConversationPage() {
     enabled: !!user?.id,
   });
   const name = data?.firstName ?? "Membre";
+  const { data: premiumIds } = usePremiumBadges(data ? [data.userId] : []);
   const { data: quota } = useQuery({
     ...messageQuotaQuery(user?.id ?? "", conversationId),
     enabled: !!user?.id && !!data,
@@ -78,6 +84,7 @@ function ConversationPage() {
       fromMe: true,
       status: "sending",
       createdAt: new Date().toISOString(),
+      voice: null,
     };
     queryClient.setQueryData(queryKey, (list) => mergeThreadMessage(list, pending));
     try {
@@ -91,6 +98,7 @@ function ConversationPage() {
             fromMe: true,
             status: "delivered",
             createdAt: sent.createdAt,
+            voice: null,
           },
           pending.id,
         ),
@@ -161,6 +169,7 @@ function ConversationPage() {
               <div className="min-w-0 flex-1">
                 <h2 className="truncate font-display text-lg font-semibold text-foreground">
                   {name}
+                  {premiumIds?.has(data.userId) ? <PremiumBadge className="ml-2" /> : null}
                 </h2>
                 <PresenceBadge userId={data.userId} />
                 <Link
@@ -171,6 +180,7 @@ function ConversationPage() {
                   Voir son profil
                 </Link>
               </div>
+              <SafetyActions userId={data.userId} name={name} variant="compact" />
             </section>
 
             {quota?.unlocked ? (
@@ -191,6 +201,7 @@ function ConversationPage() {
                 userId={user?.id ?? ""}
                 conversationId={data.conversationId}
                 otherName={name}
+                otherUserId={data.userId}
               />
             </section>
 
@@ -202,11 +213,34 @@ function ConversationPage() {
               onSend={sendMessage}
               remaining={quota?.remaining ?? null}
               unlocked={quota?.unlocked ?? false}
+              premium={quota?.premium ?? false}
+              toolbar={(insert) => (
+                <IceBreakerBar
+                  conversationId={data.conversationId}
+                  otherUserId={data.userId}
+                  otherName={name}
+                  premium={quota?.premium ?? false}
+                  insert={insert}
+                />
+              )}
+              accessory={
+                <VoiceRecorder
+                  userId={user?.id ?? ""}
+                  conversationId={data.conversationId}
+                  premium={quota?.premium ?? false}
+                  onSent={() => {
+                    void queryClient.invalidateQueries({
+                      queryKey: conversationMessagesQuery(user?.id ?? "", conversationId).queryKey,
+                    });
+                    void queryClient.invalidateQueries({ queryKey: ["conversations", "mine"] });
+                  }}
+                />
+              }
               notice={sendNotice}
               onTextChange={() => setSendNotice(null)}
             />
 
-            {quota?.exhausted && !quota.unlocked ? (
+            {quota?.exhausted && !quota.unlocked && !quota.premium ? (
               <UnlockOffer
                 conversationId={conversationId}
                 otherName={name}

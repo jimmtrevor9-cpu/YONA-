@@ -16,6 +16,8 @@ export interface MessageQuota {
   unlockExpiresAt: string | null;
   /** Fin du dernier déblocage terminé (quand aucun n'est en cours). */
   lastUnlockExpiredAt: string | null;
+  /** Membre Premium : messages illimités (vérifié par le serveur). */
+  premium: boolean;
 }
 
 /**
@@ -41,6 +43,7 @@ export const messageQuotaQuery = (userId: string, conversationId: string) =>
         unlockedBy: row.unlocked_by,
         unlockExpiresAt: row.unlock_expires_at,
         lastUnlockExpiredAt: row.last_unlock_expired_at,
+        premium: row.premium,
       };
     },
     staleTime: 30 * 1000,

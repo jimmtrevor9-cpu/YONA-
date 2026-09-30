@@ -145,6 +145,7 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          is_flash: boolean
           message: string | null
           receiver_id: string
           responded_at: string | null
@@ -154,6 +155,7 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
+          is_flash?: boolean
           message?: string | null
           receiver_id: string
           responded_at?: string | null
@@ -163,6 +165,7 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
+          is_flash?: boolean
           message?: string | null
           receiver_id?: string
           responded_at?: string | null
@@ -499,36 +502,45 @@ export type Database = {
       }
       messages: {
         Row: {
+          audio_duration_seconds: number | null
+          audio_path: string | null
           blocked_reason: string | null
           contains_phone_number: boolean
           content: string
           conversation_id: string
           created_at: string
           id: string
+          kind: string
           moderation_flags: Json
           moderation_status: Database["public"]["Enums"]["moderation_status"]
           sender_id: string
           status: Database["public"]["Enums"]["message_status"]
         }
         Insert: {
+          audio_duration_seconds?: number | null
+          audio_path?: string | null
           blocked_reason?: string | null
           contains_phone_number?: boolean
           content: string
           conversation_id: string
           created_at?: string
           id?: string
+          kind?: string
           moderation_flags?: Json
           moderation_status?: Database["public"]["Enums"]["moderation_status"]
           sender_id: string
           status?: Database["public"]["Enums"]["message_status"]
         }
         Update: {
+          audio_duration_seconds?: number | null
+          audio_path?: string | null
           blocked_reason?: string | null
           contains_phone_number?: boolean
           content?: string
           conversation_id?: string
           created_at?: string
           id?: string
+          kind?: string
           moderation_flags?: Json
           moderation_status?: Database["public"]["Enums"]["moderation_status"]
           sender_id?: string
@@ -595,6 +607,36 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      notifications: {
+        Row: {
+          actor_id: string | null
+          created_at: string
+          data: Json
+          id: string
+          read_at: string | null
+          type: string
+          user_id: string
+        }
+        Insert: {
+          actor_id?: string | null
+          created_at?: string
+          data?: Json
+          id?: string
+          read_at?: string | null
+          type: string
+          user_id: string
+        }
+        Update: {
+          actor_id?: string | null
+          created_at?: string
+          data?: Json
+          id?: string
+          read_at?: string | null
+          type?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       payments: {
         Row: {
@@ -739,6 +781,30 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      profile_boosts: {
+        Row: {
+          created_at: string
+          expires_at: string
+          id: string
+          starts_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at: string
+          id?: string
+          starts_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          id?: string
+          starts_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       profile_locations: {
         Row: {
@@ -1010,6 +1076,45 @@ export type Database = {
           },
         ]
       }
+      support_tickets: {
+        Row: {
+          admin_reply: string | null
+          answered_at: string | null
+          created_at: string
+          id: string
+          message: string
+          priority: string
+          status: string
+          subject: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          admin_reply?: string | null
+          answered_at?: string | null
+          created_at?: string
+          id?: string
+          message: string
+          priority?: string
+          status?: string
+          subject: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          admin_reply?: string | null
+          answered_at?: string | null
+          created_at?: string
+          id?: string
+          message?: string
+          priority?: string
+          status?: string
+          subject?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_activity: {
         Row: {
           events: Json
@@ -1077,6 +1182,39 @@ export type Database = {
           },
         ]
       }
+      user_settings: {
+        Row: {
+          activity_visible: boolean
+          created_at: string
+          notify_email: boolean
+          notify_likes: boolean
+          notify_matches: boolean
+          notify_messages: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          activity_visible?: boolean
+          created_at?: string
+          notify_email?: boolean
+          notify_likes?: boolean
+          notify_matches?: boolean
+          notify_messages?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          activity_visible?: boolean
+          created_at?: string
+          notify_email?: boolean
+          notify_likes?: boolean
+          notify_matches?: boolean
+          notify_messages?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       users: {
         Row: {
           created_at: string
@@ -1109,8 +1247,127 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      activate_profile_boost: { Args: never; Returns: string }
+      admin_list_payments: {
+        Args: never
+        Returns: {
+          amount: number
+          created_at: string
+          currency: string
+          email: string | null
+          id: string
+          provider: string
+          provider_transaction_id: string | null
+          status: Database["public"]["Enums"]["payment_status"]
+          type: Database["public"]["Enums"]["payment_type"]
+          user_id: string
+        }[]
+      }
+      admin_list_pending_photos: {
+        Args: never
+        Returns: {
+          created_at: string
+          first_name: string | null
+          id: string
+          storage_path: string
+          user_id: string
+        }[]
+      }
+      admin_list_reports: {
+        Args: { _status?: string }
+        Returns: {
+          created_at: string
+          description: string | null
+          id: string
+          message_content: string | null
+          message_id: string | null
+          reason: Database["public"]["Enums"]["report_reason"]
+          reported_name: string | null
+          reported_status: Database["public"]["Enums"]["account_status"] | null
+          reported_user_id: string
+          reporter_id: string
+          reporter_name: string | null
+          status: Database["public"]["Enums"]["report_status"]
+        }[]
+      }
+      admin_list_subscriptions: {
+        Args: never
+        Returns: {
+          active_now: boolean
+          email: string | null
+          expires_at: string | null
+          id: string
+          plan: Database["public"]["Enums"]["subscription_plan"]
+          starts_at: string | null
+          status: Database["public"]["Enums"]["subscription_status"]
+          user_id: string
+        }[]
+      }
+      admin_list_support_tickets: {
+        Args: never
+        Returns: {
+          admin_reply: string | null
+          created_at: string
+          email: string | null
+          first_name: string | null
+          id: string
+          message: string
+          priority: string
+          status: string
+          subject: string
+          user_id: string
+        }[]
+      }
+      admin_list_unlocks: {
+        Args: never
+        Returns: {
+          active_now: boolean
+          conversation_id: string
+          email: string | null
+          expires_at: string | null
+          id: string
+          paid_by: string
+          starts_at: string | null
+          status: Database["public"]["Enums"]["unlock_status"]
+        }[]
+      }
+      admin_list_users: {
+        Args: { _limit?: number; _offset?: number; _search?: string; _status?: string }
+        Returns: {
+          created_at: string
+          email: string | null
+          first_name: string | null
+          id: string
+          is_admin: boolean
+          premium: boolean
+          profile_status: Database["public"]["Enums"]["profile_status"] | null
+          reports_count: number
+          status: Database["public"]["Enums"]["account_status"]
+        }[]
+      }
+      admin_moderate_photo: {
+        Args: { _approve: boolean; _photo_id: string; _reason?: string }
+        Returns: Database["public"]["Enums"]["photo_status"]
+      }
+      admin_reply_support_ticket: {
+        Args: { _close?: boolean; _reply: string; _ticket_id: string }
+        Returns: undefined
+      }
+      admin_resolve_report: {
+        Args: { _note?: string; _report_id: string; _status: string }
+        Returns: undefined
+      }
+      admin_set_user_status: {
+        Args: { _action: string; _reason?: string; _user_id: string }
+        Returns: Database["public"]["Enums"]["account_status"]
+      }
+      admin_stats: { Args: never; Returns: Json }
+      admin_user_detail: { Args: { _user_id: string }; Returns: Json }
       ai_usage_day: { Args: never; Returns: string }
+      assert_admin: { Args: never; Returns: undefined }
+      block_user: { Args: { _user_id: string }; Returns: boolean }
       can_browse_profiles: { Args: never; Returns: boolean }
+      can_view_profile: { Args: { _other: string }; Returns: boolean }
       cancel_contact_request: { Args: { _request_id: string }; Returns: Json }
       confirm_payment: {
         Args: {
@@ -1129,6 +1386,10 @@ export type Database = {
       }
       clear_my_location: { Args: never; Returns: undefined }
       contains_phone_number: { Args: { _text: string }; Returns: boolean }
+      create_support_ticket: {
+        Args: { _message: string; _subject: string }
+        Returns: string
+      }
       discover_profiles: {
         Args: { _limit?: number }
         Returns: {
@@ -1146,7 +1407,16 @@ export type Database = {
         Args: { _lat1: number; _lat2: number; _lng1: number; _lng2: number }
         Returns: number
       }
+      expire_subscriptions: { Args: never; Returns: number }
       get_ai_quota: { Args: { _feature?: string }; Returns: Json }
+      get_compatibility: { Args: { _other: string }; Returns: Json }
+      get_compatibility_scores: {
+        Args: { _user_ids: string[] }
+        Returns: {
+          score: number | null
+          user_id: string
+        }[]
+      }
       get_contact_request_quota: { Args: never; Returns: Json }
       get_conversation_quota: {
         Args: { _conversation_id: string }
@@ -1163,6 +1433,9 @@ export type Database = {
           user_id: string
         }[]
       }
+      get_my_boost: { Args: never; Returns: Json }
+      get_my_premium: { Args: never; Returns: Json }
+      get_premium_badges: { Args: { _user_ids: string[] }; Returns: string[] }
       get_presence: { Args: { _user_id: string }; Returns: string }
       get_profile_visitors: {
         Args: never
@@ -1176,6 +1449,7 @@ export type Database = {
           visitor_id: string
         }[]
       }
+      get_unread_notification_count: { Args: never; Returns: number }
       has_active_conversation_unlock: {
         Args: { _conversation_id: string }
         Returns: boolean
@@ -1188,8 +1462,10 @@ export type Database = {
         Returns: boolean
       }
       is_active_account: { Args: { _user_id: string }; Returns: boolean }
+      is_activity_visible: { Args: { _user_id: string }; Returns: boolean }
       is_admin: { Args: never; Returns: boolean }
       is_blocked_between: { Args: { _a: string; _b: string }; Returns: boolean }
+      is_boosted: { Args: { _user_id: string }; Returns: boolean }
       is_conversation_participant: {
         Args: { _conversation_id: string; _user_id: string }
         Returns: boolean
@@ -1199,6 +1475,7 @@ export type Database = {
         Returns: {
           exhausted: boolean
           last_unlock_expired_at: string | null
+          premium: boolean
           quota_limit: number
           remaining: number
           unlock_expires_at: string | null
@@ -1217,6 +1494,14 @@ export type Database = {
       has_mutual_like: { Args: { _other: string }; Returns: boolean }
       is_discoverable_profile: { Args: { _user_id: string }; Returns: boolean }
       is_premium: { Args: { _user_id: string }; Returns: boolean }
+      list_blocked_users: {
+        Args: never
+        Returns: {
+          blocked_at: string
+          first_name: string | null
+          user_id: string
+        }[]
+      }
       list_contact_requests: {
         Args: { _direction?: string }
         Returns: {
@@ -1226,12 +1511,27 @@ export type Database = {
           created_at: string
           first_name: string | null
           id: string
+          is_flash: boolean
           message: string | null
           other_user_id: string
           responded_at: string | null
           status: string
         }[]
       }
+      list_notifications: {
+        Args: { _limit?: number }
+        Returns: {
+          actor_first_name: string | null
+          actor_id: string | null
+          created_at: string
+          data: Json
+          id: string
+          read_at: string | null
+          type: string
+        }[]
+      }
+      mark_all_notifications_read: { Args: never; Returns: number }
+      mark_notification_read: { Args: { _id: string }; Returns: boolean }
       mark_offline: { Args: never; Returns: undefined }
       list_search_cities: {
         Args: { _country?: string }
@@ -1259,6 +1559,10 @@ export type Database = {
         Returns: string
       }
       normalize_place: { Args: { _value: string }; Returns: string }
+      premium_plan_amount: {
+        Args: { _plan: Database["public"]["Enums"]["subscription_plan"] }
+        Returns: number
+      }
       record_profile_visit: {
         Args: { _visited_user_id: string }
         Returns: boolean
@@ -1266,6 +1570,15 @@ export type Database = {
       refund_ai_quota: {
         Args: { _feature: string; _user_id: string }
         Returns: undefined
+      }
+      report_user: {
+        Args: { 
+          _description?: string
+          _message_id?: string
+          _reason: Database["public"]["Enums"]["report_reason"]
+          _user_id: string
+         }
+        Returns: string
       }
       respond_contact_request: {
         Args: { _accept: boolean; _request_id: string }
@@ -1285,7 +1598,7 @@ export type Database = {
         }[]
       }
       send_contact_request: {
-        Args: { _message?: string; _receiver_id: string }
+        Args: { _flash?: boolean; _message?: string; _receiver_id: string }
         Returns: Json
       }
       send_message: {
@@ -1299,6 +1612,14 @@ export type Database = {
           status: Database["public"]["Enums"]["message_status"]
         }[]
       }
+      send_voice_message: {
+        Args: {
+          _audio_path: string
+          _conversation_id: string
+          _duration_seconds: number
+        }
+        Returns: string
+      }
       set_primary_photo: { Args: { _photo_id: string }; Returns: undefined }
       start_conversation_unlock_payment: {
         Args: { _conversation_id: string; _provider: string }
@@ -1308,7 +1629,15 @@ export type Database = {
         Args: { _latitude: number; _longitude: number }
         Returns: undefined
       }
+      start_premium_payment: {
+        Args: {
+          _plan: Database["public"]["Enums"]["subscription_plan"]
+          _provider: string
+        }
+        Returns: string
+      }
       touch_activity: { Args: never; Returns: boolean }
+      unblock_user: { Args: { _user_id: string }; Returns: boolean }
       utc_day_start: { Args: never; Returns: string }
     }
     Enums: {

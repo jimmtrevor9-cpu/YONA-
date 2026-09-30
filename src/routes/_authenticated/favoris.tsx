@@ -174,8 +174,13 @@ function FavoritedBySection({
           <div className="space-y-1">
             <p className="text-sm font-medium text-foreground">Réservé aux membres Premium</p>
             <p className="text-xs text-muted-foreground">
-              Avec Premium, découvrez qui vous a mis en favori. L'abonnement Premium sera bientôt
-              disponible.
+              Avec Premium, découvrez qui vous a mis en favori.{" "}
+              <Link
+                to="/premium"
+                className="font-medium text-gold underline-offset-2 hover:underline"
+              >
+                Découvrir Premium
+              </Link>
             </p>
           </div>
         </div>

@@ -1,5 +1,5 @@
 import { SendHorizontal } from "lucide-react";
-import { useEffect, useId, useRef, useState } from "react";
+import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -29,6 +29,12 @@ interface MessageComposerProps {
   remaining?: number | null;
   /** Conversation débloquée : messages illimités (le quota gratuit ne s'applique pas). */
   unlocked?: boolean;
+  /** Membre Premium : messages illimités dans toutes ses conversations. */
+  premium?: boolean;
+  /** Bouton affiché à gauche du champ (ex. message vocal). */
+  accessory?: ReactNode;
+  /** Outils affichés au-dessus du champ ; `insert` place un texte dans le champ. */
+  toolbar?: (insert: (text: string) => void) => ReactNode;
   /** Explication d'un refus (ex. numéro de téléphone), affichée sous le champ. */
   notice?: string | null;
   /** Appelé à chaque modification du texte (sert à effacer l'explication). */
@@ -43,6 +49,9 @@ export function MessageComposer({
   onSend,
   remaining = null,
   unlocked = false,
+  premium = false,
+  accessory = null,
+  toolbar,
   notice = null,
   onTextChange,
 }: MessageComposerProps) {
@@ -62,7 +71,7 @@ export function MessageComposer({
 
   const length = text.length;
   const atLimit = length >= MESSAGE_MAX_LENGTH;
-  const exhausted = !unlocked && remaining !== null && remaining <= 0;
+  const exhausted = !unlocked && !premium && remaining !== null && remaining <= 0;
   const canSend = isMessageSendable(text) && !sending && !exhausted;
   const quotaId = useId();
   const noticeId = useId();
@@ -98,10 +107,23 @@ export function MessageComposer({
         void send();
       }}
     >
+      {toolbar && !exhausted
+        ? toolbar((inserted) => {
+            const next = (text.trim() ? `${text.trimEnd()} ${inserted}` : inserted).slice(
+              0,
+              MESSAGE_MAX_LENGTH,
+            );
+            setText(next);
+            saveDraft(userId, conversationId, next);
+            onTextChange?.();
+            textareaRef.current?.focus();
+          })
+        : null}
       <label htmlFor="message-input" className="sr-only">
         Votre message à {otherName}
       </label>
       <div className="flex items-end gap-2">
+        {accessory}
         <Textarea
           id="message-input"
           ref={textareaRef}
@@ -185,7 +207,11 @@ export function MessageComposer({
             exhausted ? "font-medium text-destructive" : "text-muted-foreground",
           )}
         >
-          {unlocked ? "Conversation débloquée : messages illimités" : remainingLabel(remaining)}
+          {premium
+            ? "Premium : messages illimités"
+            : unlocked
+              ? "Conversation débloquée : messages illimités"
+              : remainingLabel(remaining)}
         </div>
       ) : null}
     </form>

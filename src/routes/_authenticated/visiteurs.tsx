@@ -109,8 +109,13 @@ function VisitorsPage() {
             <div className="space-y-1">
               <p className="text-sm font-medium text-foreground">Réservé aux membres Premium</p>
               <p className="text-xs text-muted-foreground">
-                Avec Premium, découvrez qui a visité votre profil. L'abonnement Premium sera bientôt
-                disponible.
+                Avec Premium, découvrez qui a visité votre profil.{" "}
+                <Link
+                  to="/premium"
+                  className="font-medium text-gold underline-offset-2 hover:underline"
+                >
+                  Découvrir Premium
+                </Link>
               </p>
             </div>
           </div>

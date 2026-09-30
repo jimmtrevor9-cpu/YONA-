@@ -27,10 +27,15 @@ export interface MyPhoto {
   url: string | null;
 }
 
+/** Photo HD : fichier d'origine gardé (Premium). En gratuit, 2 Mo au plus (vérifié par la base). */
+export const FREE_PHOTO_MAX_BYTES = 2 * 1024 * 1024;
+/** Côté le plus long d'une photo en qualité standard (gratuit). */
+const STANDARD_MAX_SIDE = 1280;
+
 export const myPhotosQuery = (userId: string) =>
   queryOptions({
     queryKey: ["photos", "me", userId],
-    queryFn: async (): Promise<{ photos: MyPhoto[]; max: number }> => {
+    queryFn: async (): Promise<{ photos: MyPhoto[]; max: number; hd: boolean }> => {
       const [rows, premium] = await Promise.all([
         supabase
           .from("photos")
@@ -58,6 +63,7 @@ export const myPhotosQuery = (userId: string) =>
           url: urls.get(p.storage_path) ?? null,
         })),
         max: premium.data === true ? PREMIUM_MAX_PHOTOS : FREE_MAX_PHOTOS,
+        hd: premium.data === true,
       };
     },
   });
@@ -71,7 +77,37 @@ export function validatePhotoFile(file: File): string | null {
   return null;
 }
 
-export async function uploadPhoto(userId: string, file: File) {
+/**
+ * Qualité standard (gratuit) : la photo est réduite à 1 280 px (JPEG) avant l'envoi.
+ * En HD (Premium), le fichier d'origine est gardé tel quel.
+ */
+export async function preparePhoto(file: File, hd: boolean): Promise<File> {
+  if (hd || typeof createImageBitmap === "undefined") return file;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, STANDARD_MAX_SIDE / Math.max(bitmap.width, bitmap.height));
+    if (scale === 1 && file.size <= FREE_PHOTO_MAX_BYTES) {
+      bitmap.close();
+      return file;
+    }
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    canvas.getContext("2d")?.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close();
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, "image/jpeg", 0.85),
+    );
+    if (!blob) return file;
+    return new File([blob], file.name.replace(/\.[^.]+$/, "") + ".jpg", { type: "image/jpeg" });
+  } catch {
+    // Image illisible par le navigateur : envoyée telle quelle (la base vérifie la taille).
+    return file;
+  }
+}
+
+export async function uploadPhoto(userId: string, original: File, hd = false) {
+  const file = await preparePhoto(original, hd);
   const ext = EXTENSIONS[file.type as (typeof PHOTO_TYPES)[number]];
   const path = `${userId}/${crypto.randomUUID()}.${ext}`;
   const upload = await supabase.storage
@@ -100,6 +136,9 @@ export async function setPrimaryPhoto(photoId: string) {
 export function photoErrorMessage(error: unknown, max: number): string {
   const m = (error instanceof Error ? error.message : String(error ?? "")).toLowerCase();
   if (m.includes("photo_limit_reached")) return `Vous avez atteint la limite de ${max} photos.`;
+  if (m.includes("photo_hd_premium")) {
+    return "Photo trop lourde : les photos HD (plus de 2 Mo) sont réservées aux membres Premium.";
+  }
   if (m.includes("mime") || m.includes("invalid_mime_type")) {
     return "Format non accepté : choisissez une photo JPG, PNG ou WebP.";
   }

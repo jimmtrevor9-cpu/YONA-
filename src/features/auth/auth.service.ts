@@ -4,9 +4,11 @@ import { supabase } from "@/integrations/supabase/client";
 export function translateAuthError(message: string): string {
   const m = message.toLowerCase();
   if (m.includes("invalid login credentials")) return "Email ou mot de passe incorrect.";
-  if (m.includes("email not confirmed")) return "Veuillez confirmer votre email avant de vous connecter.";
+  if (m.includes("email not confirmed"))
+    return "Veuillez confirmer votre email avant de vous connecter.";
   if (m.includes("user already registered")) return "Un compte existe déjà avec cet email.";
-  if (m.includes("password should be at least")) return "Le mot de passe doit contenir au moins 8 caractères.";
+  if (m.includes("password should be at least"))
+    return "Le mot de passe doit contenir au moins 8 caractères.";
   // Délai minimal entre deux emails (ex. « …only request this after 59 seconds. »).
   if (m.includes("for security purposes")) {
     const seconds = m.match(/after (\d+) second/)?.[1];

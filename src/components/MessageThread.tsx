@@ -2,7 +2,9 @@ import { useQuery } from "@tanstack/react-query";
 import { ArrowDown } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
+import { ReportDialog } from "@/components/ReportDialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import { VoiceMessagePlayer } from "@/components/VoiceMessagePlayer";
 import { useLiveConversation } from "@/features/messaging/live";
 import { useMarkConversationRead } from "@/features/messaging/unread";
 import { conversationMessagesQuery } from "@/features/messaging/queries";
@@ -30,10 +32,18 @@ interface MessageThreadProps {
   userId: string;
   conversationId: string;
   otherName: string;
+  /** Permet de signaler un message reçu (22.2). */
+  otherUserId?: string;
 }
 
 /** Fil des messages d'une conversation (plus anciens en haut, défilement vers le bas). */
-export function MessageThread({ userId, conversationId, otherName }: MessageThreadProps) {
+export function MessageThread({
+  userId,
+  conversationId,
+  otherName,
+  otherUserId,
+}: MessageThreadProps) {
+  const [reportedId, setReportedId] = useState<string | null>(null);
   const live = useLiveConversation(userId, conversationId);
   const { data, isLoading, isError } = useQuery({
     ...conversationMessagesQuery(userId, conversationId),
@@ -127,7 +137,14 @@ export function MessageThread({ userId, conversationId, otherName }: MessageThre
                   )}
                 >
                   <span className="sr-only">{message.fromMe ? "Vous : " : `${otherName} : `}</span>
-                  {message.content}
+                  {message.voice ? (
+                    <VoiceMessagePlayer
+                      path={message.voice.path}
+                      durationSeconds={message.voice.durationSeconds}
+                    />
+                  ) : (
+                    message.content
+                  )}
                 </p>
                 <span className="mt-0.5 text-[10px] text-muted-foreground">
                   <time dateTime={message.createdAt}>{timeFormat.format(date)}</time>
@@ -138,6 +155,16 @@ export function MessageThread({ userId, conversationId, otherName }: MessageThre
                       · Non envoyé : bloqué par la modération
                     </span>
                   ) : null}
+                  {!message.fromMe && otherUserId ? (
+                    <button
+                      type="button"
+                      onClick={() => setReportedId(message.id)}
+                      className="ml-2 underline-offset-2 hover:text-destructive hover:underline"
+                      data-testid="report-message"
+                    >
+                      Signaler
+                    </button>
+                  ) : null}
                 </span>
               </div>
             </li>
@@ -145,6 +172,15 @@ export function MessageThread({ userId, conversationId, otherName }: MessageThre
         })}
       </ol>
       <div ref={endRef} />
+      {otherUserId ? (
+        <ReportDialog
+          open={reportedId !== null}
+          onOpenChange={(open) => !open && setReportedId(null)}
+          userId={otherUserId}
+          name={otherName}
+          {...(reportedId ? { messageId: reportedId } : {})}
+        />
+      ) : null}
       {unseen ? (
         <button
           type="button"

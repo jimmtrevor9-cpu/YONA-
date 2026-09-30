@@ -12,6 +12,8 @@ import { ProfileCard } from "@/components/ProfileCard";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/features/auth/AuthProvider";
+import { useCompatibilityScores } from "@/features/compatibility/queries";
+import { usePremiumBadges } from "@/features/premium/queries";
 import { myFavoriteIdsQuery } from "@/features/favorites/queries";
 import { useFavoriteToggle } from "@/features/favorites/useFavoriteToggle";
 import { discoverFeedQuery } from "@/features/profiles/discovery";
@@ -123,6 +125,8 @@ function DiscoverPage() {
     passMutation.mutate(profileId);
   };
   const profiles = (data ?? []).filter((profile) => !passedIds.includes(profile.user_id));
+  const { data: premiumIds } = usePremiumBadges(profiles.map((profile) => profile.user_id));
+  const { data: scores } = useCompatibilityScores(profiles.map((profile) => profile.user_id));
 
   const handleLike = (profileId: string) => {
     if (!user?.id || likeMutation.isPending || sentLikes.includes(profileId)) return;
@@ -162,6 +166,8 @@ function DiscoverPage() {
         ) : profiles.length > 0 ? (
           profiles.map((profile) => (
             <ProfileCard
+              isPremium={premiumIds?.has(profile.user_id) ?? false}
+              compatibility={scores?.get(profile.user_id) ?? null}
               key={profile.user_id}
               profile={profile}
               isLiked={sentLikes.includes(profile.user_id)}

@@ -31,11 +31,14 @@ export type SendContactRequestResult = { id: string; status: "sent" | "already_p
 export async function sendContactRequest(
   receiverId: string,
   message: string,
+  flash = false,
 ): Promise<SendContactRequestResult> {
   const text = message.trim();
   const { data, error } = await supabase.rpc("send_contact_request", {
     _receiver_id: receiverId,
     ...(text ? { _message: text } : {}),
+    // 17.2 : Message Flash (Premium, message obligatoire — vérifié par le serveur).
+    ...(flash ? { _flash: true } : {}),
   });
   if (error) throw error;
   return data as SendContactRequestResult;
@@ -161,7 +164,7 @@ export const contactRequestsQuery = (userId: string, direction: ContactRequestDi
         country: r.country,
         message: r.message,
         status: r.status as ContactRequestStatus,
-        isFlash: (r as { is_flash?: boolean }).is_flash === true,
+        isFlash: r.is_flash === true,
         createdAt: r.created_at,
         respondedAt: r.responded_at,
         photoUrl: urls.get(r.other_user_id) ?? null,

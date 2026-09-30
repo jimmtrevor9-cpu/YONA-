@@ -20,9 +20,12 @@ export async function generateText(options: {
   system: string;
   messages: AiTurn[];
   maxTokens?: number;
+  /** Réponse fixe du fournisseur de test (sinon, celle de Roi Salomon). */
+  testReply?: string;
 }): Promise<string> {
   const { provider, system, messages } = options;
   if (provider === "test") {
+    if (options.testReply) return options.testReply;
     const last = messages.filter((m) => m.role === "user").at(-1)?.content ?? "";
     return `Réponse de test de Roi Salomon. Vous avez demandé : « ${last.slice(0, 120)} ». Que la paix soit avec vous.`;
   }

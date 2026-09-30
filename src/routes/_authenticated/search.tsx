@@ -13,6 +13,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/features/auth/AuthProvider";
+import { useCompatibilityScores } from "@/features/compatibility/queries";
+import { usePremiumBadges } from "@/features/premium/queries";
 import type { Gender } from "@/features/profiles/discovery";
 import {
   MARITAL_STATUSES,
@@ -120,6 +122,8 @@ function SearchPage() {
     ...searchProfilesQuery(user?.id ?? "", filters),
     enabled: !!user?.id && !defaultsLoading,
   });
+  const { data: premiumIds } = usePremiumBadges((data ?? []).map((profile) => profile.user_id));
+  const { data: scores } = useCompatibilityScores((data ?? []).map((profile) => profile.user_id));
 
   return (
     <div className="min-h-screen bg-background pb-24">
@@ -353,7 +357,13 @@ function SearchPage() {
                 data-testid="advanced-filters-locked"
               >
                 <Lock className="size-3 shrink-0 text-gold-soft" aria-hidden />
-                Réservé aux membres Premium. L'abonnement Premium sera bientôt disponible.
+                Réservé aux membres Premium.{" "}
+                <Link
+                  to="/premium"
+                  className="font-medium text-gold underline-offset-2 hover:underline"
+                >
+                  Découvrir Premium
+                </Link>
               </p>
             ) : null}
           </fieldset>
@@ -383,6 +393,8 @@ function SearchPage() {
               <ProfileCard
                 key={profile.user_id}
                 profile={profile}
+                isPremium={premiumIds?.has(profile.user_id) ?? false}
+                compatibility={scores?.get(profile.user_id) ?? null}
                 footer={
                   <ContactRequestButton
                     receiverId={profile.user_id}

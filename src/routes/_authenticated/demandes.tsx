@@ -208,9 +208,12 @@ function RequestCard({
           ) : null}
           <p className="mt-1 text-[11px] text-muted-foreground">
             {item.isFlash ? (
-              <span className="mr-1 inline-flex items-center gap-1 font-medium text-gold">
+              <span
+                className="mr-1 inline-flex items-center gap-1 font-medium text-gold"
+                data-testid="flash-badge"
+              >
                 <Sparkles className="size-3" aria-hidden />
-                Flash ·
+                Message Flash ·
               </span>
             ) : null}
             {direction === "received" ? "Reçue" : "Envoyée"} le{" "}

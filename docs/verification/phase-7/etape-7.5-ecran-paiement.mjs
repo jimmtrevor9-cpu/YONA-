@@ -296,7 +296,7 @@ check(
 );
 r = await api("v", "rpc/start_conversation_unlock_payment", "POST", {
   _conversation_id: cA,
-  _provider: "stripe",
+  _provider: "paypal",
 });
 check("Prestataire non autorisé : refusé", r.text.includes("payment_provider_unavailable"));
 r = await api("c", "rpc/start_conversation_unlock_payment", "POST", {

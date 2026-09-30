@@ -170,12 +170,14 @@ const waitOffer = async (p, present) => {
   return (await offer(p).count()) === 1;
 };
 
-const SERVICE_KEY = execFileSync("bash", [
-  "-c",
-  "cd /var/tmp/yona-local && /var/tmp/sbcli/node_modules/.bin/supabase status -o env 2>/dev/null | grep '^SERVICE_ROLE_KEY' | cut -d= -f2- | tr -d '\"'",
-])
-  .toString()
-  .trim();
+const SERVICE_KEY =
+  process.env.SUPABASE_SERVICE_ROLE_KEY ||
+  execFileSync("bash", [
+    "-c",
+    "cd /var/tmp/yona-local && /var/tmp/sbcli/node_modules/.bin/supabase status -o env 2>/dev/null | grep '^SERVICE_ROLE_KEY' | cut -d= -f2- | tr -d '\"'",
+  ])
+    .toString()
+    .trim();
 const pay = (tag) =>
   sql(
     `select status || '|' || coalesce(provider_transaction_id, '') || '|' || (metadata ? 'confirmed_at') from public.payments where user_id='${id[tag]}' order by created_at desc limit 1`,

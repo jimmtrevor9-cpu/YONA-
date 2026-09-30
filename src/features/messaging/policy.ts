@@ -34,9 +34,7 @@ export function canSendMessage(ctx: MessagingContext): SendDecision {
 
   if (ctx.activeUnlockExpiresAt) {
     if (ctx.activeUnlockExpiresAt.getTime() > ctx.now.getTime()) return "ALLOW";
-    return ctx.freeMessagesUsed >= FREE_MESSAGES_PER_CONVERSATION
-      ? "DENY_UNLOCK_EXPIRED"
-      : "ALLOW";
+    return ctx.freeMessagesUsed >= FREE_MESSAGES_PER_CONVERSATION ? "DENY_UNLOCK_EXPIRED" : "ALLOW";
   }
 
   if (ctx.freeMessagesUsed >= FREE_MESSAGES_PER_CONVERSATION) return "DENY_FREE_LIMIT";
@@ -47,7 +45,8 @@ export const SEND_DECISION_LABELS: Record<SendDecision, string> = {
   ALLOW: "Message autorisé",
   DENY_NO_MATCH: "Vous devez avoir un Match pour écrire à cette personne.",
   DENY_BLOCKED: "Cette conversation n'est plus disponible.",
-  DENY_FREE_LIMIT: "Vos 3 messages gratuits sont utilisés. Débloquez la conversation pour continuer.",
+  DENY_FREE_LIMIT:
+    "Vos 3 messages gratuits sont utilisés. Débloquez la conversation pour continuer.",
   DENY_UNLOCK_EXPIRED: "Votre déblocage a expiré. Débloquez à nouveau pour continuer.",
   DENY_CONVERSATION_CLOSED: "Cette conversation est fermée.",
 };

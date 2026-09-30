@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { ImagePlus, LoaderCircle, Star, Trash2 } from "lucide-react";
 import { useRef } from "react";
 import { toast } from "sonner";
@@ -27,7 +28,7 @@ export function ProfilePhotos({ userId }: { userId: string }) {
   const onError = (error: unknown) => toast.error(photoErrorMessage(error, max));
 
   const add = useMutation({
-    mutationFn: (file: File) => uploadPhoto(userId, file),
+    mutationFn: (file: File) => uploadPhoto(userId, file, data?.hd ?? false),
     onSuccess: () => {
       toast.success("Photo ajoutée. Elle sera visible après validation.");
       void refresh();
@@ -76,8 +77,17 @@ export function ProfilePhotos({ userId }: { userId: string }) {
         </p>
         <span className="text-xs text-muted-foreground" data-testid="photos-count">
           {photos.length} / {max}
+          {data?.hd ? " · HD" : ""}
         </span>
       </div>
+      {data && !data.hd ? (
+        <p className="text-[11px] text-muted-foreground" data-testid="photos-hd-hint">
+          Photos en qualité standard (3 au plus).{" "}
+          <Link to="/premium" className="text-gold underline-offset-2 hover:underline">
+            Premium : 10 photos en HD
+          </Link>
+        </p>
+      ) : null}
 
       {isLoading ? (
         <p className="text-xs text-muted-foreground">Chargement…</p>

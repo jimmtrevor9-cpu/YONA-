@@ -76,11 +76,8 @@ export const askRoiSalomon = createServerFn({ method: "POST" })
     if (question.length > ROI_SALOMON_QUESTION_MAX) {
       throw new Error(ROI_SALOMON_ERRORS.question_too_long);
     }
-    const { data: hasPhone, error: phoneError } = await context.supabase.rpc(
-      "contains_phone_number",
-      { _text: question },
-    );
-    if (phoneError) throw phoneError;
+    const { containsPhoneNumber } = await import("./phone.server");
+    const hasPhone = await containsPhoneNumber(question);
     if (hasPhone) throw new Error(ROI_SALOMON_ERRORS.phone_number_detected);
 
     const availability = readAiAvailability(process.env);

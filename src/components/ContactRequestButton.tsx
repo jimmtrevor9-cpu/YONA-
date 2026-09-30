@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Send } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import { Send, Zap } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -39,6 +40,7 @@ export function ContactRequestButton({
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
+  const [flash, setFlash] = useState(false);
   const tooLong = message.trim().length > CONTACT_MESSAGE_MAX_LENGTH;
   // Quota du jour (étape 12.4) : lu à l'ouverture de la fenêtre, recalculé par le serveur.
   const { data: quota } = useQuery({
@@ -46,18 +48,26 @@ export function ContactRequestButton({
     enabled: open && !!userId,
   });
   const exhausted = !!quota && !quota.unlimited && (quota.remaining ?? 0) <= 0;
+  // Message Flash : proposé aux Premium (quota illimité = Premium), message obligatoire.
+  const canFlash = !!quota?.unlimited;
+  const flashMissingMessage = flash && message.trim().length === 0;
   const refreshQuota = () => queryClient.invalidateQueries({ queryKey: ["contact-requests"] });
 
   const send = useMutation({
-    mutationFn: () => sendContactRequest(receiverId, message),
+    mutationFn: () => sendContactRequest(receiverId, message, flash && canFlash),
     onSuccess: (result) => {
       if (result.status === "already_pending") {
         toast.info(`Vous avez déjà une demande de contact en attente pour ${receiverName}.`);
       } else {
-        toast.success(`Demande de contact envoyée à ${receiverName}.`);
+        toast.success(
+          flash
+            ? `Message Flash envoyé à ${receiverName} : il sera mis en avant.`
+            : `Demande de contact envoyée à ${receiverName}.`,
+        );
       }
       setMessage("");
       setNotice(null);
+      setFlash(false);
       setOpen(false);
       void refreshQuota();
     },
@@ -96,12 +106,14 @@ export function ContactRequestButton({
             className="space-y-3"
             onSubmit={(e) => {
               e.preventDefault();
-              if (tooLong || send.isPending) return;
+              if (tooLong || flashMissingMessage || send.isPending) return;
               send.mutate();
             }}
           >
             <div className="space-y-2">
-              <Label htmlFor={`contact-message-${receiverId}`}>Message (facultatif)</Label>
+              <Label htmlFor={`contact-message-${receiverId}`}>
+                {flash ? "Message (obligatoire pour un Flash)" : "Message (facultatif)"}
+              </Label>
               <Textarea
                 id={`contact-message-${receiverId}`}
                 rows={4}
@@ -126,6 +138,34 @@ export function ContactRequestButton({
                 </p>
               ) : null}
             </div>
+            {quota && canFlash ? (
+              <label
+                className="flex cursor-pointer items-start gap-2 rounded-xl border border-gold/40 bg-gold/10 px-3 py-2 text-xs text-foreground"
+                data-testid="flash-toggle"
+              >
+                <input
+                  type="checkbox"
+                  className="mt-0.5 accent-[var(--color-gold)]"
+                  checked={flash}
+                  onChange={(e) => setFlash(e.target.checked)}
+                />
+                <span>
+                  <span className="flex items-center gap-1 font-medium text-gold">
+                    <Zap className="size-3.5" aria-hidden />
+                    Envoyer en Message Flash
+                  </span>
+                  Votre demande et votre message apparaissent en tête, mis en avant.
+                </span>
+              </label>
+            ) : quota ? (
+              <p className="text-[11px] text-muted-foreground" data-testid="flash-locked">
+                <Zap className="mr-1 inline size-3 text-gold" aria-hidden />
+                Message Flash mis en avant :{" "}
+                <Link to="/premium" className="text-gold underline-offset-2 hover:underline">
+                  avec Premium
+                </Link>
+              </p>
+            ) : null}
             {quota ? (
               <div
                 className={
@@ -137,7 +177,15 @@ export function ContactRequestButton({
                 aria-live="polite"
               >
                 {contactQuotaLabel(quota)}
-                {exhausted ? " · Premium : demandes illimitées" : null}
+                {exhausted ? (
+                  <>
+                    {" "}
+                    ·{" "}
+                    <Link to="/premium" className="font-medium underline underline-offset-2">
+                      Premium : demandes illimitées
+                    </Link>
+                  </>
+                ) : null}
               </div>
             ) : null}
             <DialogFooter>
@@ -152,9 +200,9 @@ export function ContactRequestButton({
               <Button
                 type="submit"
                 variant="gold"
-                disabled={tooLong || exhausted || send.isPending}
+                disabled={tooLong || exhausted || flashMissingMessage || send.isPending}
               >
-                {send.isPending ? "Envoi…" : "Envoyer la demande"}
+                {send.isPending ? "Envoi…" : flash ? "Envoyer le Flash" : "Envoyer la demande"}
               </Button>
             </DialogFooter>
           </form>

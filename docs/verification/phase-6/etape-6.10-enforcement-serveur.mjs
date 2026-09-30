@@ -144,12 +144,14 @@ const toastText = async (p) => {
   ).trim();
 };
 
-const SERVICE_KEY = execFileSync("bash", [
-  "-c",
-  "cd /var/tmp/yona-local && /var/tmp/sbcli/node_modules/.bin/supabase status -o env 2>/dev/null | grep '^SERVICE_ROLE_KEY' | cut -d= -f2- | tr -d '\"'",
-])
-  .toString()
-  .trim();
+const SERVICE_KEY =
+  process.env.SUPABASE_SERVICE_ROLE_KEY ||
+  execFileSync("bash", [
+    "-c",
+    "cd /var/tmp/yona-local && /var/tmp/sbcli/node_modules/.bin/supabase status -o env 2>/dev/null | grep '^SERVICE_ROLE_KEY' | cut -d= -f2- | tr -d '\"'",
+  ])
+    .toString()
+    .trim();
 const PHONE = "Mon numéro : 06 12 34 56 78";
 
 const PHONES = [

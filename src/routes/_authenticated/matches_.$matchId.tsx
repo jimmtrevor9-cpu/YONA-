@@ -4,12 +4,16 @@ import { ArrowLeft, Briefcase, MapPin } from "lucide-react";
 import { useState } from "react";
 
 import { AppHeader } from "@/components/AppHeader";
+import { CompatibilityPanel } from "@/components/CompatibilityPanel";
+import { PremiumBadge } from "@/components/PremiumBadge";
 import { BottomNav } from "@/components/BottomNav";
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { PresenceBadge } from "@/components/PresenceBadge";
+import { SafetyActions } from "@/components/SafetyActions";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/features/auth/AuthProvider";
+import { usePremiumBadges } from "@/features/premium/queries";
 import { myFavoriteIdsQuery } from "@/features/favorites/queries";
 import { useFavoriteToggle } from "@/features/favorites/useFavoriteToggle";
 import { matchProfileQuery } from "@/features/matches/queries";
@@ -47,6 +51,7 @@ function MatchProfilePage() {
     ...matchProfileQuery(user?.id ?? "", matchId),
     enabled: !!user?.id,
   });
+  const { data: premiumIds } = usePremiumBadges(data ? [data.userId] : []);
   useRecordProfileVisit(data?.userId);
 
   const name = data?.firstName ?? "Profil";
@@ -125,6 +130,7 @@ function MatchProfilePage() {
                 <h2 className="font-display text-2xl font-semibold text-foreground">
                   {name}
                   {age ? <span className="text-muted-foreground"> · {age} ans</span> : null}
+                  {premiumIds?.has(data.userId) ? <PremiumBadge className="ml-2" /> : null}
                 </h2>
                 <FavoriteButton
                   name={name}
@@ -153,6 +159,8 @@ function MatchProfilePage() {
                 Match le {matchedOn.format(new Date(data.matchedAt))}
               </p>
             </section>
+
+            <CompatibilityPanel userId={user?.id ?? ""} otherId={data.userId} />
 
             {data.bio ? (
               <section className="panel space-y-2 p-5">
@@ -207,6 +215,8 @@ function MatchProfilePage() {
                 </ul>
               </section>
             ) : null}
+
+            <SafetyActions userId={data.userId} name={name} />
           </>
         )}
       </main>

@@ -46,9 +46,7 @@ function ForgotPasswordPage() {
       eyebrow="Récupération"
       title="Mot de passe oublié"
       subtitle={
-        sent
-          ? undefined
-          : "Indiquez votre email : nous vous envoyons un lien de réinitialisation."
+        sent ? undefined : "Indiquez votre email : nous vous envoyons un lien de réinitialisation."
       }
       footer={
         <Link to="/login" className="text-gold underline-offset-4 hover:underline">

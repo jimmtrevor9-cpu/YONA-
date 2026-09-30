@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { Crown, SendHorizontal } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -241,7 +241,15 @@ function RoiSalomonPage() {
               data-testid="ai-quota"
             >
               {aiQuotaLabel(quota)}
-              {exhausted ? " · Premium : questions illimitées" : null}
+              {exhausted ? (
+                <>
+                  {" "}
+                  ·{" "}
+                  <Link to="/premium" className="font-medium underline underline-offset-2">
+                    Premium : questions illimitées
+                  </Link>
+                </>
+              ) : null}
             </p>
           ) : null}
         </form>

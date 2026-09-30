@@ -1,12 +1,23 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ChevronRight, Eye, EyeOff, Footprints, Star } from "lucide-react";
+import {
+  ChevronRight,
+  Eye,
+  EyeOff,
+  Footprints,
+  LifeBuoy,
+  Settings,
+  ShieldCheck,
+  Star,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { AppHeader } from "@/components/AppHeader";
+import { BoostCard } from "@/components/BoostCard";
 import { BottomNav } from "@/components/BottomNav";
 import { MyLocationPanel } from "@/components/MyLocationPanel";
+import { PremiumCard } from "@/components/PremiumCard";
 import { ProfilePhotos } from "@/components/ProfilePhotos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +25,7 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/features/auth/AuthProvider";
+import { isAdminQuery } from "@/features/auth/roles";
 import {
   CHILDREN_COUNT_MAX,
   INTERESTS_MAX,
@@ -56,6 +68,7 @@ export const Route = createFileRoute("/_authenticated/profile")({
 
 function ProfilePage() {
   const { user } = useAuth();
+  const { data: isAdmin } = useQuery({ ...isAdminQuery(user?.id ?? ""), enabled: !!user?.id });
   const userId = user?.id ?? "";
   const queryClient = useQueryClient();
   const { data, isLoading } = useQuery({ ...myProfileQuery(userId), enabled: !!userId });
@@ -180,6 +193,51 @@ function ProfilePage() {
                 <span className="block text-sm font-medium text-foreground">Mes visiteurs</span>
                 <span className="block text-xs text-muted-foreground">
                   Qui a consulté votre profil
+                </span>
+              </span>
+              <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+            </Link>
+
+            <PremiumCard userId={userId} />
+            <BoostCard userId={userId} />
+
+            <Link
+              to="/settings"
+              className="panel-2 flex items-center gap-3 p-4 transition-colors hover:bg-surface-2"
+              data-testid="settings-link"
+            >
+              <Settings className="size-4 shrink-0 text-gold-soft" aria-hidden />
+              <span className="flex-1">
+                <span className="block text-sm font-medium text-foreground">Paramètres</span>
+                <span className="block text-xs text-muted-foreground">
+                  Confidentialité, notifications, mot de passe, compte
+                </span>
+              </span>
+              <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+            </Link>
+
+            {isAdmin ? (
+              <Link
+                to="/admin"
+                className="panel-2 flex items-center gap-3 p-4 transition-colors hover:bg-surface-2"
+                data-testid="admin-link"
+              >
+                <ShieldCheck className="size-4 shrink-0 text-gold-soft" aria-hidden />
+                <span className="flex-1 text-sm font-medium text-foreground">Administration</span>
+                <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+              </Link>
+            ) : null}
+
+            <Link
+              to="/support"
+              className="panel-2 flex items-center gap-3 p-4 transition-colors hover:bg-surface-2"
+              data-testid="support-link"
+            >
+              <LifeBuoy className="size-4 shrink-0 text-gold-soft" aria-hidden />
+              <span className="flex-1">
+                <span className="block text-sm font-medium text-foreground">Aide et support</span>
+                <span className="block text-xs text-muted-foreground">
+                  Poser une question à l'équipe YONA
                 </span>
               </span>
               <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
@@ -355,10 +413,6 @@ function ProfilePage() {
             </form>
 
             <MyLocationPanel userId={userId} />
-
-            <p className="text-center text-[11px] text-muted-foreground">
-              Préférences avancées et abonnement Premium arrivent en Phase 2.
-            </p>
           </>
         )}
       </main>

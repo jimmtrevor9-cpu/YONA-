@@ -15,16 +15,22 @@ import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as RegisterRouteImport } from './routes/register'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
 import { Route as AuthenticatedDemandesRouteImport } from './routes/_authenticated/demandes'
 import { Route as AuthenticatedDiscoverRouteImport } from './routes/_authenticated/discover'
 import { Route as AuthenticatedFavorisRouteImport } from './routes/_authenticated/favoris'
 import { Route as AuthenticatedMatchesRouteImport } from './routes/_authenticated/matches'
 import { Route as AuthenticatedMessagesRouteImport } from './routes/_authenticated/messages'
+import { Route as AuthenticatedNotificationsRouteImport } from './routes/_authenticated/notifications'
 import { Route as AuthenticatedOnboardingRouteImport } from './routes/_authenticated/onboarding'
+import { Route as AuthenticatedPremiumRouteImport } from './routes/_authenticated/premium'
 import { Route as AuthenticatedProfileRouteImport } from './routes/_authenticated/profile'
 import { Route as AuthenticatedRoiSalomonRouteImport } from './routes/_authenticated/roi-salomon'
 import { Route as AuthenticatedSearchRouteImport } from './routes/_authenticated/search'
+import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
+import { Route as AuthenticatedSupportRouteImport } from './routes/_authenticated/support'
 import { Route as AuthenticatedVisiteursRouteImport } from './routes/_authenticated/visiteurs'
+import { Route as ApiStripeWebhookRouteImport } from './routes/api/stripe-webhook'
 import { Route as AuthenticatedMatchesMatchIdRouteImport } from './routes/_authenticated/matches_.$matchId'
 import { Route as AuthenticatedMessagesConversationIdRouteImport } from './routes/_authenticated/messages_.$conversationId'
 import { Route as AuthenticatedMessagesConversationIdDebloquerRouteImport } from './routes/_authenticated/messages_.$conversationId_.debloquer'
@@ -58,6 +64,11 @@ const ResetPasswordRoute = ResetPasswordRouteImport.update({
   path: '/reset-password',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedAdminRoute = AuthenticatedAdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedDemandesRoute = AuthenticatedDemandesRouteImport.update({
   id: '/demandes',
   path: '/demandes',
@@ -83,9 +94,20 @@ const AuthenticatedMessagesRoute = AuthenticatedMessagesRouteImport.update({
   path: '/messages',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedNotificationsRoute =
+  AuthenticatedNotificationsRouteImport.update({
+    id: '/notifications',
+    path: '/notifications',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedOnboardingRoute = AuthenticatedOnboardingRouteImport.update({
   id: '/onboarding',
   path: '/onboarding',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedPremiumRoute = AuthenticatedPremiumRouteImport.update({
+  id: '/premium',
+  path: '/premium',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedProfileRoute = AuthenticatedProfileRouteImport.update({
@@ -103,10 +125,25 @@ const AuthenticatedSearchRoute = AuthenticatedSearchRouteImport.update({
   path: '/search',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedSupportRoute = AuthenticatedSupportRouteImport.update({
+  id: '/support',
+  path: '/support',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedVisiteursRoute = AuthenticatedVisiteursRouteImport.update({
   id: '/visiteurs',
   path: '/visiteurs',
   getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const ApiStripeWebhookRoute = ApiStripeWebhookRouteImport.update({
+  id: '/api/stripe-webhook',
+  path: '/api/stripe-webhook',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedMatchesMatchIdRoute =
   AuthenticatedMatchesMatchIdRouteImport.update({
@@ -133,16 +170,22 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/admin': typeof AuthenticatedAdminRoute
   '/demandes': typeof AuthenticatedDemandesRoute
   '/discover': typeof AuthenticatedDiscoverRoute
   '/favoris': typeof AuthenticatedFavorisRoute
   '/matches': typeof AuthenticatedMatchesRoute
   '/messages': typeof AuthenticatedMessagesRoute
+  '/notifications': typeof AuthenticatedNotificationsRoute
   '/onboarding': typeof AuthenticatedOnboardingRoute
+  '/premium': typeof AuthenticatedPremiumRoute
   '/profile': typeof AuthenticatedProfileRoute
   '/roi-salomon': typeof AuthenticatedRoiSalomonRoute
   '/search': typeof AuthenticatedSearchRoute
+  '/settings': typeof AuthenticatedSettingsRoute
+  '/support': typeof AuthenticatedSupportRoute
   '/visiteurs': typeof AuthenticatedVisiteursRoute
+  '/api/stripe-webhook': typeof ApiStripeWebhookRoute
   '/matches/$matchId': typeof AuthenticatedMatchesMatchIdRoute
   '/messages/$conversationId': typeof AuthenticatedMessagesConversationIdRoute
   '/messages/$conversationId/debloquer': typeof AuthenticatedMessagesConversationIdDebloquerRoute
@@ -153,16 +196,22 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/admin': typeof AuthenticatedAdminRoute
   '/demandes': typeof AuthenticatedDemandesRoute
   '/discover': typeof AuthenticatedDiscoverRoute
   '/favoris': typeof AuthenticatedFavorisRoute
   '/matches': typeof AuthenticatedMatchesRoute
   '/messages': typeof AuthenticatedMessagesRoute
+  '/notifications': typeof AuthenticatedNotificationsRoute
   '/onboarding': typeof AuthenticatedOnboardingRoute
+  '/premium': typeof AuthenticatedPremiumRoute
   '/profile': typeof AuthenticatedProfileRoute
   '/roi-salomon': typeof AuthenticatedRoiSalomonRoute
   '/search': typeof AuthenticatedSearchRoute
+  '/settings': typeof AuthenticatedSettingsRoute
+  '/support': typeof AuthenticatedSupportRoute
   '/visiteurs': typeof AuthenticatedVisiteursRoute
+  '/api/stripe-webhook': typeof ApiStripeWebhookRoute
   '/matches/$matchId': typeof AuthenticatedMatchesMatchIdRoute
   '/messages/$conversationId': typeof AuthenticatedMessagesConversationIdRoute
   '/messages/$conversationId/debloquer': typeof AuthenticatedMessagesConversationIdDebloquerRoute
@@ -175,16 +224,22 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/_authenticated/admin': typeof AuthenticatedAdminRoute
   '/_authenticated/demandes': typeof AuthenticatedDemandesRoute
   '/_authenticated/discover': typeof AuthenticatedDiscoverRoute
   '/_authenticated/favoris': typeof AuthenticatedFavorisRoute
   '/_authenticated/matches': typeof AuthenticatedMatchesRoute
   '/_authenticated/messages': typeof AuthenticatedMessagesRoute
+  '/_authenticated/notifications': typeof AuthenticatedNotificationsRoute
   '/_authenticated/onboarding': typeof AuthenticatedOnboardingRoute
+  '/_authenticated/premium': typeof AuthenticatedPremiumRoute
   '/_authenticated/profile': typeof AuthenticatedProfileRoute
   '/_authenticated/roi-salomon': typeof AuthenticatedRoiSalomonRoute
   '/_authenticated/search': typeof AuthenticatedSearchRoute
+  '/_authenticated/settings': typeof AuthenticatedSettingsRoute
+  '/_authenticated/support': typeof AuthenticatedSupportRoute
   '/_authenticated/visiteurs': typeof AuthenticatedVisiteursRoute
+  '/api/stripe-webhook': typeof ApiStripeWebhookRoute
   '/_authenticated/matches_/$matchId': typeof AuthenticatedMatchesMatchIdRoute
   '/_authenticated/messages_/$conversationId': typeof AuthenticatedMessagesConversationIdRoute
   '/_authenticated/messages_/$conversationId_/debloquer': typeof AuthenticatedMessagesConversationIdDebloquerRoute
@@ -197,16 +252,22 @@ export interface FileRouteTypes {
     | '/login'
     | '/register'
     | '/reset-password'
+    | '/admin'
     | '/demandes'
     | '/discover'
     | '/favoris'
     | '/matches'
     | '/messages'
+    | '/notifications'
     | '/onboarding'
+    | '/premium'
     | '/profile'
     | '/roi-salomon'
     | '/search'
+    | '/settings'
+    | '/support'
     | '/visiteurs'
+    | '/api/stripe-webhook'
     | '/matches/$matchId'
     | '/messages/$conversationId'
     | '/messages/$conversationId/debloquer'
@@ -217,16 +278,22 @@ export interface FileRouteTypes {
     | '/login'
     | '/register'
     | '/reset-password'
+    | '/admin'
     | '/demandes'
     | '/discover'
     | '/favoris'
     | '/matches'
     | '/messages'
+    | '/notifications'
     | '/onboarding'
+    | '/premium'
     | '/profile'
     | '/roi-salomon'
     | '/search'
+    | '/settings'
+    | '/support'
     | '/visiteurs'
+    | '/api/stripe-webhook'
     | '/matches/$matchId'
     | '/messages/$conversationId'
     | '/messages/$conversationId/debloquer'
@@ -238,16 +305,22 @@ export interface FileRouteTypes {
     | '/login'
     | '/register'
     | '/reset-password'
+    | '/_authenticated/admin'
     | '/_authenticated/demandes'
     | '/_authenticated/discover'
     | '/_authenticated/favoris'
     | '/_authenticated/matches'
     | '/_authenticated/messages'
+    | '/_authenticated/notifications'
     | '/_authenticated/onboarding'
+    | '/_authenticated/premium'
     | '/_authenticated/profile'
     | '/_authenticated/roi-salomon'
     | '/_authenticated/search'
+    | '/_authenticated/settings'
+    | '/_authenticated/support'
     | '/_authenticated/visiteurs'
+    | '/api/stripe-webhook'
     | '/_authenticated/matches_/$matchId'
     | '/_authenticated/messages_/$conversationId'
     | '/_authenticated/messages_/$conversationId_/debloquer'
@@ -260,6 +333,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   RegisterRoute: typeof RegisterRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
+  ApiStripeWebhookRoute: typeof ApiStripeWebhookRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -306,6 +380,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ResetPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated/admin': {
+      id: '/_authenticated/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AuthenticatedAdminRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/demandes': {
       id: '/_authenticated/demandes'
       path: '/demandes'
@@ -341,11 +422,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedMessagesRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/notifications': {
+      id: '/_authenticated/notifications'
+      path: '/notifications'
+      fullPath: '/notifications'
+      preLoaderRoute: typeof AuthenticatedNotificationsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/onboarding': {
       id: '/_authenticated/onboarding'
       path: '/onboarding'
       fullPath: '/onboarding'
       preLoaderRoute: typeof AuthenticatedOnboardingRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/premium': {
+      id: '/_authenticated/premium'
+      path: '/premium'
+      fullPath: '/premium'
+      preLoaderRoute: typeof AuthenticatedPremiumRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/profile': {
@@ -369,12 +464,33 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSearchRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/settings': {
+      id: '/_authenticated/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof AuthenticatedSettingsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/support': {
+      id: '/_authenticated/support'
+      path: '/support'
+      fullPath: '/support'
+      preLoaderRoute: typeof AuthenticatedSupportRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/visiteurs': {
       id: '/_authenticated/visiteurs'
       path: '/visiteurs'
       fullPath: '/visiteurs'
       preLoaderRoute: typeof AuthenticatedVisiteursRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/api/stripe-webhook': {
+      id: '/api/stripe-webhook'
+      path: '/api/stripe-webhook'
+      fullPath: '/api/stripe-webhook'
+      preLoaderRoute: typeof ApiStripeWebhookRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_authenticated/matches_/$matchId': {
       id: '/_authenticated/matches_/$matchId'
@@ -401,15 +517,20 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthenticatedRouteRouteChildren {
+  AuthenticatedAdminRoute: typeof AuthenticatedAdminRoute
   AuthenticatedDemandesRoute: typeof AuthenticatedDemandesRoute
   AuthenticatedDiscoverRoute: typeof AuthenticatedDiscoverRoute
   AuthenticatedFavorisRoute: typeof AuthenticatedFavorisRoute
   AuthenticatedMatchesRoute: typeof AuthenticatedMatchesRoute
   AuthenticatedMessagesRoute: typeof AuthenticatedMessagesRoute
+  AuthenticatedNotificationsRoute: typeof AuthenticatedNotificationsRoute
   AuthenticatedOnboardingRoute: typeof AuthenticatedOnboardingRoute
+  AuthenticatedPremiumRoute: typeof AuthenticatedPremiumRoute
   AuthenticatedProfileRoute: typeof AuthenticatedProfileRoute
   AuthenticatedRoiSalomonRoute: typeof AuthenticatedRoiSalomonRoute
   AuthenticatedSearchRoute: typeof AuthenticatedSearchRoute
+  AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
+  AuthenticatedSupportRoute: typeof AuthenticatedSupportRoute
   AuthenticatedVisiteursRoute: typeof AuthenticatedVisiteursRoute
   AuthenticatedMatchesMatchIdRoute: typeof AuthenticatedMatchesMatchIdRoute
   AuthenticatedMessagesConversationIdRoute: typeof AuthenticatedMessagesConversationIdRoute
@@ -417,15 +538,20 @@ interface AuthenticatedRouteRouteChildren {
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedAdminRoute: AuthenticatedAdminRoute,
   AuthenticatedDemandesRoute: AuthenticatedDemandesRoute,
   AuthenticatedDiscoverRoute: AuthenticatedDiscoverRoute,
   AuthenticatedFavorisRoute: AuthenticatedFavorisRoute,
   AuthenticatedMatchesRoute: AuthenticatedMatchesRoute,
   AuthenticatedMessagesRoute: AuthenticatedMessagesRoute,
+  AuthenticatedNotificationsRoute: AuthenticatedNotificationsRoute,
   AuthenticatedOnboardingRoute: AuthenticatedOnboardingRoute,
+  AuthenticatedPremiumRoute: AuthenticatedPremiumRoute,
   AuthenticatedProfileRoute: AuthenticatedProfileRoute,
   AuthenticatedRoiSalomonRoute: AuthenticatedRoiSalomonRoute,
   AuthenticatedSearchRoute: AuthenticatedSearchRoute,
+  AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
+  AuthenticatedSupportRoute: AuthenticatedSupportRoute,
   AuthenticatedVisiteursRoute: AuthenticatedVisiteursRoute,
   AuthenticatedMatchesMatchIdRoute: AuthenticatedMatchesMatchIdRoute,
   AuthenticatedMessagesConversationIdRoute:
@@ -444,6 +570,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   RegisterRoute: RegisterRoute,
   ResetPasswordRoute: ResetPasswordRoute,
+  ApiStripeWebhookRoute: ApiStripeWebhookRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

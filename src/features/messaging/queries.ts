@@ -186,6 +186,8 @@ export interface ThreadMessage {
    */
   status: "delivered" | "blocked" | "sending";
   createdAt: string;
+  /** Message vocal (Premium) : fichier privé et durée en secondes. */
+  voice: { path: string; durationSeconds: number } | null;
 }
 
 /** Ligne de la table `messages` telle que lue par l'application (ou reçue en direct). */
@@ -195,6 +197,9 @@ export interface MessageRow {
   content: string;
   status: string;
   created_at: string;
+  kind?: string | null;
+  audio_path?: string | null;
+  audio_duration_seconds?: number | null;
 }
 
 /** Nombre maximal de messages chargés (les plus récents). */
@@ -207,6 +212,10 @@ export function toThreadMessage(row: MessageRow, userId: string): ThreadMessage 
     fromMe: row.sender_id === userId,
     status: row.status === "blocked" ? "blocked" : "delivered",
     createdAt: row.created_at,
+    voice:
+      row.kind === "voice" && row.audio_path
+        ? { path: row.audio_path, durationSeconds: row.audio_duration_seconds ?? 0 }
+        : null,
   };
 }
 
@@ -236,7 +245,9 @@ export const conversationMessagesQuery = (userId: string, conversationId: string
     queryFn: async (): Promise<ThreadMessage[]> => {
       const { data, error } = await supabase
         .from("messages")
-        .select("id, sender_id, content, status, created_at")
+        .select(
+          "id, sender_id, content, status, created_at, kind, audio_path, audio_duration_seconds",
+        )
         .eq("conversation_id", conversationId)
         .neq("status", "deleted")
         .order("created_at", { ascending: false })

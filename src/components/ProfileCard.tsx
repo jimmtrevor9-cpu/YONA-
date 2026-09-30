@@ -1,7 +1,9 @@
 import { Heart, LoaderCircle, MapPin, X } from "lucide-react";
 import type { ReactNode } from "react";
 
+import { CompatibilityPill } from "@/components/CompatibilityPanel";
 import { FavoriteButton } from "@/components/FavoriteButton";
+import { PremiumBadge } from "@/components/PremiumBadge";
 import { Button } from "@/components/ui/button";
 import { computeAge } from "@/features/profiles/queries";
 
@@ -29,6 +31,10 @@ interface ProfileCardProps {
   onToggleFavorite?: (profileId: string) => void;
   /** Action complémentaire affichée en bas de la carte (demande de contact…). */
   footer?: ReactNode;
+  /** Badge « Premium vérifié » (information donnée par le serveur). */
+  isPremium?: boolean;
+  /** Score de compatibilité (0 à 100), s'il peut être calculé. */
+  compatibility?: number | null;
 }
 
 /** Carte éditoriale d'un profil avec son action Like. */
@@ -43,6 +49,8 @@ export function ProfileCard({
   isFavoritePending = false,
   onToggleFavorite,
   footer,
+  isPremium = false,
+  compatibility = null,
 }: ProfileCardProps) {
   const age = computeAge(profile.birth_date);
   const place = [profile.city, profile.country].filter(Boolean).join(", ");
@@ -53,6 +61,7 @@ export function ProfileCard({
         <h3 className="font-display text-lg font-semibold text-foreground">
           {profile.first_name ?? "Profil"}
           {age ? <span className="text-muted-foreground"> · {age} ans</span> : null}
+          {isPremium ? <PremiumBadge className="ml-2" /> : null}
         </h3>
         {onToggleFavorite ? (
           <FavoriteButton
@@ -69,6 +78,11 @@ export function ProfileCard({
         <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
           <MapPin className="size-3.5" aria-hidden />
           {place}
+        </p>
+      ) : null}
+      {compatibility !== null ? (
+        <p className="mt-2">
+          <CompatibilityPill score={compatibility} />
         </p>
       ) : null}
 

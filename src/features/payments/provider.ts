@@ -8,8 +8,12 @@
  * `test` : prestataire de TEST, pour les environnements de développement et de
  * vérification uniquement — aucun argent n'est encaissé. Il n'est actif que si le
  * serveur le demande explicitement (`PAYMENT_PROVIDER=test`), jamais par défaut.
+ *
+ * `stripe` : paiement réel par carte (Stripe Checkout). Actif seulement si
+ * `STRIPE_SECRET_KEY` et `STRIPE_WEBHOOK_SECRET` sont aussi renseignées sur le serveur.
+ * La confirmation vient uniquement de la notification signée de Stripe (webhook).
  */
-export type PaymentProviderId = "test";
+export type PaymentProviderId = "test" | "stripe";
 
 export interface PaymentAvailability {
   available: boolean;
@@ -24,5 +28,12 @@ export function readPaymentAvailability(
 ): PaymentAvailability {
   const provider = (env["PAYMENT_PROVIDER"] ?? "").trim().toLowerCase();
   if (provider === "test") return { available: true, provider: "test", testMode: true };
+  if (
+    provider === "stripe" &&
+    (env["STRIPE_SECRET_KEY"] ?? "").trim() &&
+    (env["STRIPE_WEBHOOK_SECRET"] ?? "").trim()
+  ) {
+    return { available: true, provider: "stripe", testMode: false };
+  }
   return { available: false, provider: null, testMode: false };
 }

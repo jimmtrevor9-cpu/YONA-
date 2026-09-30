@@ -15,6 +15,10 @@ export const UNLOCK_PAYMENT_ERRORS = {
   payment_already_confirmed: "Ce paiement est déjà confirmé.",
   payment_mismatch: "Le montant confirmé ne correspond pas : le paiement a été refusé.",
   test_mode_only: "Cette confirmation n'existe qu'en mode test.",
+  stripe_checkout_failed:
+    "La page de paiement n'a pas pu être ouverte. Aucun montant n'a été prélevé : réessayez.",
+  invalid_plan: "Cette formule n'existe pas.",
+  account_inactive: "Votre compte doit être actif pour payer.",
 } as const;
 
 type UnlockPaymentErrorCode = keyof typeof UNLOCK_PAYMENT_ERRORS;
@@ -57,7 +61,21 @@ export const startUnlockPayment = createServerFn({ method: "POST" })
       if (code) throw new Error(UNLOCK_PAYMENT_ERRORS[code]);
       throw error;
     }
-    return { paymentId: paymentId as string, testMode: availability.testMode };
+    // Paiement réel (Stripe) : adresse de la page de paiement sécurisée du prestataire.
+    let checkoutUrl: string | null = null;
+    try {
+      const { checkoutUrlFor } = await import("./checkout.server");
+      checkoutUrl = await checkoutUrlFor({
+        provider: availability.provider,
+        paymentId: paymentId as string,
+        label: "YONA — Déblocage d'une conversation (3 jours)",
+        successPath: `/messages/${data.conversationId}?paiement=ok`,
+        cancelPath: `/messages/${data.conversationId}/debloquer`,
+      });
+    } catch {
+      throw new Error(UNLOCK_PAYMENT_ERRORS.stripe_checkout_failed);
+    }
+    return { paymentId: paymentId as string, testMode: availability.testMode, checkoutUrl };
   });
 
 /** Message à afficher pour une erreur de démarrage du paiement. */
@@ -90,13 +108,13 @@ export const confirmTestPayment = createServerFn({ method: "POST" })
     if (!availability.testMode) throw new Error(UNLOCK_PAYMENT_ERRORS.test_mode_only);
 
     // Le paiement doit appartenir à la personne connectée (lecture soumise aux règles
-    // d'accès), être un déblocage du prestataire de test et être en attente.
+    // d'accès), être un déblocage ou un abonnement du prestataire de test, en attente.
     const { data: payment, error } = await context.supabase
       .from("payments")
       .select("id, amount, currency, status")
       .eq("id", data.paymentId)
       .eq("user_id", context.userId)
-      .eq("type", "conversation_unlock")
+      .in("type", ["conversation_unlock", "subscription"])
       .eq("provider", "test")
       .maybeSingle();
     if (error) throw error;

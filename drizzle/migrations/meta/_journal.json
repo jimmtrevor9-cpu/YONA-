@@ -512,6 +512,62 @@
       "when": 1790690400000,
       "tag": "0072_phase13_roi_salomon",
       "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1790694000000,
+      "tag": "0073_phase14_premium",
+      "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1790697600000,
+      "tag": "0074_phase15_avantages_premium",
+      "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1790701200000,
+      "tag": "0075_phase17_message_flash",
+      "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "7",
+      "when": 1790704800000,
+      "tag": "0076_phase18_compatibilite",
+      "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "7",
+      "when": 1790708400000,
+      "tag": "0077_phase19_notifications",
+      "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1790712000000,
+      "tag": "0078_phase20_parametres",
+      "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "7",
+      "when": 1790715600000,
+      "tag": "0079_phase21_22_blocage_signalement",
+      "breakpoints": true
+    },
+    {
+      "idx": 80,
+      "version": "7",
+      "when": 1790719200000,
+      "tag": "0080_phase23_administration",
+      "breakpoints": true
     }
   ]
 }

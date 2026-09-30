@@ -52,6 +52,10 @@ function UnlockPaymentPage() {
   const start = useServerFn(startUnlockPayment);
   const payment = useMutation({
     mutationFn: () => start({ data: { conversationId } }),
+    // Paiement réel : redirection vers la page de paiement sécurisée du prestataire.
+    onSuccess: (result) => {
+      if (result.checkoutUrl) window.location.assign(result.checkoutUrl);
+    },
   });
   const confirmTest = useServerFn(confirmTestPayment);
   const queryClient = useQueryClient();
