@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { MapPin } from "lucide-react";
+import { ChevronRight, MapPin, Send } from "lucide-react";
 
 import { AppHeader } from "@/components/AppHeader";
 import { BottomNav } from "@/components/BottomNav";
@@ -45,6 +45,21 @@ function MatchesPage() {
     <div className="min-h-screen bg-background pb-24">
       <AppHeader title="Mes Matchs" />
       <main className="mx-auto max-w-md space-y-4 px-5 py-6" data-testid="matches-page">
+        <Link
+          to="/demandes"
+          className="panel-2 flex items-center gap-3 p-4 transition-colors hover:bg-surface-2"
+          data-testid="contact-requests-link"
+        >
+          <Send className="size-4 shrink-0 text-gold-soft" aria-hidden />
+          <span className="flex-1">
+            <span className="block text-sm font-medium text-foreground">Demandes de contact</span>
+            <span className="block text-xs text-muted-foreground">
+              Reçues et envoyées : acceptez ou refusez
+            </span>
+          </span>
+          <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+        </Link>
+
         <p className="eyebrow">Vos Matchs</p>
 
         {isLoading ? (

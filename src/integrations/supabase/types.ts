@@ -1110,6 +1110,7 @@ export type Database = {
     }
     Functions: {
       can_browse_profiles: { Args: never; Returns: boolean }
+      cancel_contact_request: { Args: { _request_id: string }; Returns: Json }
       confirm_payment: {
         Args: {
           _amount: number
@@ -1144,6 +1145,7 @@ export type Database = {
         Returns: number
       }
       get_ai_quota: { Args: { _feature?: string }; Returns: Json }
+      get_contact_request_quota: { Args: never; Returns: Json }
       get_conversation_quota: {
         Args: { _conversation_id: string }
         Returns: Json
@@ -1213,6 +1215,21 @@ export type Database = {
       has_mutual_like: { Args: { _other: string }; Returns: boolean }
       is_discoverable_profile: { Args: { _user_id: string }; Returns: boolean }
       is_premium: { Args: { _user_id: string }; Returns: boolean }
+      list_contact_requests: {
+        Args: { _direction?: string }
+        Returns: {
+          birth_date: string | null
+          city: string | null
+          country: string | null
+          created_at: string
+          first_name: string | null
+          id: string
+          message: string | null
+          other_user_id: string
+          responded_at: string | null
+          status: string
+        }[]
+      }
       mark_offline: { Args: never; Returns: undefined }
       list_search_cities: {
         Args: { _country?: string }
@@ -1243,6 +1260,10 @@ export type Database = {
       record_profile_visit: {
         Args: { _visited_user_id: string }
         Returns: boolean
+      }
+      respond_contact_request: {
+        Args: { _accept: boolean; _request_id: string }
+        Returns: Json
       }
       search_profiles: {
         Args: { _filters?: Json; _limit?: number }
@@ -1282,6 +1303,7 @@ export type Database = {
         Returns: undefined
       }
       touch_activity: { Args: never; Returns: boolean }
+      utc_day_start: { Args: never; Returns: string }
     }
     Enums: {
       account_status: "active" | "suspended" | "disabled" | "deleted"

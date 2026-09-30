@@ -15,6 +15,7 @@ import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as RegisterRouteImport } from './routes/register'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as AuthenticatedDemandesRouteImport } from './routes/_authenticated/demandes'
 import { Route as AuthenticatedDiscoverRouteImport } from './routes/_authenticated/discover'
 import { Route as AuthenticatedFavorisRouteImport } from './routes/_authenticated/favoris'
 import { Route as AuthenticatedMatchesRouteImport } from './routes/_authenticated/matches'
@@ -55,6 +56,11 @@ const ResetPasswordRoute = ResetPasswordRouteImport.update({
   id: '/reset-password',
   path: '/reset-password',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedDemandesRoute = AuthenticatedDemandesRouteImport.update({
+  id: '/demandes',
+  path: '/demandes',
+  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedDiscoverRoute = AuthenticatedDiscoverRouteImport.update({
   id: '/discover',
@@ -121,6 +127,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/demandes': typeof AuthenticatedDemandesRoute
   '/discover': typeof AuthenticatedDiscoverRoute
   '/favoris': typeof AuthenticatedFavorisRoute
   '/matches': typeof AuthenticatedMatchesRoute
@@ -139,6 +146,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/demandes': typeof AuthenticatedDemandesRoute
   '/discover': typeof AuthenticatedDiscoverRoute
   '/favoris': typeof AuthenticatedFavorisRoute
   '/matches': typeof AuthenticatedMatchesRoute
@@ -159,6 +167,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/_authenticated/demandes': typeof AuthenticatedDemandesRoute
   '/_authenticated/discover': typeof AuthenticatedDiscoverRoute
   '/_authenticated/favoris': typeof AuthenticatedFavorisRoute
   '/_authenticated/matches': typeof AuthenticatedMatchesRoute
@@ -179,6 +188,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/register'
     | '/reset-password'
+    | '/demandes'
     | '/discover'
     | '/favoris'
     | '/matches'
@@ -197,6 +207,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/register'
     | '/reset-password'
+    | '/demandes'
     | '/discover'
     | '/favoris'
     | '/matches'
@@ -216,6 +227,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/register'
     | '/reset-password'
+    | '/_authenticated/demandes'
     | '/_authenticated/discover'
     | '/_authenticated/favoris'
     | '/_authenticated/matches'
@@ -281,6 +293,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/reset-password'
       preLoaderRoute: typeof ResetPasswordRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/demandes': {
+      id: '/_authenticated/demandes'
+      path: '/demandes'
+      fullPath: '/demandes'
+      preLoaderRoute: typeof AuthenticatedDemandesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/discover': {
       id: '/_authenticated/discover'
@@ -363,6 +382,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthenticatedRouteRouteChildren {
+  AuthenticatedDemandesRoute: typeof AuthenticatedDemandesRoute
   AuthenticatedDiscoverRoute: typeof AuthenticatedDiscoverRoute
   AuthenticatedFavorisRoute: typeof AuthenticatedFavorisRoute
   AuthenticatedMatchesRoute: typeof AuthenticatedMatchesRoute
@@ -377,6 +397,7 @@ interface AuthenticatedRouteRouteChildren {
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedDemandesRoute: AuthenticatedDemandesRoute,
   AuthenticatedDiscoverRoute: AuthenticatedDiscoverRoute,
   AuthenticatedFavorisRoute: AuthenticatedFavorisRoute,
   AuthenticatedMatchesRoute: AuthenticatedMatchesRoute,

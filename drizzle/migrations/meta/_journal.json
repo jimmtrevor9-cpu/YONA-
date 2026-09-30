@@ -498,6 +498,13 @@
       "when": 1790683200000,
       "tag": "0070_phase12_creer_demande",
       "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "7",
+      "when": 1790686800000,
+      "tag": "0071_phase12_repondre_quota_demandes",
+      "breakpoints": true
     }
   ]
 }
