@@ -22,6 +22,7 @@ import { Route as AuthenticatedMatchesRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedMessagesRouteImport } from './routes/_authenticated/messages'
 import { Route as AuthenticatedOnboardingRouteImport } from './routes/_authenticated/onboarding'
 import { Route as AuthenticatedProfileRouteImport } from './routes/_authenticated/profile'
+import { Route as AuthenticatedRoiSalomonRouteImport } from './routes/_authenticated/roi-salomon'
 import { Route as AuthenticatedSearchRouteImport } from './routes/_authenticated/search'
 import { Route as AuthenticatedVisiteursRouteImport } from './routes/_authenticated/visiteurs'
 import { Route as AuthenticatedMatchesMatchIdRouteImport } from './routes/_authenticated/matches_.$matchId'
@@ -92,6 +93,11 @@ const AuthenticatedProfileRoute = AuthenticatedProfileRouteImport.update({
   path: '/profile',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedRoiSalomonRoute = AuthenticatedRoiSalomonRouteImport.update({
+  id: '/roi-salomon',
+  path: '/roi-salomon',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedSearchRoute = AuthenticatedSearchRouteImport.update({
   id: '/search',
   path: '/search',
@@ -134,6 +140,7 @@ export interface FileRoutesByFullPath {
   '/messages': typeof AuthenticatedMessagesRoute
   '/onboarding': typeof AuthenticatedOnboardingRoute
   '/profile': typeof AuthenticatedProfileRoute
+  '/roi-salomon': typeof AuthenticatedRoiSalomonRoute
   '/search': typeof AuthenticatedSearchRoute
   '/visiteurs': typeof AuthenticatedVisiteursRoute
   '/matches/$matchId': typeof AuthenticatedMatchesMatchIdRoute
@@ -153,6 +160,7 @@ export interface FileRoutesByTo {
   '/messages': typeof AuthenticatedMessagesRoute
   '/onboarding': typeof AuthenticatedOnboardingRoute
   '/profile': typeof AuthenticatedProfileRoute
+  '/roi-salomon': typeof AuthenticatedRoiSalomonRoute
   '/search': typeof AuthenticatedSearchRoute
   '/visiteurs': typeof AuthenticatedVisiteursRoute
   '/matches/$matchId': typeof AuthenticatedMatchesMatchIdRoute
@@ -174,6 +182,7 @@ export interface FileRoutesById {
   '/_authenticated/messages': typeof AuthenticatedMessagesRoute
   '/_authenticated/onboarding': typeof AuthenticatedOnboardingRoute
   '/_authenticated/profile': typeof AuthenticatedProfileRoute
+  '/_authenticated/roi-salomon': typeof AuthenticatedRoiSalomonRoute
   '/_authenticated/search': typeof AuthenticatedSearchRoute
   '/_authenticated/visiteurs': typeof AuthenticatedVisiteursRoute
   '/_authenticated/matches_/$matchId': typeof AuthenticatedMatchesMatchIdRoute
@@ -195,6 +204,7 @@ export interface FileRouteTypes {
     | '/messages'
     | '/onboarding'
     | '/profile'
+    | '/roi-salomon'
     | '/search'
     | '/visiteurs'
     | '/matches/$matchId'
@@ -214,6 +224,7 @@ export interface FileRouteTypes {
     | '/messages'
     | '/onboarding'
     | '/profile'
+    | '/roi-salomon'
     | '/search'
     | '/visiteurs'
     | '/matches/$matchId'
@@ -234,6 +245,7 @@ export interface FileRouteTypes {
     | '/_authenticated/messages'
     | '/_authenticated/onboarding'
     | '/_authenticated/profile'
+    | '/_authenticated/roi-salomon'
     | '/_authenticated/search'
     | '/_authenticated/visiteurs'
     | '/_authenticated/matches_/$matchId'
@@ -343,6 +355,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedProfileRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/roi-salomon': {
+      id: '/_authenticated/roi-salomon'
+      path: '/roi-salomon'
+      fullPath: '/roi-salomon'
+      preLoaderRoute: typeof AuthenticatedRoiSalomonRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/search': {
       id: '/_authenticated/search'
       path: '/search'
@@ -389,6 +408,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedMessagesRoute: typeof AuthenticatedMessagesRoute
   AuthenticatedOnboardingRoute: typeof AuthenticatedOnboardingRoute
   AuthenticatedProfileRoute: typeof AuthenticatedProfileRoute
+  AuthenticatedRoiSalomonRoute: typeof AuthenticatedRoiSalomonRoute
   AuthenticatedSearchRoute: typeof AuthenticatedSearchRoute
   AuthenticatedVisiteursRoute: typeof AuthenticatedVisiteursRoute
   AuthenticatedMatchesMatchIdRoute: typeof AuthenticatedMatchesMatchIdRoute
@@ -404,6 +424,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedMessagesRoute: AuthenticatedMessagesRoute,
   AuthenticatedOnboardingRoute: AuthenticatedOnboardingRoute,
   AuthenticatedProfileRoute: AuthenticatedProfileRoute,
+  AuthenticatedRoiSalomonRoute: AuthenticatedRoiSalomonRoute,
   AuthenticatedSearchRoute: AuthenticatedSearchRoute,
   AuthenticatedVisiteursRoute: AuthenticatedVisiteursRoute,
   AuthenticatedMatchesMatchIdRoute: AuthenticatedMatchesMatchIdRoute,

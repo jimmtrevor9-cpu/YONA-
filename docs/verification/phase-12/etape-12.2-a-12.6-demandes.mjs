@@ -96,7 +96,10 @@ check(
 await send("v", "c");
 const r3 = reqId("v", "c");
 r = await rest(tok.c, "rpc/cancel_contact_request", "POST", { _request_id: r3 });
-check("La destinataire ne peut pas annuler : « request_not_found »", r.text.includes("request_not_found"));
+check(
+  "La destinataire ne peut pas annuler : « request_not_found »",
+  r.text.includes("request_not_found"),
+);
 r = await rest(tok.v, "rpc/cancel_contact_request", "POST", { _request_id: r3 });
 check(
   "L'expéditeur annule : statut « cancelled »",
@@ -190,7 +193,9 @@ check(
   sql(`select count(*) from public.contact_requests where sender_id='${id.p}'`) === "5" &&
     burst.filter((x) => x.json?.status === "sent").length === 5 &&
     burst.filter((x) => x.text.includes("daily_limit_reached")).length === 2,
-  burst.map((x) => x.json?.status ?? (x.text.includes("daily_limit") ? "limit" : x.status)).join(","),
+  burst
+    .map((x) => x.json?.status ?? (x.text.includes("daily_limit") ? "limit" : x.status))
+    .join(","),
 );
 r = await rest(tok.p, "contact_requests", "POST", { sender_id: id.p, receiver_id: id.b });
 check("Contourner le quota par écriture directe : refusé", r.status >= 400);

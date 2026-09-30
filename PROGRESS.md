@@ -8,7 +8,7 @@ Dernière mise à jour : 2026-09-30
 |---|---|---|
 | 0 à 11 | Environnement, inscription, Découvrir, Like/Pass, Match, messages, quota 3 messages, numéros, déblocage 1 USD, favoris, visites, présence, recherche | ✅ Terminé (travail précédent) |
 | 12 | Demandes de contact | ✅ Terminé (12.1 avant, 12.2 à 12.6 le 2026-09-30) |
-| 13 | Roi Salomon | ⏳ À faire |
+| 13 | Roi Salomon | ✅ Terminé (2026-09-30) |
 | 14 | Premium (page, paiement, badge, expiration) | ⏳ À faire |
 | 15 | Avantages Premium | ⏳ À faire |
 | 16 | Ice Breaker | ⏳ À faire |
@@ -25,13 +25,13 @@ Dernière mise à jour : 2026-09-30
 
 ## Tâche en cours
 
-Phase 13 — Roi Salomon (page, champ de question, envoi, quota 3/jour, fournisseur IA).
+Phase 14 — Premium (page `/premium`, paiement mensuel/annuel, activation, badge, expiration).
 
 ## Prochaine action précise
 
-Créer la migration `supabase/migrations/20260930110000_phase13_roi_salomon.sql`
-(remboursement du quota si l'IA échoue), puis la fonction serveur
-`src/features/ai/roi-salomon.functions.ts` et la page `src/routes/_authenticated/roi-salomon.tsx`.
+Créer la migration `supabase/migrations/20260930120000_phase14_premium.sql`
+(`start_premium_payment`, activation de l'abonnement quand le paiement est confirmé,
+badge), puis la page `src/routes/_authenticated/premium.tsx`.
 
 ## Décisions techniques
 
@@ -48,6 +48,11 @@ Créer la migration `supabase/migrations/20260930110000_phase13_roi_salomon.sql`
 - **Demandes de contact** : accepter une demande crée un Match (et la conversation). Une
   demande compte dans le quota dès son envoi, même annulée. Jour = jour calendaire UTC.
   Après un refus, pas de relance pendant 30 jours.
+
+- **Roi Salomon** : Claude (Anthropic) via le SDK officiel, clé `ANTHROPIC_API_KEY` sur le
+  serveur uniquement, modèle `claude-opus-5-5` par défaut (`AI_MODEL` pour changer). La
+  discussion n'est pas enregistrée sur le serveur (gardée dans l'onglet). Si l'IA échoue,
+  la question est rendue.
 
 ## Problèmes connus
 

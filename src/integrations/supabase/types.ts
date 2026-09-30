@@ -1109,6 +1109,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      ai_usage_day: { Args: never; Returns: string }
       can_browse_profiles: { Args: never; Returns: boolean }
       cancel_contact_request: { Args: { _request_id: string }; Returns: Json }
       confirm_payment: {
@@ -1127,6 +1128,7 @@ export type Database = {
         Returns: Json
       }
       clear_my_location: { Args: never; Returns: undefined }
+      contains_phone_number: { Args: { _text: string }; Returns: boolean }
       discover_profiles: {
         Args: { _limit?: number }
         Returns: {
@@ -1260,6 +1262,10 @@ export type Database = {
       record_profile_visit: {
         Args: { _visited_user_id: string }
         Returns: boolean
+      }
+      refund_ai_quota: {
+        Args: { _feature: string; _user_id: string }
+        Returns: undefined
       }
       respond_contact_request: {
         Args: { _accept: boolean; _request_id: string }
