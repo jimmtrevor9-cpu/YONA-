@@ -89,7 +89,8 @@ for (const path of ["/search", "/profile"]) {
 }
 check(
   "L'onglet « Messages » est présent sur les autres pages",
-  (await page.getByRole("link", { name: "Messages" }).count()) === 1,
+  // Nom exact : la carte Premium du profil contient aussi le mot « messages » (phase 14).
+  (await page.getByRole("link", { name: "Messages", exact: true }).count()) === 1,
 );
 const other = await ctx.newPage();
 other.on("pageerror", (e) => jsErrors.push(String(e).slice(0, 120)));

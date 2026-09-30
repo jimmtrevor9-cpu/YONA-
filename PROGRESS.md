@@ -11,29 +11,28 @@ Dernière mise à jour : 2026-09-30
 | 13 | Roi Salomon | ✅ Terminé (2026-09-30) |
 | 14 | Premium (page, paiement, badge, expiration) | ✅ Terminé et testé (46/46) |
 | 15 | Avantages Premium | ✅ Terminé et testé (50/50) |
-| 16 | Ice Breaker | ✅ Code terminé (test auto à écrire) |
-| 17 | Message Flash | ✅ Code terminé (test auto à écrire) |
-| 18 | Compatibilité | ✅ Code terminé (test auto à écrire) |
-| 19 | Notifications | 🟡 Code écrit, migration à appliquer et tester |
-| 20 | Paramètres `/settings` | 🟡 Code écrit, migration à appliquer et tester |
-| 21 | Blocage | 🟡 Code écrit, migration à appliquer et tester |
-| 22 | Signalement | 🟡 Code écrit, migration à appliquer et tester |
-| 23 | Administration `/admin` | 🟡 Code écrit, migration à appliquer et tester |
-| 24 | Sécurité finale | ⏳ À faire |
-| 25 | Tests | ⏳ À faire |
+| 16 | Ice Breaker | ✅ Terminé et testé (21/21 avec 17 et 18) |
+| 17 | Message Flash | ✅ Terminé et testé |
+| 18 | Compatibilité | ✅ Terminé et testé |
+| 19 | Notifications | ✅ Terminé et testé (44/44 pour 19 à 22) |
+| 20 | Paramètres `/settings` | ✅ Terminé et testé (44/44 pour 19 à 22) |
+| 21 | Blocage | ✅ Terminé et testé (44/44 pour 19 à 22) |
+| 22 | Signalement | ✅ Terminé et testé (44/44 pour 19 à 22) |
+| 23 | Administration `/admin` | ✅ Terminé et testé (26/26) |
+| 24 | Sécurité finale | ✅ Audit terminé (33/33) |
+| 25 | Tests | 🔄 En cours : tous les tests relancés |
 | 26 | Validation finale + README | ⏳ À faire |
 
 ## Tâche en cours
 
-Vérifier les phases 19 à 23 sur une base locale (le conteneur a redémarré : Docker à relancer).
+Phase 25 : relance de tous les tests (phases 0 à 24) sur la base locale.
 
 ## Prochaine action précise
 
-1. Relancer Supabase local (`supabase start` dans `/home/claude/yona-local`).
-2. Appliquer dans l'ordre les migrations `20260930170000_phase19_notifications.sql`,
-   `20260930180000_phase20_parametres.sql`, `20260930190000_phase21_22_blocage_signalement.sql`,
-   `20260930200000_phase23_administration.sql` (+ copies drizzle 0077 à 0080).
-3. Écrire les tests `docs/verification/phase-16` à `phase-23`, corriger, puis phases 24 à 26.
+1. Lire le résultat de la relance complète et corriger les échecs.
+2. Phase 26 : `npx supabase db reset` (toutes les migrations sur une base vide), relancer
+   l'audit phase 24, `npm run build`, `npx tsc --noEmit`, `npm run lint`.
+3. ZIP final dans `/mnt/project-files/yona/` et bilan final.
 
 ## Décisions techniques
 
@@ -73,7 +72,7 @@ Vérifier les phases 19 à 23 sur une base locale (le conteneur a redémarré : 
   Anthropic, envoi d'e-mails (aucun service d'e-mail : la préférence est seulement enregistrée).
 - Paiement réel : pas encore choisi par le propriétaire (question posée : Stripe ou
   Mobile Money). En attendant : prestataire « test » (sans argent réel).
-- Lint : ~1 200 erreurs de mise en forme, presque toutes dans des fichiers générés
-  automatiquement (`src/integrations/supabase/*`). À traiter en phase 26.
+- Lint : 0 erreur (7 avertissements dans des composants d'interface fournis par la
+  bibliothèque). Les fichiers générés par Lovable sont exclus du contrôle.
 - Les photos restent « en attente » tant qu'un admin ne les a pas validées (choix de la
-  phase 1) : la modération des photos sera ajoutée dans `/admin` (phase 23).
+  phase 1) : validation dans `/admin` → onglet Photos.

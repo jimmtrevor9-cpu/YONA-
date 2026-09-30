@@ -204,6 +204,9 @@ check(
 
 // Signalements de remplissage retirés pour laisser la place au test dans l'interface.
 sql(`delete from public.reports where reporter_id='${id.f}' and status='dismissed'`);
+// Signalements précédents traités : un signalement encore ouvert sur le même message ne
+// serait pas dupliqué (règle 22.4).
+sql(`update public.reports set status='resolved' where reporter_id='${id.f}'`);
 
 // ---------- Interface ----------
 const { browser, jsErrors, login } = await openBrowser();
@@ -234,7 +237,15 @@ await fp.waitForTimeout(500);
 await fp.getByTestId("report-message").first().click();
 await fp.getByLabel("Comportement suspect").check();
 await fp.getByTestId("report-submit").click();
-await fp.waitForTimeout(800);
+for (
+  let i = 0;
+  i < 40 &&
+  sql(
+    `select count(*) from public.reports where reporter_id='${id.f}' and reason='suspicious_behavior'`,
+  ) === "0";
+  i++
+)
+  await fp.waitForTimeout(100);
 check(
   "Signaler un message depuis la conversation",
   sql(

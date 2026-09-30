@@ -251,7 +251,10 @@ noErr(
 );
 
 sql("delete from auth.users where email like 'test-coherence-%@example.test';");
-check("Nettoyage : comptes de test supprimés", sql("select count(*) from public.users") === "0");
+check(
+  "Nettoyage : comptes de test supprimés",
+  sql("select count(*) from public.users where email like 'test-coherence-%'") === "0",
+);
 const failed = results.filter((r) => !r).length;
 console.log(`\n${results.length - failed}/${results.length} tests réussis`);
 process.exit(failed ? 1 : 0);

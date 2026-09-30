@@ -412,7 +412,13 @@ check(
 
 // ---------- 6. Administrateur ----------
 const adminUsers = (await api("E", "GET", "users?select=id")).rows.length;
-check("Admin E : voit tous les comptes", adminUsers === 5, `${adminUsers}`);
+// Comparé au nombre réel de comptes (la base de test peut contenir d'autres comptes).
+const allUsers = Number(sql("select count(*) from public.users"));
+check(
+  "Admin E : voit tous les comptes",
+  adminUsers === allUsers && adminUsers >= 5,
+  `${adminUsers}`,
+);
 const adminMod = await api("E", "POST", "moderation_actions", {
   admin_id: ids.E,
   target_user_id: ids.C,
@@ -441,7 +447,10 @@ for (const [who, path] of [
   });
 }
 sql(`delete from auth.users where email like 'test-rls-%@example.test';`);
-check("Nettoyage : comptes de test supprimés", sql("select count(*) from public.users") === "0");
+check(
+  "Nettoyage : comptes de test supprimés",
+  sql("select count(*) from public.users where email like 'test-rls-%'") === "0",
+);
 
 const failed = results.filter((r) => !r.pass);
 console.log(`\n${results.length - failed.length}/${results.length} tests réussis`);

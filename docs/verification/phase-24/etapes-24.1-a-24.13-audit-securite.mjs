@@ -239,7 +239,8 @@ check("24.11 : lire les paiements d'un autre → rien", refused(r));
 r = await rest(tok.u, "user_roles", "POST", { user_id: id.u, role: "admin" });
 check(
   "24.13 : se donner le rôle admin → refusé",
-  r.status >= 400 && sql(`select count(*) from public.user_roles where user_id='${id.u}' and role='admin'`) === "0",
+  r.status >= 400 &&
+    sql(`select count(*) from public.user_roles where user_id='${id.u}' and role='admin'`) === "0",
 );
 sql(`update public.users set status='suspended' where id='${id.u}'`);
 r = await rest(tok.u, `users?id=eq.${id.u}`, "PATCH", { status: "active" });

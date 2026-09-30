@@ -304,7 +304,8 @@ check(
 
 // ---------- D. Membre Premium : 10 photos ----------
 page = await login(P);
-check("Membre Premium : compteur 0 / 10", (await count(page)) === "0 / 10");
+// Depuis la phase 15, le compteur Premium indique aussi « · HD ».
+check("Membre Premium : compteur 0 / 10", (await count(page)).startsWith("0 / 10"));
 await page.context().close();
 
 check("Aucune erreur JavaScript", jsErrors.length === 0, jsErrors.join(" | "));

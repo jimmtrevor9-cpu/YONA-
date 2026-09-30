@@ -110,14 +110,15 @@ await pv.route("**/_serverFn/**", (r) => r.abort());
 await openConv(pv, cA);
 check(
   "Bouton « Envoyer le message » présent à côté du champ",
-  (await button(pv).count()) === 1 &&
-    (await pv.getByTestId("message-composer").getByRole("button").count()) === 1,
+  // Depuis les phases 15 et 16, la zone contient aussi Ice Breaker et le message vocal :
+  // on vérifie le seul bouton d'envoi.
+  (await button(pv).count()) === 1,
 );
 const pos = await pv.evaluate(() => {
   const f = document.getElementById("message-input").getBoundingClientRect();
-  const b = [
-    ...document.querySelectorAll("[data-testid=message-composer] button"),
-  ][0].getBoundingClientRect();
+  const b = document
+    .querySelector('[data-testid=message-composer] button[aria-label="Envoyer le message"]')
+    .getBoundingClientRect();
   return {
     fRight: f.right,
     bLeft: b.left,
@@ -245,9 +246,9 @@ const small = await login("v", 320);
 await openConv(small, cB);
 await field(small).fill("Motextrêmementlongsansaucunespace".repeat(20));
 const sm = await small.evaluate(() => {
-  const b = [
-    ...document.querySelectorAll("[data-testid=message-composer] button"),
-  ][0].getBoundingClientRect();
+  const b = document
+    .querySelector('[data-testid=message-composer] button[aria-label="Envoyer le message"]')
+    .getBoundingClientRect();
   return {
     right: b.right,
     w: innerWidth,

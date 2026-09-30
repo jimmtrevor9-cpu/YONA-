@@ -1,9 +1,12 @@
 // YONA — Phase 0 / Étape 0.2 — Vérifie que l'application se connecte à un projet Supabase
 // choisi uniquement par configuration (ici : Supabase local lancé avec `supabase start`).
 // Prérequis : build avec VITE_SUPABASE_URL / VITE_SUPABASE_PUBLISHABLE_KEY du projet local,
-// et un jeton de connexion d'un compte de TEST local dans /var/tmp/yona-local/jwt_a.txt.
+// et un jeton de connexion d'un compte de TEST local (fichier JWT_FILE, sinon un compte de
+// test temporaire est créé puis supprimé).
 import { createRequire } from "node:module";
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+
+import { createAccounts, tokenOf } from "../outils/base-favoris.mjs";
 process.env.SUPABASE_URL = "http://127.0.0.1:54321";
 process.env.SUPABASE_PUBLISHABLE_KEY = "sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH";
 const root = process.cwd();
@@ -13,7 +16,15 @@ const id = readFileSync(`${root}/.output/server/${r}`, "utf8").match(
   /"([a-f0-9]{64})": \{\s*functionName: "likeProfile/,
 )[1];
 const { default: app } = await import(`${root}/.output/server/index.mjs`);
-const jwt = readFileSync("/var/tmp/yona-local/jwt_a.txt", "utf8").trim();
+const jwtFile = process.env.JWT_FILE ?? "/var/tmp/yona-local/jwt_a.txt";
+let cleanup = () => true;
+let jwt;
+if (existsSync(jwtFile)) jwt = readFileSync(jwtFile, "utf8").trim();
+else {
+  const acc = createAccounts("c02", { a: ["male", "Connexion"] });
+  cleanup = acc.cleanup;
+  jwt = await tokenOf(acc.emails.a, acc.PWD);
+}
 const body = JSON.stringify(
   await toJSONAsync({ data: { receiverId: "00000000-0000-4000-8000-000000000001" } }),
 );
@@ -41,4 +52,5 @@ for (const [label, auth] of [
     `### ${label} → HTTP ${res.status}\n${(t.match(/"s":"([^"]+)"/g) || [t.slice(0, 200)]).join(" | ")}`,
   );
 }
+cleanup();
 process.exit(0);

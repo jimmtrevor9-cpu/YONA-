@@ -217,8 +217,11 @@ check(
 );
 check(
   "Chaque décision est tracée",
-  Number(sql(`select count(*) from public.moderation_actions where target_user_id='${id.v}' and action in ('suspend','unsuspend','disable')`)) ===
-    3,
+  Number(
+    sql(
+      `select count(*) from public.moderation_actions where target_user_id='${id.v}' and action in ('suspend','unsuspend','disable')`,
+    ),
+  ) === 3,
 );
 const small = await login(emails.admin, PWD, 320);
 await small.goto(`${BASE}/admin`, { waitUntil: "networkidle" });
