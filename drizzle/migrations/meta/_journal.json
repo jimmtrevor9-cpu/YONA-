@@ -568,6 +568,13 @@
       "when": 1790719200000,
       "tag": "0080_phase23_administration",
       "breakpoints": true
+    },
+    {
+      "idx": 81,
+      "version": "7",
+      "when": 1790722800000,
+      "tag": "0081_phase24_securite_finale",
+      "breakpoints": true
     }
   ]
 }
