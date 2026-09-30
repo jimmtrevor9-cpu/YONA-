@@ -15,7 +15,7 @@ pour le mobile.
 | Pour tous | Premium |
 |---|---|
 | Inscription, profil chrétien, photos (3), Découvrir, Like / Pass, Match | Messages illimités, messages vocaux |
-| Messagerie : 3 messages gratuits par conversation, déblocage à 1 USD (24 h) | 10 photos HD, Boost du profil (1 h par semaine) |
+| Messagerie : 3 messages gratuits par conversation, déblocage à 1 USD (3 jours) | 10 photos HD, Boost du profil (1 h par semaine) |
 | Protection contre l'échange de numéros de téléphone | Voir qui m'a mis en favori et qui a visité mon profil |
 | Favoris, visites, recherche, demandes de contact (5 par jour) | Demandes et Roi Salomon illimités, Message Flash |
 | Roi Salomon (conseiller IA, quota quotidien), Ice Breaker | Ice Breaker personnalisé par l'IA, détail de compatibilité |
