@@ -105,6 +105,11 @@ SUPABASE_SERVICE_ROLE_KEY=<clé service locale> PLAYWRIGHT_ROOT="$(npm root -g)"
 
 (Playwright doit être installé : `npm i -g playwright`.)
 
+Réglages de la base locale utilisés par les tests (dans `supabase/config.toml` du dossier
+local) : `site_url = "http://127.0.0.1:4173"`, `enable_confirmations = true`,
+`max_frequency = "60s"`, et le modèle d'e-mail
+`supabase/templates/reinitialisation-mot-de-passe.html` pour `[auth.email.template.recovery]`.
+
 ## 5. Organisation du code
 
 ```

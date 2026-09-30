@@ -20,19 +20,17 @@ Dernière mise à jour : 2026-09-30
 | 22 | Signalement | ✅ Terminé et testé (44/44 pour 19 à 22) |
 | 23 | Administration `/admin` | ✅ Terminé et testé (26/26) |
 | 24 | Sécurité finale | ✅ Audit terminé (33/33) |
-| 25 | Tests | 🔄 En cours : tous les tests relancés |
-| 26 | Validation finale + README | ⏳ À faire |
+| 25 | Tests | ✅ Tous les tests relancés sur une base propre |
+| 26 | Validation finale + README | ✅ Terminé (types, lint, build, migrations à neuf, écrans, README) |
 
 ## Tâche en cours
 
-Phase 25 : relance de tous les tests (phases 0 à 24) sur la base locale.
+Aucune : toutes les phases du plan (0 à 26) sont terminées.
 
 ## Prochaine action précise
 
-1. Lire le résultat de la relance complète et corriger les échecs.
-2. Phase 26 : `npx supabase db reset` (toutes les migrations sur une base vide), relancer
-   l'audit phase 24, `npm run build`, `npx tsc --noEmit`, `npm run lint`.
-3. ZIP final dans `/mnt/project-files/yona/` et bilan final.
+Brancher les vrais services avant la mise en ligne : clés Stripe (`PAYMENT_PROVIDER=stripe`),
+clé Anthropic, et un service d'e-mail (voir le README, section « Limites connues »).
 
 ## Décisions techniques
 
