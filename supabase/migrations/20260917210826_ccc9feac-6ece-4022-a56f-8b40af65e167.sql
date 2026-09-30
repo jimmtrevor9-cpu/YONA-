@@ -1,0 +1,19 @@
+-- ============================================================
+-- Migration neutralisée (Phase 0 — Étape 0.4)
+--
+-- Cette migration recréait l'intégralité du schéma de la Phase 1, déjà créé par
+-- 20260908214236 (+ 20260909003751 / 20260909003817). Appliquée à la suite de
+-- celles-ci, elle échouait (« type "app_role" already exists ») et bloquait
+-- l'installation de tout le schéma sur une base neuve.
+--
+-- Son contenu était une copie de 20260908214236 à laquelle il manquait :
+--   - la contrainte reports_description_length ;
+--   - les index moderation_actions_target_idx, reports_status_idx,
+--     subscriptions_user_idx.
+-- Elle est absente du miroir drizzle/migrations (0000 → 0003).
+--
+-- Elle est conservée (même nom) pour garder l'historique des versions déjà
+-- enregistrées, mais ne fait plus rien. Une base qui aurait été créée à partir
+-- de son ancien contenu est complétée par 20260925120000_phase0_rattrapage_schema.
+-- ============================================================
+SELECT 1;
