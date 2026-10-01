@@ -38,7 +38,7 @@ bannir), signalements, validation des photos, paiements, abonnements, déblocage
 Il faut **Node.js 20 ou plus** et **npm**.
 
 ```sh
-npm install          # ne pas utiliser bun : bun.lock pointe vers un dépôt privé Lovable
+npm install          # utiliser npm (pas bun ni yarn)
 cp .env.example .env # puis remplir .env (voir la section 3)
 npm run dev          # ouvrir ensuite l'adresse affichée dans le terminal
 ```
@@ -138,7 +138,7 @@ src/features/<thème>/  logique par thème : requêtes, fonctions serveur (*.fun
                        code serveur uniquement (*.server.ts)
 src/integrations/supabase/  clients Supabase et types (générés)
 supabase/migrations/   toutes les migrations SQL (la vraie source de la base)
-drizzle/migrations/    copie des migrations pour Lovable
+drizzle/migrations/    copie des migrations au format drizzle-kit
 docs/verification/     tests automatiques et rapports
 ```
 

@@ -1,9 +1,16 @@
-// Petit serveur HTTP Node qui sert le build Cloudflare (.output) pour les tests locaux.
+// Petit serveur HTTP Node qui sert le build pour les tests locaux :
+// - par défaut le build « cloudflare-module » (.output, voir demarrer-test-local.sh) ;
+// - avec YONA_BUILD=vercel, le build Vercel (.vercel/output, celui mis en ligne).
 import http from "node:http";
 import { readFile } from "node:fs/promises";
 import { extname, join } from "node:path";
 const root = process.cwd();
-const { default: app } = await import(`${root}/.output/server/index.mjs`);
+const vercel = process.env.YONA_BUILD === "vercel";
+const serverEntry = vercel
+  ? ".vercel/output/functions/__server.func/index.mjs"
+  : ".output/server/index.mjs";
+const publicDir = vercel ? ".vercel/output/static" : ".output/public";
+const { default: app } = await import(`${root}/${serverEntry}`);
 const types = {
   ".js": "text/javascript",
   ".css": "text/css",
@@ -19,7 +26,7 @@ http
     const url = new URL(req.url, `http://${req.headers.host}`);
     if (url.pathname.includes(".") && !url.pathname.startsWith("/_serverFn")) {
       try {
-        const buf = await readFile(join(root, ".output/public", url.pathname));
+        const buf = await readFile(join(root, publicDir, url.pathname));
         res.writeHead(200, {
           "content-type": types[extname(url.pathname)] ?? "application/octet-stream",
         });

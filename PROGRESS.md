@@ -39,6 +39,11 @@ clé Anthropic, et un service d'e-mail (voir le README, section « Limites connu
   (`vercel.json`, construction testée : préréglage Nitro « vercel », Node 22), base sur son
   propre projet Supabase `ahljepryelikxepfpnuq` (structure créée avec
   `YONA_structure_base_complete.sql`). Les migrations futures sont à exécuter à la main.
+  Plus aucune dépendance à Lovable : `vite.config.ts` n'utilise plus
+  `@lovable.dev/vite-tanstack-config` (plugins TanStack Start, React, Tailwind et Nitro
+  déclarés directement, cible « vercel » par défaut) ; retirés aussi le partage de session
+  avec l'éditeur Lovable, le rapport d'erreurs Lovable, `cron-auth.ts` (inutilisé, secrets
+  `LOVABLE_CRON_*`) et le dossier `.lovable`. drizzle-kit lit `DATABASE_URL`.
 
 - **Nouvelle inscription (demande du 2026-10-01)** : parcours des captures d'écran fourni
   par le propriétaire. Le profil est rempli AVANT la création du compte ; les réponses sont
@@ -57,11 +62,10 @@ clé Anthropic, et un service d'e-mail (voir le README, section « Limites connu
 - **Tests** : chaque phase a un script dans `docs/verification/phase-N/` exécuté contre un
   Supabase local (`supabase start`, Docker) + l'application construite. Rapport `.md` à côté.
 - **Migrations** : chaque migration existe en double (`supabase/migrations/` pour la CLI
-  Supabase et `drizzle/migrations/` pour Lovable), comme dans le travail précédent.
+  Supabase et `drizzle/migrations/` pour drizzle-kit), comme dans le travail précédent.
   Une migration par phase (au lieu d'une par étape) pour aller plus vite, avec chaque
   étape commentée dans le fichier.
-- **Installation** : `npm install` (le fichier `bun.lock` pointe vers un dépôt privé de
-  Lovable et échoue ailleurs).
+- **Installation** : `npm install` (npm uniquement ; `bun.lock` et `bunfig.toml` retirés).
 - **Demandes de contact** : accepter une demande crée un Match (et la conversation). Une
   demande compte dans le quota dès son envoi, même annulée. Jour = jour calendaire UTC.
   Après un refus, pas de relance pendant 30 jours.
@@ -89,6 +93,6 @@ clé Anthropic, et un service d'e-mail (voir le README, section « Limites connu
 - Paiement réel : pas encore choisi par le propriétaire (question posée : Stripe ou
   Mobile Money). En attendant : prestataire « test » (sans argent réel).
 - Lint : 0 erreur (7 avertissements dans des composants d'interface fournis par la
-  bibliothèque). Les fichiers générés par Lovable sont exclus du contrôle.
+  bibliothèque). Les fichiers générés automatiquement sont exclus du contrôle.
 - Les photos restent « en attente » tant qu'un admin ne les a pas validées (choix de la
   phase 1) : validation dans `/admin` → onglet Photos.
