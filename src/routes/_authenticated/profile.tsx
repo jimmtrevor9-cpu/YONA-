@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   ChevronRight,
+  Church,
   Eye,
   EyeOff,
   Footprints,
@@ -200,6 +201,25 @@ function ProfilePage() {
 
             <PremiumCard userId={userId} />
             <BoostCard userId={userId} />
+
+            {data?.onboarding_completed_at ? (
+              <Link
+                to="/onboarding"
+                className="panel-2 flex items-center gap-3 p-4 transition-colors hover:bg-surface-2"
+                data-testid="faith-link"
+              >
+                <Church className="size-4 shrink-0 text-gold-soft" aria-hidden />
+                <span className="flex-1">
+                  <span className="block text-sm font-medium text-foreground">
+                    Ma foi et mes attentes
+                  </span>
+                  <span className="block text-xs text-muted-foreground">
+                    Église, vie de prière, vision du mariage, personne recherchée
+                  </span>
+                </span>
+                <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+              </Link>
+            ) : null}
 
             <Link
               to="/settings"

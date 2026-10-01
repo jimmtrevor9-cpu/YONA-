@@ -67,11 +67,11 @@ const lastToast = async (page) => {
   return t;
 };
 
-// ---------- A. Onboarding, étape « Vous » ----------
+// ---------- A. Création du profil (nouveau parcours), étape « Crée ton profil » ----------
 const e1 = mk("onb", false);
 let page = await login(e1);
 await page.waitForTimeout(700);
-const cont = () => page.getByRole("button", { name: "Continuer" }).click();
+const cont = () => page.getByTestId("signup-next").click();
 const heading = () => page.locator("main h1").textContent();
 const maxAttr = await page.getAttribute("#birthDate", "max");
 check(
@@ -79,17 +79,12 @@ check(
   maxAttr === yearsAgo(18),
   `max=${maxAttr}`,
 );
-check(
-  "Ville / pays limités à 100 caractères",
-  (await page.getAttribute("#city", "maxlength")) === "100" &&
-    (await page.getAttribute("#country", "maxlength")) === "100",
-);
 await page.fill("#firstName", "   ");
 await cont();
 let t = await lastToast(page);
 check(
   "Prénom vide → étape bloquée avec message",
-  (await heading()) === "Vous" && t.includes("prénom"),
+  (await heading()) === "Crée ton profil" && t.includes("prénom"),
   t,
 );
 await page.fill("#firstName", "Infos");
@@ -97,15 +92,15 @@ await cont();
 t = await lastToast(page);
 check(
   "Sexe non indiqué → étape bloquée avec message",
-  (await heading()) === "Vous" && /homme ou une femme/.test(t),
+  (await heading()) === "Crée ton profil" && /homme ou une femme/.test(t),
   t,
 );
-await page.selectOption("#gender", "female");
+await page.getByTestId("choice-gender").getByRole("radio", { name: "Femme" }).click();
 await cont();
 t = await lastToast(page);
 check(
   "Date de naissance absente → étape bloquée avec message",
-  (await heading()) === "Vous" && t.includes("date de naissance"),
+  (await heading()) === "Crée ton profil" && t.includes("date de naissance"),
   t,
 );
 await page.fill("#birthDate", yearsAgo(18, 1));
@@ -113,7 +108,7 @@ await cont();
 t = await lastToast(page);
 check(
   "17 ans (18 ans demain) → étape bloquée : réservé aux majeurs",
-  (await heading()) === "Vous" && t.includes("18 ans"),
+  (await heading()) === "Crée ton profil" && t.includes("18 ans"),
   t,
 );
 await page.fill("#birthDate", "1850-01-01");
@@ -121,12 +116,18 @@ await cont();
 t = await lastToast(page);
 check(
   "Date de naissance 1850 → étape bloquée : date invalide",
-  (await heading()) === "Vous" && /invalide/i.test(t),
+  (await heading()) === "Crée ton profil" && /invalide/i.test(t),
   t,
 );
 await page.fill("#birthDate", yearsAgo(18));
 await cont();
-check("Exactement 18 ans aujourd'hui → étape suivante", (await heading()) === "Votre foi");
+check("Exactement 18 ans aujourd'hui → étape suivante", (await heading()) === "Ta bio en 30 s");
+await cont();
+check(
+  "Ville / pays limités à 100 caractères (étape « Où es-tu ? »)",
+  (await page.getAttribute("#city", "maxlength")) === "100" &&
+    (await page.getAttribute("#country", "maxlength")) === "100",
+);
 await page.context().close();
 
 // ---------- B. Page Profil ----------

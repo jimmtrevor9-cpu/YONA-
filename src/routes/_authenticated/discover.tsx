@@ -9,6 +9,7 @@ import { MatchDialog } from "@/components/MatchDialog";
 import { BottomNav } from "@/components/BottomNav";
 import { ContactRequestButton } from "@/components/ContactRequestButton";
 import { ProfileCard } from "@/components/ProfileCard";
+import { WelcomeSequence } from "@/components/signup/WelcomeSequence";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/features/auth/AuthProvider";
@@ -136,6 +137,9 @@ function DiscoverPage() {
   return (
     <div className="min-h-screen bg-background pb-24">
       <AppHeader title="Découvrir" />
+      {me?.onboarding_completed_at ? (
+        <WelcomeSequence userId={user?.id ?? ""} firstName={me.first_name ?? ""} />
+      ) : null}
       <main className="mx-auto max-w-md space-y-4 px-5 py-6">
         <p className="eyebrow">Sélection du jour</p>
 

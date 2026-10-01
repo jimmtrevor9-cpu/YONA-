@@ -31,7 +31,9 @@ const mk = (tag, completed) => {
   );
   return e;
 };
-const A = mk("a", false);
+// Depuis la nouvelle inscription, les attentes détaillées se modifient après la création
+// du profil (formulaire complet « Ma foi et mes attentes », route /onboarding).
+const A = mk("a", true);
 const B = mk("b", true);
 const prefs = (e) =>
   sql(
@@ -72,7 +74,9 @@ await page.goto(`${BASE}/login`, { waitUntil: "networkidle" });
 await page.fill("#email", A);
 await page.fill("#password", PWD);
 await page.click("button[type=submit]");
-await page.waitForURL(/\/onboarding$/, { timeout: 8000 });
+await page.waitForURL(/\/discover$/, { timeout: 8000 });
+await page.goto(`${BASE}/onboarding`, { waitUntil: "networkidle" });
+await page.waitForTimeout(600);
 for (let i = 0; i < 80 && (await page.locator("[data-sonner-toast]").count()) > 0; i++)
   await page.waitForTimeout(100);
 await page.selectOption("#gender", "female");
@@ -88,11 +92,11 @@ check(
   opts.join("/"),
 );
 check(
-  "Âges : 18 à 99 ; proposés 25–40",
+  "Âges : 18 à 99 ; valeurs enregistrées reprises (18–60)",
   (await page.getAttribute("#minAge", "min")) === "18" &&
     (await page.getAttribute("#maxAge", "max")) === "99" &&
-    (await page.inputValue("#minAge")) === "25" &&
-    (await page.inputValue("#maxAge")) === "40",
+    (await page.inputValue("#minAge")) === "18" &&
+    (await page.inputValue("#maxAge")) === "60",
 );
 check(
   "« Ce que vous recherchez » limité à 100 caractères",
@@ -113,7 +117,7 @@ const tryAges = async (min, max) => {
 let t = await tryAges("40", "30");
 check(
   "Âge min 40 > max 30 → message clair, rien d'enregistré",
-  t.includes("ne peut pas dépasser") && status(A) === "incomplete",
+  t.includes("ne peut pas dépasser") && prefs(A) === "∅|18|60|∅|∅",
   t,
 );
 t = await tryAges("25", "");
@@ -121,7 +125,11 @@ check("Âge max vidé → message clair", t.includes("entre 18 et 99"), t);
 t = await tryAges("17", "30");
 check("Âge min 17 → message clair", t.includes("entre 18 et 99"), t);
 t = await tryAges("25", "120");
-check("Âge max 120 → message clair", t.includes("entre 18 et 99") && status(A) === "incomplete", t);
+check(
+  "Âge max 120 → message clair",
+  t.includes("entre 18 et 99") && prefs(A) === "∅|18|60|∅|∅" && status(A) === "active",
+  t,
+);
 
 // 3. Saisie valide
 await page.selectOption("#preferredGender", "male");

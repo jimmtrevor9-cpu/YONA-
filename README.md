@@ -14,13 +14,21 @@ pour le mobile.
 
 | Pour tous | Premium |
 |---|---|
-| Inscription, profil chrétien, photos (3), Découvrir, Like / Pass, Match | Messages illimités, messages vocaux |
+| Inscription rapide en 4 étapes (e-mail ou Google), profil chrétien, photos (3), Découvrir, Like / Pass, Match | Messages illimités, messages vocaux |
 | Messagerie : 3 messages gratuits par conversation, déblocage à 1 USD (3 jours) | 10 photos HD, Boost du profil (1 h par semaine) |
 | Protection contre l'échange de numéros de téléphone | Voir qui m'a mis en favori et qui a visité mon profil |
 | Favoris, visites, recherche, demandes de contact (5 par jour) | Demandes et Roi Salomon illimités, Message Flash |
 | Roi Salomon (conseiller IA, quota quotidien), Ice Breaker | Ice Breaker personnalisé par l'IA, détail de compatibilité |
 | Score de compatibilité, notifications, paramètres | Filtres avancés, support prioritaire, badge doré |
 | Bloquer, signaler, supprimer son compte | |
+
+**Inscription** (`/register`) : écran d'accueil (Créer mon compte, Google, E-mail), puis
+4 étapes : « Crée ton profil » (photos, prénom, date de naissance, je suis / je cherche,
+âge des profils), « Ta bio en 30 s » (puces → bio proposée), « Où es-tu ? » (pays, région,
+ville, pourquoi tu es là), « Reste au courant » (e-mails d'actualité, e-mail + mot de passe),
+puis les conditions (18 ans et plus). Après l'inscription : bienvenue, 2e photo, position,
+« Complète ton profil en 20 secondes ». Le détail de la foi se complète ensuite dans
+Profil → « Ma foi et mes attentes ».
 
 Espace **/admin** (rôle administrateur) : tableau de bord, membres (suspendre, réactiver,
 bannir), signalements, validation des photos, paiements, abonnements, déblocages, support.
@@ -50,13 +58,19 @@ les migrations sont appliquées toutes seules.
    ```
 3. Dans Supabase → *Authentication* : activez la connexion par e-mail et mettez l'adresse
    de votre site dans *Site URL* et *Redirect URLs*.
-4. Créez le premier administrateur (après son inscription dans l'application), dans
+4. **Connexion Google** (bouton « Continuer avec Google ») : dans Supabase →
+   *Authentication → Providers → Google*, activez Google et collez l'identifiant client
+   et le secret créés dans Google Cloud (*API et services → Identifiants → ID client
+   OAuth*, type « Application Web », URI de redirection autorisée :
+   `https://<ID_DU_PROJET>.supabase.co/auth/v1/callback`). Avec Lovable Cloud : même
+   réglage dans la partie Cloud (authentification). Aucune clé Google dans `.env`.
+5. Créez le premier administrateur (après son inscription dans l'application), dans
    Supabase → *SQL Editor* :
    ```sql
    insert into public.user_roles (user_id, role)
    select id, 'admin' from auth.users where email = 'vous@exemple.com';
    ```
-5. Pour les tâches automatiques (fin des déblocages et des abonnements), l'extension
+6. Pour les tâches automatiques (fin des déblocages et des abonnements), l'extension
    `pg_cron` doit être activée (elle l'est sur Supabase). Sans elle, tout reste exact :
    les dates de fin sont toujours vérifiées.
 

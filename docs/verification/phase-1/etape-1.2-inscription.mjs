@@ -6,6 +6,8 @@
 import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
 
+import { inscrireParEmail } from "../outils/inscription.mjs";
+
 const { chromium } = createRequire(`${process.env.PLAYWRIGHT_ROOT ?? ""}/`)("playwright");
 const BASE = process.env.BASE ?? "http://127.0.0.1:4173";
 const MODE = process.env.MODE ?? "confirmation";
@@ -27,12 +29,9 @@ const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
 const jsErrors = [];
 page.on("pageerror", (e) => jsErrors.push(String(e).slice(0, 120)));
 
+// Nouveau parcours d'inscription en 4 étapes (voir outils/inscription.mjs).
 async function fill(firstName, email, password) {
-  await page.goto(`${BASE}/register`, { waitUntil: "networkidle" });
-  await page.fill("#firstName", firstName);
-  await page.fill("#email", email);
-  await page.fill("#password", password);
-  await page.click("button[type=submit]");
+  await inscrireParEmail(page, { base: BASE, firstName, email, password });
 }
 async function toast() {
   const t = page.locator("[data-sonner-toast]").last();
@@ -44,25 +43,30 @@ const account = (email) =>
     `select coalesce(p.first_name,'∅')||'|'||(select count(*) from public.user_roles r where r.user_id=u.id)||'|'||(select count(*) from public.christian_profiles c where c.user_id=u.id)||'|'||(select count(*) from public.preferences c where c.user_id=u.id)||'|'||p.status from public.users u join public.profiles p on p.user_id=u.id where u.email='${email}'`,
   );
 
-// 1. Page et champs
+// 1. Page et champs (le prénom est demandé à l'étape 1, l'e-mail et le mot de passe à
+// la dernière étape du parcours)
 await page.goto(`${BASE}/register`, { waitUntil: "networkidle" });
 check("Page /register affichée", (await page.title()).includes("Créer un compte"));
-const attrs = await page.evaluate(() => ({
-  first: document.querySelector("#firstName")?.required,
-  email: document.querySelector("#email")?.type,
-  pwdMin: document.querySelector("#password")?.minLength,
-  labels: [...document.querySelectorAll("label")].map((l) => l.htmlFor).join(","),
-}));
-check(
-  "Champs : prénom obligatoire, email de type email, mot de passe 8 min",
-  attrs.first && attrs.email === "email" && attrs.pwdMin === 8,
-  JSON.stringify(attrs),
-);
-check("Chaque champ a une étiquette", attrs.labels === "firstName,email,password", attrs.labels);
+await page.getByTestId("signup-start").click();
+const firstLabel = await page.evaluate(() => !!document.querySelector("label[for=firstName]"));
 
 // 2. Validations côté navigateur (aucun compte créé)
 await fill("Test", mail("court"), "Court1!");
 check("Mot de passe de 7 caractères refusé (aucun compte créé)", account(mail("court")) === "");
+const attrs = await page.evaluate(() => ({
+  email: document.querySelector("#email")?.type,
+  pwdMin: document.querySelector("#password")?.minLength,
+  labels: [...document.querySelectorAll("label")]
+    .map((l) => l.htmlFor)
+    .filter(Boolean)
+    .join(","),
+}));
+check(
+  "Champs : prénom (étape 1), email de type email, mot de passe 8 min (dernière étape)",
+  firstLabel && attrs.email === "email" && attrs.pwdMin === 8,
+  JSON.stringify(attrs),
+);
+check("Chaque champ a une étiquette", attrs.labels === "email,password", attrs.labels);
 await fill("Test", "pas-un-email", "TestInscr!2026");
 check(
   "Email invalide refusé",

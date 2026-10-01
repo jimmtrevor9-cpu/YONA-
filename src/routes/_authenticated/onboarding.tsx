@@ -1,455 +1,183 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { FullProfileEditor } from "@/components/profile/FullProfileEditor";
+import { SignupWizard } from "@/components/signup/SignupWizard";
 import { useAuth } from "@/features/auth/AuthProvider";
 import {
-  BIO_MAX_LENGTH,
-  FIRST_NAME_MAX_LENGTH,
-  OLDEST_BIRTH_DATE,
-  PLACE_MAX_LENGTH,
-  latestAllowedBirthDate,
-  personalInfoServerError,
-  validatePersonalInfo,
-} from "@/features/profiles/personal-info";
-import {
-  CHRISTIAN_VALUES_MAX,
-  FAITH_LONG_MAX_LENGTH,
-  FAITH_SHORT_MAX_LENGTH,
-  formatChristianValues,
-  parseChristianValues,
-} from "@/features/profiles/christian-info";
-import {
-  FAMILY_PROJECT_MAX_LENGTH,
-  PARTNER_MAX_AGE,
-  PARTNER_MIN_AGE,
-  RELATIONSHIP_GOAL_MAX_LENGTH,
-  preferencesServerError,
-  validateAgeRange,
-} from "@/features/profiles/preferences";
+  EMPTY_DRAFT,
+  applySignupDraft,
+  clearLocalDraft,
+  draftFromUser,
+  isDraftComplete,
+  loadDraftPhotos,
+  loadLocalDraft,
+  saveLocalDraft,
+  sameDraftOwner,
+  welcomeKey,
+  type SignupDraft,
+} from "@/features/auth/signup-draft";
+import { FREE_MAX_PHOTOS } from "@/features/monetization/rules";
+import { personalInfoServerError } from "@/features/profiles/personal-info";
+import { preferencesServerError } from "@/features/profiles/preferences";
 import { onboardingDataQuery } from "@/features/profiles/queries";
 import { supabase } from "@/integrations/supabase/client";
-import type { Database } from "@/integrations/supabase/types";
 import { APP_NAME } from "@/lib/config";
-
-type Gender = Database["public"]["Enums"]["gender"];
 
 export const Route = createFileRoute("/_authenticated/onboarding")({
   head: () => ({
     meta: [
       { title: `Bienvenue — ${APP_NAME}` },
-      { name: "description", content: "Complétez votre profil en trois étapes." },
+      { name: "description", content: "Créez votre profil en quelques étapes." },
       { property: "og:title", content: `Bienvenue — ${APP_NAME}` },
-      { property: "og:description", content: "Complétez votre profil en trois étapes." },
+      { property: "og:description", content: "Créez votre profil en quelques étapes." },
     ],
   }),
   component: OnboardingPage,
 });
 
-const STEPS = ["Vous", "Votre foi", "Vos attentes"] as const;
+function saveErrorMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  return (
+    personalInfoServerError(message) ??
+    preferencesServerError(message) ??
+    "Impossible d'enregistrer. Réessayez."
+  );
+}
 
+/**
+ * - Profil déjà terminé : formulaire complet (foi, attentes…) pour le compléter.
+ * - Réponses du parcours d'inscription disponibles (même appareil, ou métadonnées du
+ *   compte) : le profil est créé automatiquement, sans rien redemander.
+ * - Sinon (ex. arrivée directe par Google depuis « Se connecter ») : le parcours
+ *   d'inscription s'affiche ici, déjà connecté.
+ */
 function OnboardingPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { user } = useAuth();
   const userId = user?.id ?? "";
-  const [step, setStep] = useState(0);
-
-  const [firstName, setFirstName] = useState("");
-  const [gender, setGender] = useState<Gender | "">("");
-  const [birthDate, setBirthDate] = useState("");
-  const [city, setCity] = useState("");
-  const [country, setCountry] = useState("");
-  const [bio, setBio] = useState("");
-
-  const [denomination, setDenomination] = useState("");
-  const [churchAttendance, setChurchAttendance] = useState("");
-  const [faithImportance, setFaithImportance] = useState("");
-  const [marriageVision, setMarriageVision] = useState("");
-  const [faithCommitment, setFaithCommitment] = useState("");
-  const [prayerPractice, setPrayerPractice] = useState("");
-  const [christianValues, setChristianValues] = useState("");
-
-  const [preferredGender, setPreferredGender] = useState<Gender | "">("");
-  const [minAge, setMinAge] = useState(25);
-  const [maxAge, setMaxAge] = useState(40);
-  const [relationshipGoal, setRelationshipGoal] = useState("");
-  const [familyProject, setFamilyProject] = useState("");
-
-  // Pré-remplissage avec les données déjà enregistrées (prénom saisi à l'inscription,
-  // ou profil complet si l'onboarding est rouvert) pour ne jamais les écraser à vide.
-  const queryClient = useQueryClient();
   const { data: saved } = useQuery({ ...onboardingDataQuery(userId), enabled: !!userId });
-  const [prefilled, setPrefilled] = useState(false);
-  useEffect(() => {
-    if (!saved || prefilled) return;
-    setPrefilled(true);
-    const { profile, faith, prefs } = saved;
-    setFirstName(profile?.first_name ?? "");
-    setGender(profile?.gender ?? "");
-    setBirthDate(profile?.birth_date ?? "");
-    setCity(profile?.city ?? "");
-    setCountry(profile?.country ?? "");
-    setBio(profile?.bio ?? "");
-    setDenomination(faith?.denomination ?? "");
-    setChurchAttendance(faith?.church_attendance ?? "");
-    setFaithImportance(faith?.faith_importance ?? "");
-    setMarriageVision(faith?.marriage_vision ?? "");
-    setFaithCommitment(faith?.faith_commitment ?? "");
-    setPrayerPractice(faith?.prayer_practice ?? "");
-    setChristianValues(formatChristianValues(faith?.christian_values));
-    // Préférences : valeurs par défaut de l'onboarding tant qu'il n'a jamais été terminé.
-    if (profile?.onboarding_completed_at && prefs) {
-      setPreferredGender(prefs.preferred_gender ?? "");
-      setMinAge(prefs.min_age);
-      setMaxAge(prefs.max_age);
-      setRelationshipGoal(prefs.relationship_goal ?? "");
-      setFamilyProject(prefs.family_project ?? "");
-    }
-  }, [saved, prefilled]);
-
-  /** Étape « Vous » : informations personnelles obligatoires et âge minimum. */
-  function personalInfoError() {
-    return validatePersonalInfo(
-      { firstName, gender, birthDate },
-      { requireGender: true, requireBirthDate: true },
-    );
-  }
-
-  function goNext() {
-    if (step === 0) {
-      const error = personalInfoError();
-      if (error) {
-        toast.error(error);
-        return;
-      }
-    }
-    setStep(step + 1);
-  }
-
-  function submit() {
-    const error = personalInfoError();
-    if (error) {
-      setStep(0);
-      toast.error(error);
-      return;
-    }
-    const ageError = validateAgeRange(minAge, maxAge);
-    if (ageError) {
-      toast.error(ageError);
-      return;
-    }
-    finish.mutate();
-  }
-
-  const finish = useMutation({
-    mutationFn: async () => {
-      const faith = await supabase
-        .from("christian_profiles")
-        .update({
-          denomination: denomination.trim() || null,
-          church_attendance: churchAttendance.trim() || null,
-          faith_importance: faithImportance.trim() || null,
-          marriage_vision: marriageVision.trim() || null,
-          faith_commitment: faithCommitment.trim() || null,
-          prayer_practice: prayerPractice.trim() || null,
-          christian_values: parseChristianValues(christianValues),
-        })
+  const { data: photoCount } = useQuery({
+    queryKey: ["photos", "count", userId],
+    enabled: !!userId,
+    queryFn: async () => {
+      const { count } = await supabase
+        .from("photos")
+        .select("id", { count: "exact", head: true })
         .eq("user_id", userId);
-      if (faith.error) throw faith.error;
-
-      const prefs = await supabase
-        .from("preferences")
-        .update({
-          preferred_gender: preferredGender || null,
-          min_age: minAge,
-          max_age: maxAge,
-          relationship_goal: relationshipGoal.trim() || null,
-          family_project: familyProject.trim() || null,
-        })
-        .eq("user_id", userId);
-      if (prefs.error) throw prefs.error;
-
-      // Le profil (qui devient actif et visible) est enregistré en dernier : un échec
-      // précédent ne laisse jamais un profil visible à moitié rempli.
-      const profile = await supabase
-        .from("profiles")
-        .update({
-          first_name: firstName.trim() || null,
-          gender: gender || null,
-          birth_date: birthDate || null,
-          city: city.trim() || null,
-          country: country.trim() || null,
-          bio: bio.trim() || null,
-          onboarding_step: STEPS.length,
-          onboarding_completed_at: new Date().toISOString(),
-          status: "active",
-          visibility: "visible",
-        })
-        .eq("user_id", userId);
-      if (profile.error) throw profile.error;
+      return count ?? 0;
     },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["profiles"] });
+  });
+
+  const [phase, setPhase] = useState<"loading" | "saving" | "wizard" | "editor">("loading");
+  const [initial, setInitial] = useState<SignupDraft>(EMPTY_DRAFT);
+  const [pending, setPending] = useState(false);
+  const started = useRef(false);
+
+  const save = useCallback(
+    async (draft: SignupDraft, photos: File[]) => {
+      const result = await applySignupDraft(userId, draft, photos);
+      clearLocalDraft();
+      try {
+        window.localStorage.setItem(welcomeKey(userId), "pending");
+      } catch {
+        // Les fenêtres d'accueil ne s'afficheront simplement pas.
+      }
+      await queryClient.invalidateQueries({ queryKey: ["profiles"] });
+      await queryClient.invalidateQueries({ queryKey: ["photos"] });
+      if (result.photoErrors) {
+        toast.error(
+          "Une photo n'a pas pu être ajoutée. Vous pourrez la remettre depuis votre profil.",
+        );
+      }
       toast.success("Votre profil est prêt.");
       navigate({ to: "/discover", replace: true });
     },
-    onError: (error: Error) =>
-      toast.error(
-        personalInfoServerError(error.message) ??
-          preferencesServerError(error.message) ??
-          "Impossible d'enregistrer. Réessayez.",
-      ),
-  });
+    [userId, queryClient, navigate],
+  );
+
+  useEffect(() => {
+    if (!saved || photoCount === undefined || started.current) return;
+    started.current = true;
+    if (saved.profile?.onboarding_completed_at) {
+      setPhase("editor");
+      return;
+    }
+    const local = loadLocalDraft();
+    const fromAccount = draftFromUser(user);
+    // Inscription par e-mail : les réponses gardées avec le compte font foi ; les photos du
+    // navigateur ne sont reprises que si elles viennent bien de la même personne.
+    // Inscription Google : seul le brouillon du navigateur existe.
+    const ready = isDraftComplete(fromAccount)
+      ? fromAccount
+      : isDraftComplete(local) && local.method === "google"
+        ? local
+        : null;
+    const photosFromDevice =
+      !!ready && isDraftComplete(local) && (ready === local || sameDraftOwner(local, ready));
+    if (ready) {
+      setPhase("saving");
+      void (async () => {
+        try {
+          const photos = photosFromDevice ? await loadDraftPhotos() : [];
+          await save(ready, photos.slice(0, Math.max(0, FREE_MAX_PHOTOS - photoCount)));
+        } catch (error) {
+          toast.error(saveErrorMessage(error));
+          setInitial({ ...ready, termsAcceptedAt: null });
+          setPhase("wizard");
+        }
+      })();
+      return;
+    }
+    // Parcours à faire ici : on reprend ce qui est déjà connu (prénom donné par Google…).
+    const base = local ?? EMPTY_DRAFT;
+    setInitial({
+      ...base,
+      method: "google",
+      termsAcceptedAt: null,
+      firstName: base.firstName || saved.profile?.first_name || "",
+      birthDate: base.birthDate || saved.profile?.birth_date || "",
+      gender: base.gender || saved.profile?.gender || "",
+    });
+    setPhase("wizard");
+  }, [saved, photoCount, user, save]);
+
+  const remember = useCallback((draft: SignupDraft) => {
+    saveLocalDraft({ ...draft, termsAcceptedAt: null });
+  }, []);
+
+  if (phase === "editor") return <FullProfileEditor />;
+
+  if (phase === "wizard") {
+    return (
+      <SignupWizard
+        mode="member"
+        method="google"
+        initial={initial}
+        photoSlots={Math.max(0, FREE_MAX_PHOTOS - (photoCount ?? 0))}
+        pending={pending}
+        onChange={remember}
+        onFinish={(draft, photos) => {
+          setPending(true);
+          void save(draft, photos).catch((error: unknown) => {
+            setPending(false);
+            toast.error(saveErrorMessage(error));
+          });
+        }}
+      />
+    );
+  }
 
   return (
-    <main className="min-h-screen bg-background px-5 py-10">
-      <div className="mx-auto w-full max-w-md">
-        <p className="eyebrow">
-          Étape {step + 1} sur {STEPS.length}
+    <main className="flex min-h-screen items-center justify-center bg-background px-5">
+      <div className="text-center" data-testid="onboarding-saving">
+        <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-gold border-t-transparent" />
+        <p className="mt-4 text-sm text-muted-foreground">
+          {phase === "saving" ? "On prépare votre profil…" : "Chargement…"}
         </p>
-        <h1 className="mt-2 font-display text-2xl font-semibold text-foreground">{STEPS[step]}</h1>
-
-        <div className="mt-4 flex gap-1.5">
-          {STEPS.map((label, index) => (
-            <span
-              key={label}
-              className={`h-0.5 flex-1 rounded-full ${index <= step ? "bg-gold" : "bg-border"}`}
-            />
-          ))}
-        </div>
-
-        <section className="panel gold-thread animate-rise mt-6 space-y-4 p-5">
-          {step === 0 ? (
-            <>
-              <div className="space-y-2">
-                <Label htmlFor="firstName">Prénom</Label>
-                <Input
-                  id="firstName"
-                  maxLength={FIRST_NAME_MAX_LENGTH}
-                  value={firstName}
-                  onChange={(e) => setFirstName(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="gender">Je suis</Label>
-                <select
-                  id="gender"
-                  value={gender}
-                  onChange={(e) => setGender(e.target.value as Gender | "")}
-                  className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm text-foreground"
-                >
-                  <option value="">À préciser</option>
-                  <option value="female">Une femme</option>
-                  <option value="male">Un homme</option>
-                </select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="birthDate">Date de naissance</Label>
-                <Input
-                  id="birthDate"
-                  type="date"
-                  min={OLDEST_BIRTH_DATE}
-                  max={latestAllowedBirthDate()}
-                  value={birthDate}
-                  onChange={(e) => setBirthDate(e.target.value)}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-2">
-                  <Label htmlFor="city">Ville</Label>
-                  <Input
-                    id="city"
-                    maxLength={PLACE_MAX_LENGTH}
-                    value={city}
-                    onChange={(e) => setCity(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="country">Pays</Label>
-                  <Input
-                    id="country"
-                    maxLength={PLACE_MAX_LENGTH}
-                    value={country}
-                    onChange={(e) => setCountry(e.target.value)}
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="bio">Présentation</Label>
-                <Textarea
-                  id="bio"
-                  maxLength={BIO_MAX_LENGTH}
-                  rows={4}
-                  value={bio}
-                  onChange={(e) => setBio(e.target.value)}
-                  placeholder="Quelques lignes sincères sur vous."
-                />
-              </div>
-            </>
-          ) : null}
-
-          {step === 1 ? (
-            <>
-              <div className="space-y-2">
-                <Label htmlFor="denomination">Église / dénomination</Label>
-                <Input
-                  id="denomination"
-                  maxLength={FAITH_SHORT_MAX_LENGTH}
-                  value={denomination}
-                  onChange={(e) => setDenomination(e.target.value)}
-                  placeholder="Évangélique, catholique, protestante…"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="churchAttendance">Fréquentation du culte</Label>
-                <Input
-                  id="churchAttendance"
-                  maxLength={FAITH_SHORT_MAX_LENGTH}
-                  value={churchAttendance}
-                  onChange={(e) => setChurchAttendance(e.target.value)}
-                  placeholder="Chaque dimanche"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="faithImportance">Place de la foi dans votre vie</Label>
-                <Input
-                  id="faithImportance"
-                  maxLength={FAITH_SHORT_MAX_LENGTH}
-                  value={faithImportance}
-                  onChange={(e) => setFaithImportance(e.target.value)}
-                  placeholder="Centrale, importante…"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="faithCommitment">Votre pratique chrétienne</Label>
-                <Input
-                  id="faithCommitment"
-                  maxLength={FAITH_SHORT_MAX_LENGTH}
-                  value={faithCommitment}
-                  onChange={(e) => setFaithCommitment(e.target.value)}
-                  placeholder="Engagé(e) dans un ministère, groupe de maison…"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="prayerPractice">Votre vie de prière</Label>
-                <Input
-                  id="prayerPractice"
-                  maxLength={FAITH_SHORT_MAX_LENGTH}
-                  value={prayerPractice}
-                  onChange={(e) => setPrayerPractice(e.target.value)}
-                  placeholder="Chaque jour, en famille…"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="marriageVision">Votre vision du mariage</Label>
-                <Textarea
-                  id="marriageVision"
-                  maxLength={FAITH_LONG_MAX_LENGTH}
-                  rows={4}
-                  value={marriageVision}
-                  onChange={(e) => setMarriageVision(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="christianValues">Vos valeurs chrétiennes</Label>
-                <Input
-                  id="christianValues"
-                  value={christianValues}
-                  onChange={(e) => setChristianValues(e.target.value)}
-                  placeholder="Fidélité, pardon, humilité…"
-                  aria-describedby="christianValuesHelp"
-                />
-                <p id="christianValuesHelp" className="text-xs text-muted-foreground">
-                  Séparées par des virgules, {CHRISTIAN_VALUES_MAX} au maximum.
-                </p>
-              </div>
-            </>
-          ) : null}
-
-          {step === 2 ? (
-            <>
-              <div className="space-y-2">
-                <Label htmlFor="preferredGender">Je cherche</Label>
-                <select
-                  id="preferredGender"
-                  value={preferredGender}
-                  onChange={(e) => setPreferredGender(e.target.value as Gender | "")}
-                  className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm text-foreground"
-                >
-                  <option value="">Indifférent</option>
-                  <option value="female">Une femme</option>
-                  <option value="male">Un homme</option>
-                </select>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-2">
-                  <Label htmlFor="minAge">Âge minimum</Label>
-                  <Input
-                    id="minAge"
-                    type="number"
-                    min={PARTNER_MIN_AGE}
-                    max={PARTNER_MAX_AGE}
-                    value={minAge}
-                    onChange={(e) => setMinAge(Number(e.target.value))}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="maxAge">Âge maximum</Label>
-                  <Input
-                    id="maxAge"
-                    type="number"
-                    min={PARTNER_MIN_AGE}
-                    max={PARTNER_MAX_AGE}
-                    value={maxAge}
-                    onChange={(e) => setMaxAge(Number(e.target.value))}
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="relationshipGoal">Ce que vous recherchez</Label>
-                <Input
-                  id="relationshipGoal"
-                  maxLength={RELATIONSHIP_GOAL_MAX_LENGTH}
-                  value={relationshipGoal}
-                  onChange={(e) => setRelationshipGoal(e.target.value)}
-                  placeholder="Une relation menant au mariage"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="familyProject">Votre projet familial</Label>
-                <Input
-                  id="familyProject"
-                  maxLength={FAMILY_PROJECT_MAX_LENGTH}
-                  value={familyProject}
-                  onChange={(e) => setFamilyProject(e.target.value)}
-                  placeholder="Fonder une famille, avoir des enfants…"
-                />
-              </div>
-            </>
-          ) : null}
-        </section>
-
-        <div className="mt-6 flex gap-3">
-          {step > 0 ? (
-            <Button variant="secondary" className="flex-1" onClick={() => setStep(step - 1)}>
-              Retour
-            </Button>
-          ) : null}
-          {step < STEPS.length - 1 ? (
-            <Button className="flex-1" onClick={goNext}>
-              Continuer
-            </Button>
-          ) : (
-            <Button className="flex-1" disabled={finish.isPending} onClick={submit}>
-              {finish.isPending ? "Enregistrement…" : "Terminer"}
-            </Button>
-          )}
-        </div>
       </div>
     </main>
   );

@@ -6,6 +6,8 @@
 import { execSync } from "node:child_process";
 import { createRequire } from "node:module";
 
+import { inscrireParEmail } from "../outils/inscription.mjs";
+
 const { chromium } = createRequire(`${process.env.PLAYWRIGHT_ROOT ?? ""}/`)("playwright");
 const BASE = process.env.BASE ?? "http://127.0.0.1:4173";
 const MAILPIT = process.env.MAILPIT ?? "http://127.0.0.1:54324";
@@ -56,11 +58,8 @@ ok("Route protégée /discover sans session → /login", page.url().endsWith("/l
 
 // 2. Inscription
 const signupAt = Date.now();
-await page.goto(`${BASE}/register`, { waitUntil: "networkidle" });
-await page.fill("#firstName", "TestE2E");
-await page.fill("#email", email);
-await page.fill("#password", pwd1);
-await page.click("button[type=submit]");
+// Nouveau parcours d'inscription en 4 étapes (voir outils/inscription.mjs).
+await inscrireParEmail(page, { base: BASE, firstName: "TestE2E", email, password: pwd1 });
 await page
   .getByText("Consultez votre boîte mail")
   .waitFor({ timeout: 10000 })
@@ -82,10 +81,11 @@ ok("Connexion avant confirmation refusée (message FR)", t.includes("confirmer v
 const confirmLink = await lastMailLink(email, "confirm");
 ok("Email de confirmation reçu", !!confirmLink);
 await page.goto(confirmLink, { waitUntil: "networkidle" });
-await page.waitForURL(/\/onboarding/, { timeout: 10000 }).catch(() => {});
+// Le profil rempli pendant l'inscription est créé automatiquement (/onboarding → /discover).
+await page.waitForURL(/\/discover/, { timeout: 15000 }).catch(() => {});
 ok(
-  "Lien de confirmation → session ouverte, arrivée sur la création du profil (/onboarding)",
-  page.url().includes("/onboarding"),
+  "Lien de confirmation → session ouverte, profil créé depuis le parcours (/discover)",
+  page.url().includes("/discover"),
   page.url(),
 );
 // Profil considéré comme créé (la création du profil est testée à l'étape 1.8).
@@ -93,6 +93,12 @@ execSync(
   `docker exec supabase_db_yona-local psql -U postgres -c "update public.profiles set onboarding_completed_at = now() where user_id = (select id from auth.users where email = '${email}')"`,
 );
 await page.goto(`${BASE}/discover`, { waitUntil: "networkidle" });
+
+// Fenêtres d'accueil affichées après l'inscription (testées à part) : on les ferme.
+for (let i = 0; i < 6 && (await page.getByRole("dialog").count()) > 0; i++) {
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(300);
+}
 
 // 5. Persistance de session après rechargement
 await page.reload({ waitUntil: "networkidle" });

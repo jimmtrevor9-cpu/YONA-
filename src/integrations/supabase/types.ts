@@ -889,9 +889,12 @@ export type Database = {
           marital_status: string | null
           onboarding_completed_at: string | null
           onboarding_step: number
+          origin: string | null
           personality: Json
           profession: string | null
+          region: string | null
           status: Database["public"]["Enums"]["profile_status"]
+          terms_accepted_at: string | null
           updated_at: string
           user_id: string
           visibility: Database["public"]["Enums"]["profile_visibility"]
@@ -913,9 +916,12 @@ export type Database = {
           marital_status?: string | null
           onboarding_completed_at?: string | null
           onboarding_step?: number
+          origin?: string | null
           personality?: Json
           profession?: string | null
+          region?: string | null
           status?: Database["public"]["Enums"]["profile_status"]
+          terms_accepted_at?: string | null
           updated_at?: string
           user_id: string
           visibility?: Database["public"]["Enums"]["profile_visibility"]
@@ -937,9 +943,12 @@ export type Database = {
           marital_status?: string | null
           onboarding_completed_at?: string | null
           onboarding_step?: number
+          origin?: string | null
           personality?: Json
           profession?: string | null
+          region?: string | null
           status?: Database["public"]["Enums"]["profile_status"]
+          terms_accepted_at?: string | null
           updated_at?: string
           user_id?: string
           visibility?: Database["public"]["Enums"]["profile_visibility"]
@@ -1186,6 +1195,7 @@ export type Database = {
         Row: {
           activity_visible: boolean
           created_at: string
+          marketing_emails: boolean
           notify_email: boolean
           notify_likes: boolean
           notify_matches: boolean
@@ -1196,6 +1206,7 @@ export type Database = {
         Insert: {
           activity_visible?: boolean
           created_at?: string
+          marketing_emails?: boolean
           notify_email?: boolean
           notify_likes?: boolean
           notify_matches?: boolean
@@ -1206,6 +1217,7 @@ export type Database = {
         Update: {
           activity_visible?: boolean
           created_at?: string
+          marketing_emails?: boolean
           notify_email?: boolean
           notify_likes?: boolean
           notify_matches?: boolean
@@ -1562,6 +1574,14 @@ export type Database = {
       premium_plan_amount: {
         Args: { _plan: Database["public"]["Enums"]["subscription_plan"] }
         Returns: number
+      }
+      recent_signups: {
+        Args: never
+        Returns: {
+          country: string
+          created_at: string
+          first_name: string
+        }[]
       }
       record_profile_visit: {
         Args: { _visited_user_id: string }

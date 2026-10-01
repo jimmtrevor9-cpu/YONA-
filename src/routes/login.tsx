@@ -3,11 +3,12 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { AuthShell } from "@/components/AuthShell";
+import { GoogleIcon } from "@/components/signup/GoogleIcon";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/features/auth/AuthProvider";
-import { signIn, translateAuthError } from "@/features/auth/auth.service";
+import { signIn, signInWithGoogle, translateAuthError } from "@/features/auth/auth.service";
 import { getPostLoginPath } from "@/features/profiles/queries";
 import { APP_NAME } from "@/lib/config";
 
@@ -56,6 +57,15 @@ function LoginPage() {
     }
     toast.success("Bon retour parmi nous.");
     navigate({ to: await getPostLoginPath(data.user.id), replace: true });
+  }
+
+  async function onGoogle() {
+    setPending(true);
+    const { error } = await signInWithGoogle();
+    if (error) {
+      setPending(false);
+      toast.error(translateAuthError(error.message));
+    }
   }
 
   return (
@@ -108,6 +118,20 @@ function LoginPage() {
           {pending ? "Connexion…" : "Se connecter"}
         </Button>
       </form>
+      <div className="my-5 flex items-center gap-3 text-xs text-muted-foreground">
+        <span className="h-px flex-1 bg-border" /> ou
+        <span className="h-px flex-1 bg-border" />
+      </div>
+      <Button
+        type="button"
+        variant="outline"
+        className="w-full gap-2"
+        disabled={pending}
+        onClick={() => void onGoogle()}
+        data-testid="login-google"
+      >
+        <GoogleIcon className="h-4 w-4" /> Continuer avec Google
+      </Button>
     </AuthShell>
   );
 }

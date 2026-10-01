@@ -31,7 +31,9 @@ const mk = (tag, completed) => {
   );
   return e;
 };
-const A = mk("a", false);
+// Depuis la nouvelle inscription, les informations chrétiennes se remplissent après la
+// création du profil (formulaire complet « Ma foi et mes attentes », route /onboarding).
+const A = mk("a", true);
 const B = mk("b", true);
 const faith = (e) =>
   sql(
@@ -56,7 +58,8 @@ await page.goto(`${BASE}/login`, { waitUntil: "networkidle" });
 await page.fill("#email", A);
 await page.fill("#password", PWD);
 await page.click("button[type=submit]");
-await page.waitForURL(/\/onboarding$/, { timeout: 8000 });
+await page.waitForURL(/\/discover$/, { timeout: 8000 });
+await page.goto(`${BASE}/onboarding`, { waitUntil: "networkidle" });
 await page.waitForTimeout(600);
 await page.selectOption("#gender", "female");
 await page.fill("#birthDate", "1995-03-03");

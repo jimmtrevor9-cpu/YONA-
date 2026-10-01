@@ -13,6 +13,7 @@ Le site est construit et testé, mais il n'est pas encore « branché » sur tes
 | 3. Brancher Stripe | Pour recevoir de vrais paiements (Premium, déblocage 1 USD) | 30 min |
 | 4. Régler les e-mails et l'adresse du site | Pour que les liens « mot de passe oublié » marchent et soient en français | 15 min |
 | 5. Te nommer administrateur | Pour ouvrir l'espace /admin | 5 min |
+| 5 bis. Activer la connexion Google | Pour que le bouton « Continuer avec Google » marche | 20 min |
 | 6. Tester le site en ligne | Pour vérifier en vrai avant d'ouvrir au public | 30 min |
 
 Fais les étapes dans l'ordre. Si tu bloques sur une étape, envoie-moi une capture d'écran : je te guide.
@@ -105,11 +106,28 @@ Important : les photos des membres restent « en attente » jusqu'à ce qu'un ad
 
 - [ ] Lien Administration visible
 
+## Étape 5 bis : activer la connexion Google
+
+Le bouton Google est déjà dans le site. Tant que Google n'est pas activé, il affiche : « La connexion avec Google n'est pas encore activée. Utilisez votre e-mail. »
+
+1. Va sur <https://console.cloud.google.com>, crée un projet (par exemple « YONA »).
+2. **API et services → Écran de consentement OAuth** : type « Externe », nom « YONA », ton e-mail, puis enregistre.
+3. **API et services → Identifiants → Créer des identifiants → ID client OAuth** :
+   - Type : « Application Web ».
+   - URI de redirection autorisés : `https://TON-ID-SUPABASE.supabase.co/auth/v1/callback` (Supabase t'affiche cette adresse exacte dans l'écran Google de l'étape 4).
+4. Copie l'**ID client** et le **Code secret**, puis colle-les dans Supabase → **Authentication → Providers → Google** (avec Lovable Cloud : cherche l'équivalent dans la partie Cloud → Utilisateurs / Authentification → Google) et active Google.
+5. Teste : sur ton téléphone, ouvre `/register`, touche le bouton Google, remplis les étapes, choisis ton compte Google : tu dois arriver sur Découvrir avec ton profil créé.
+
+Ces deux codes Google ne vont jamais dans le code ni dans le fichier `.env` : seulement dans Supabase / Lovable Cloud.
+
+- [ ] Bouton Google qui marche
+
 ## Étape 6 : tester le site en ligne avant d'ouvrir
 
 Fais ce parcours avec deux comptes (par exemple toi et un proche), sur téléphone. Coche chaque ligne qui marche ; si une ligne ne marche pas, envoie-moi une capture d'écran.
 
-- [ ] Inscription, e-mail de confirmation reçu, connexion
+- [ ] Inscription en 4 étapes, e-mail de confirmation reçu, profil créé tout seul
+- [ ] Inscription avec Google
 - [ ] Profil complet avec photo, photo validée dans /admin
 - [ ] Chaque compte voit l'autre dans Découvrir
 - [ ] Like réciproque : un Match apparaît

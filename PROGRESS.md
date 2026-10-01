@@ -1,6 +1,6 @@
 # YONA — Suivi de progression
 
-Dernière mise à jour : 2026-09-30
+Dernière mise à jour : 2026-10-01
 
 ## État des phases
 
@@ -22,6 +22,7 @@ Dernière mise à jour : 2026-09-30
 | 24 | Sécurité finale | ✅ Audit terminé (33/33) |
 | 25 | Tests | ✅ Tous les tests relancés sur une base propre |
 | 26 | Validation finale + README | ✅ Terminé (types, lint, build, migrations à neuf, écrans, README) |
+| + | Nouvelle inscription fluide (captures wazz241) + Google | ✅ Terminé et testé (82/82, 2026-10-01) |
 
 ## Tâche en cours
 
@@ -33,6 +34,18 @@ Brancher les vrais services avant la mise en ligne : clés Stripe (`PAYMENT_PROV
 clé Anthropic, et un service d'e-mail (voir le README, section « Limites connues »).
 
 ## Décisions techniques
+
+- **Nouvelle inscription (demande du 2026-10-01)** : parcours des captures d'écran fourni
+  par le propriétaire. Le profil est rempli AVANT la création du compte ; les réponses sont
+  gardées dans le navigateur (photos dans IndexedDB) et, pour l'e-mail, dans les
+  métadonnées du compte (lien de confirmation ouvert sur un autre appareil). `/onboarding`
+  crée alors le profil tout seul. Adaptations : date de naissance (et non âge seul) pour le
+  contrôle exact des 18 ans ; « Je suis » Homme / Femme seulement (la base et la recherche
+  ne connaissent que ces deux valeurs) ; « Pourquoi tu es là ? » adapté à une rencontre
+  chrétienne sérieuse ; inscription par téléphone et connexion par empreinte non faites
+  (service SMS et passkeys à ajouter) ; la bulle « … vient de s'inscrire » montre de vrais
+  membres (prénom et pays seulement). L'ancien formulaire 3 étapes reste accessible
+  (Profil → « Ma foi et mes attentes ») pour le détail de la foi.
 
 - **Base de travail** : le code du ZIP `YONA_PHASE_12_ETAPE_12.1` ; sauvegardé sur GitHub
   (`jimmtrevor9-cpu/YONA-`, branche `claude/yona-phase-12-onwards-7e8y61`).
