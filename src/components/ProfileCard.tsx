@@ -1,0 +1,144 @@
+import { Heart, LoaderCircle, MapPin, X } from "lucide-react";
+import type { ReactNode } from "react";
+
+import { CompatibilityPill } from "@/components/CompatibilityPanel";
+import { FavoriteButton } from "@/components/FavoriteButton";
+import { PremiumBadge } from "@/components/PremiumBadge";
+import { Button } from "@/components/ui/button";
+import { computeAge } from "@/features/profiles/queries";
+
+export interface ProfileCardData {
+  user_id: string;
+  first_name: string | null;
+  birth_date: string | null;
+  city: string | null;
+  country: string | null;
+  bio: string | null;
+  interests: string[];
+}
+
+interface ProfileCardProps {
+  profile: ProfileCardData;
+  isLiked?: boolean;
+  isLikePending?: boolean;
+  isLikeStateLoading?: boolean;
+  onLike?: (profileId: string) => void;
+  /** Passer ce profil (bouton affiché seulement si fourni et si le profil n'est pas aimé). */
+  onPass?: (profileId: string) => void;
+  /** Favori : bouton étoile affiché seulement si fourni. */
+  isFavorite?: boolean;
+  isFavoritePending?: boolean;
+  onToggleFavorite?: (profileId: string) => void;
+  /** Action complémentaire affichée en bas de la carte (demande de contact…). */
+  footer?: ReactNode;
+  /** Badge « Premium vérifié » (information donnée par le serveur). */
+  isPremium?: boolean;
+  /** Score de compatibilité (0 à 100), s'il peut être calculé. */
+  compatibility?: number | null;
+}
+
+/** Carte éditoriale d'un profil avec son action Like. */
+export function ProfileCard({
+  profile,
+  isLiked,
+  isLikePending,
+  isLikeStateLoading,
+  onLike,
+  onPass,
+  isFavorite = false,
+  isFavoritePending = false,
+  onToggleFavorite,
+  footer,
+  isPremium = false,
+  compatibility = null,
+}: ProfileCardProps) {
+  const age = computeAge(profile.birth_date);
+  const place = [profile.city, profile.country].filter(Boolean).join(", ");
+
+  return (
+    <article className="panel gold-thread animate-rise p-5">
+      <header className="flex items-baseline justify-between gap-3">
+        <h3 className="font-display text-lg font-semibold text-foreground">
+          {profile.first_name ?? "Profil"}
+          {age ? <span className="text-muted-foreground"> · {age} ans</span> : null}
+          {isPremium ? <PremiumBadge className="ml-2" /> : null}
+        </h3>
+        {onToggleFavorite ? (
+          <FavoriteButton
+            name={profile.first_name ?? "ce profil"}
+            isFavorite={isFavorite}
+            isPending={isFavoritePending}
+            onToggle={() => onToggleFavorite(profile.user_id)}
+            className="-my-2 -mr-2"
+          />
+        ) : null}
+      </header>
+
+      {place ? (
+        <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+          <MapPin className="size-3.5" aria-hidden />
+          {place}
+        </p>
+      ) : null}
+      {compatibility !== null ? (
+        <p className="mt-2">
+          <CompatibilityPill score={compatibility} />
+        </p>
+      ) : null}
+
+      {profile.bio ? (
+        <p className="mt-3 line-clamp-3 text-sm text-muted-foreground">{profile.bio}</p>
+      ) : null}
+
+      {profile.interests?.length ? (
+        <ul className="mt-4 flex flex-wrap gap-2">
+          {profile.interests.slice(0, 4).map((interest) => (
+            <li key={interest} className="panel-2 px-2.5 py-1 text-[11px] text-muted-foreground">
+              {interest}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      {onLike ? (
+        <div className="mt-5 flex justify-end gap-2 border-t border-border pt-4">
+          {onPass && !isLiked ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={isLikePending}
+              aria-label={`Passer le profil de ${profile.first_name ?? "cette personne"}`}
+              onClick={() => onPass(profile.user_id)}
+            >
+              <X aria-hidden />
+              Passer
+            </Button>
+          ) : null}
+          <Button
+            type="button"
+            variant={isLiked ? "gold-outline" : "gold"}
+            size="sm"
+            disabled={isLiked || isLikePending || isLikeStateLoading}
+            aria-label={
+              isLiked
+                ? `Profil de ${profile.first_name ?? "cette personne"} aimé`
+                : `Liker le profil de ${profile.first_name ?? "cette personne"}`
+            }
+            aria-pressed={isLiked}
+            onClick={() => onLike(profile.user_id)}
+          >
+            {isLikePending ? (
+              <LoaderCircle className="animate-spin" aria-hidden />
+            ) : (
+              <Heart className={isLiked ? "fill-current" : undefined} aria-hidden />
+            )}
+            {isLikePending ? "Envoi…" : isLiked ? "Aimé" : "Like"}
+          </Button>
+        </div>
+      ) : null}
+
+      {footer ? <div className="mt-3 flex justify-end">{footer}</div> : null}
+    </article>
+  );
+}

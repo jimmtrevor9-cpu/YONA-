@@ -1,0 +1,594 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1789285137258,
+      "tag": "0000_phase1_foundations",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1789285152004,
+      "tag": "0001_phase1_function_grants",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789285166302,
+      "tag": "0002_phase1_photos_storage_policies",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1789285251474,
+      "tag": "0003_phase2_social_quotas_monetization",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790378358617,
+      "tag": "0004_phase0_rattrapage_schema",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790378358618,
+      "tag": "0005_phase0_corrections_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790379226010,
+      "tag": "0006_phase1_inscription_prenom",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790383176243,
+      "tag": "0007_phase1_infos_personnelles",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790384678931,
+      "tag": "0008_phase1_infos_chretiennes",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790392661435,
+      "tag": "0009_phase1_preferences",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1790393506374,
+      "tag": "0010_phase1_photos",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1790404506888,
+      "tag": "0011_phase1_visibilite_profil",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1790405817990,
+      "tag": "0012_phase1_eligibilite_decouverte",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1790407584777,
+      "tag": "0013_phase2_enregistrer_like",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1790412384089,
+      "tag": "0014_phase2_exclure_profils_traites",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1790420010263,
+      "tag": "0015_phase2_blocages_decouverte",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1790425000278,
+      "tag": "0016_phase3_like_reciproque",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1790426602132,
+      "tag": "0017_phase3_creer_match",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1790427633774,
+      "tag": "0018_phase3_matchs_doublons",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1790435410005,
+      "tag": "0019_phase4_conversation_auto",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1790503200000,
+      "tag": "0020_phase4_enregistrer_message",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1790506800000,
+      "tag": "0021_phase4_messages_direct",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1790510400000,
+      "tag": "0022_phase4_messages_non_lus",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1790514000000,
+      "tag": "0023_phase4_date_dernier_message",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1790517600000,
+      "tag": "0024_phase5_compteur_individuel",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1790521200000,
+      "tag": "0025_phase5_premier_message_gratuit",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1790524800000,
+      "tag": "0026_phase5_bloquer_quatrieme_message",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1790528400000,
+      "tag": "0027_phase5_messages_restants",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1790532000000,
+      "tag": "0028_phase6_numeros_classiques",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1790535600000,
+      "tag": "0029_phase6_formats_internationaux",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1790539200000,
+      "tag": "0030_phase6_espaces",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1790542800000,
+      "tag": "0031_phase6_tirets",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1790546400000,
+      "tag": "0032_phase6_parentheses",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1790550000000,
+      "tag": "0033_phase6_formes_obfusquees",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1790553600000,
+      "tag": "0034_phase6_bloquer_message",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1790557200000,
+      "tag": "0035_phase6_empecher_stockage",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1790560800000,
+      "tag": "0036_phase6_enforcement_serveur",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1790564400000,
+      "tag": "0037_phase7_detecter_quota_epuise",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1790568000000,
+      "tag": "0038_phase7_ecran_paiement",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1790571600000,
+      "tag": "0039_phase7_paiement_confirme",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1790575200000,
+      "tag": "0040_phase7_activer_deblocage",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1790578800000,
+      "tag": "0041_phase7_appliquer_deblocage",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1790582400000,
+      "tag": "0042_phase7_messages_pendant_deblocage",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1790586000000,
+      "tag": "0043_phase7_expirer_deblocage",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1790589600000,
+      "tag": "0044_phase7_afficher_expiration",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1790593200000,
+      "tag": "0045_phase8_enregistrer_favori",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1790596800000,
+      "tag": "0046_phase8_qui_ma_favorise",
+      "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1790600400000,
+      "tag": "0047_phase8_favoris_reserve_premium",
+      "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1790604000000,
+      "tag": "0048_phase9_enregistrer_visite",
+      "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1790607600000,
+      "tag": "0049_phase9_limiter_visites",
+      "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1790611200000,
+      "tag": "0050_phase9_visiteurs_premium",
+      "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1790614800000,
+      "tag": "0051_phase9_visiteurs_reserve_premium",
+      "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1790618400000,
+      "tag": "0052_phase10_derniere_activite",
+      "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1790622000000,
+      "tag": "0053_phase10_actualiser_activite",
+      "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1790625600000,
+      "tag": "0054_phase10_statut_en_ligne",
+      "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1790629200000,
+      "tag": "0055_phase10_presence_premium",
+      "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1790632800000,
+      "tag": "0056_phase11_filtre_age",
+      "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "7",
+      "when": 1790636400000,
+      "tag": "0057_phase11_filtre_sexe",
+      "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1790640000000,
+      "tag": "0058_phase11_filtre_pays",
+      "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1790643600000,
+      "tag": "0059_phase11_filtre_ville",
+      "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1790647200000,
+      "tag": "0060_phase11_filtre_distance",
+      "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1790650800000,
+      "tag": "0061_phase11_filtre_situation",
+      "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1790654400000,
+      "tag": "0062_phase11_filtre_enfants",
+      "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1790658000000,
+      "tag": "0063_phase11_filtre_denomination",
+      "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1790661600000,
+      "tag": "0064_phase11_filtre_engagement",
+      "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1790665200000,
+      "tag": "0065_phase11_filtre_objectif",
+      "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1790668800000,
+      "tag": "0066_phase11_filtre_projet_familial",
+      "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1790672400000,
+      "tag": "0067_phase11_filtre_interets",
+      "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1790676000000,
+      "tag": "0068_phase11_filtre_avance_premium",
+      "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1790679600000,
+      "tag": "0069_phase11_filtres_premium_serveur",
+      "breakpoints": true
+    },
+    {
+      "idx": 70,
+      "version": "7",
+      "when": 1790683200000,
+      "tag": "0070_phase12_creer_demande",
+      "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "7",
+      "when": 1790686800000,
+      "tag": "0071_phase12_repondre_quota_demandes",
+      "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1790690400000,
+      "tag": "0072_phase13_roi_salomon",
+      "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1790694000000,
+      "tag": "0073_phase14_premium",
+      "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1790697600000,
+      "tag": "0074_phase15_avantages_premium",
+      "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1790701200000,
+      "tag": "0075_phase17_message_flash",
+      "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "7",
+      "when": 1790704800000,
+      "tag": "0076_phase18_compatibilite",
+      "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "7",
+      "when": 1790708400000,
+      "tag": "0077_phase19_notifications",
+      "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1790712000000,
+      "tag": "0078_phase20_parametres",
+      "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "7",
+      "when": 1790715600000,
+      "tag": "0079_phase21_22_blocage_signalement",
+      "breakpoints": true
+    },
+    {
+      "idx": 80,
+      "version": "7",
+      "when": 1790719200000,
+      "tag": "0080_phase23_administration",
+      "breakpoints": true
+    },
+    {
+      "idx": 81,
+      "version": "7",
+      "when": 1790722800000,
+      "tag": "0081_phase24_securite_finale",
+      "breakpoints": true
+    },
+    {
+      "idx": 82,
+      "version": "7",
+      "when": 1790726400000,
+      "tag": "0082_inscription_fluide",
+      "breakpoints": true
+    },
+    {
+      "idx": 83,
+      "version": "7",
+      "when": 1790730000000,
+      "tag": "0083_inscription_derniers_inscrits_serveur",
+      "breakpoints": true
+    }
+  ]
+}

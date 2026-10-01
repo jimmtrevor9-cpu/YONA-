@@ -1,0 +1,415 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * ALLIANCE — Design system « Rose clair »
+ * Rose tendre, ivoire rosé, bordeaux profond — une palette qui inspire l'amour.
+ * Toutes les couleurs sont des tokens sémantiques en oklch.
+ */
+
+@theme inline {
+  --font-display: "Fraunces", ui-serif, Georgia, serif;
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  --radius-sm: calc(var(--radius) - 8px);
+  --radius-md: calc(var(--radius) - 4px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 6px);
+  --radius-2xl: calc(var(--radius) + 10px);
+  --radius-3xl: calc(var(--radius) + 14px);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-gold: var(--gold);
+  --color-gold-soft: var(--gold-soft);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-ring-offset-background: var(--background);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --ease-obsidian: cubic-bezier(0.32, 0.72, 0, 1);
+  --animate-rise: rise 500ms var(--ease-obsidian) both;
+  --animate-sheen: sheen 3400ms var(--ease-obsidian) infinite;
+
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(18px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  @keyframes sheen {
+    0% {
+      transform: translateX(-120%) skewX(-12deg);
+    }
+    100% {
+      transform: translateX(220%) skewX(-12deg);
+    }
+  }
+}
+
+:root {
+  --radius: 1.125rem;
+
+  /* Palette « Rose clair » — amour, tendresse, romantisme */
+  --background: oklch(0.97 0.015 355);
+  --foreground: oklch(0.3 0.05 340);
+  --surface: oklch(0.99 0.008 355);
+  --surface-2: oklch(0.95 0.02 355);
+
+  --card: oklch(0.99 0.008 355);
+  --card-foreground: oklch(0.3 0.05 340);
+  --popover: oklch(0.99 0.008 355);
+  --popover-foreground: oklch(0.3 0.05 340);
+
+  --gold: oklch(0.55 0.12 355);
+  --gold-soft: oklch(0.65 0.1 355);
+  --primary: oklch(0.62 0.16 355);
+  --primary-foreground: oklch(0.99 0.008 355);
+
+  --secondary: oklch(0.94 0.03 355);
+  --secondary-foreground: oklch(0.3 0.05 340);
+  --muted: oklch(0.94 0.03 355);
+  --muted-foreground: oklch(0.3 0.05 340 / 65%);
+  --accent: oklch(0.62 0.16 355 / 12%);
+  --accent-foreground: oklch(0.55 0.12 355);
+
+  --destructive: oklch(0.55 0.2 25);
+  --destructive-foreground: oklch(0.99 0.008 355);
+  --success: oklch(0.6 0.12 155);
+
+  --border: oklch(0.3 0.05 340 / 10%);
+  --input: oklch(0.3 0.05 340 / 15%);
+  --ring: oklch(0.62 0.16 355 / 40%);
+
+  --chart-1: oklch(0.62 0.16 355);
+  --chart-2: oklch(0.75 0.1 20);
+  --chart-3: oklch(0.55 0.08 300);
+  --chart-4: oklch(0.6 0.12 155);
+  --chart-5: oklch(0.55 0.2 25);
+
+  --sidebar: oklch(0.99 0.008 355);
+  --sidebar-foreground: oklch(0.3 0.05 340);
+  --sidebar-primary: oklch(0.62 0.16 355);
+  --sidebar-primary-foreground: oklch(0.99 0.008 355);
+  --sidebar-accent: oklch(0.94 0.03 355);
+  --sidebar-accent-foreground: oklch(0.3 0.05 340);
+  --sidebar-border: oklch(0.3 0.05 340 / 10%);
+  --sidebar-ring: oklch(0.62 0.16 355 / 40%);
+
+  --shadow-glow: 0 0 80px -20px oklch(0.62 0.16 355 / 30%);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  html {
+    color-scheme: light;
+    overflow-x: clip;
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    overflow-x: clip;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1,
+  h2,
+  h3,
+  .font-display {
+    font-family: var(--font-display);
+    letter-spacing: -0.01em;
+  }
+}
+
+/* Étiquette mono en petites capitales dorées (« eyebrow ») */
+@utility eyebrow {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  color: var(--color-gold);
+}
+
+/* Fil rose en haut d'un panneau */
+@utility gold-thread {
+  position: relative;
+  &::before {
+    content: "";
+    pointer-events: none;
+    position: absolute;
+    inset-inline: 0;
+    top: 0;
+    height: 1px;
+    background: linear-gradient(to right, transparent, oklch(0.62 0.16 355 / 50%), transparent);
+  }
+}
+
+/* Halo rosé diffus */
+@utility gold-halo {
+  position: relative;
+  &::after {
+    content: "";
+    pointer-events: none;
+    position: absolute;
+    top: -4rem;
+    left: 50%;
+    width: 16rem;
+    height: 10rem;
+    transform: translateX(-50%);
+    border-radius: 9999px;
+    background: oklch(0.62 0.16 355 / 14%);
+    filter: blur(48px);
+  }
+}
+
+/* Panneau : surface claire + anneau subtil */
+@utility panel {
+  background-color: var(--color-surface);
+  box-shadow: 0 0 0 1px oklch(0.3 0.05 340 / 8%);
+  border-radius: var(--radius-2xl);
+  overflow: hidden;
+}
+
+@utility panel-2 {
+  background-color: var(--color-surface-2);
+  box-shadow: 0 0 0 1px oklch(0.3 0.05 340 / 8%);
+  border-radius: var(--radius-lg);
+}
+
+/* Bouton rose avec reflet animé */
+@utility btn-sheen {
+  position: relative;
+  overflow: hidden;
+  &::after {
+    content: "";
+    pointer-events: none;
+    position: absolute;
+    inset-block: 0;
+    left: 0;
+    width: 33%;
+    background: oklch(1 0 0 / 40%);
+    filter: blur(8px);
+    animation: var(--animate-sheen);
+  }
+}
+
+@utility safe-bottom {
+  padding-bottom: calc(env(safe-area-inset-bottom) + 0.75rem);
+}
+
+/* Animation du carrousel d'images de la page d'accueil (ajout) */
+@keyframes yona-caption-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Étapes « De l'inscription au mariage » — badge animé + révélation au scroll (ajout) */
+@keyframes yona-step-in {
+  from {
+    opacity: 0;
+    transform: translateY(26px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes yona-step-ring {
+  0% {
+    opacity: 0.55;
+    transform: scale(0.9);
+  }
+  70% {
+    opacity: 0;
+    transform: scale(1.45);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.45);
+  }
+}
+@keyframes yona-step-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+.yona-step {
+  opacity: 0;
+}
+.yona-step[data-visible="true"] {
+  animation: yona-step-in 700ms var(--ease-obsidian) both;
+}
+.yona-step-badge {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 4.25rem;
+  height: 4.25rem;
+  border-radius: var(--radius-2xl);
+  background: linear-gradient(
+    140deg,
+    var(--primary),
+    color-mix(in oklab, var(--primary) 70%, white)
+  );
+  color: var(--primary-foreground);
+  box-shadow: 0 14px 30px -14px color-mix(in oklab, var(--primary) 65%, transparent);
+}
+.yona-step[data-visible="true"] .yona-step-badge {
+  animation: yona-step-float 4.5s ease-in-out infinite;
+}
+.yona-step-badge::before,
+.yona-step-badge::after {
+  content: "";
+  position: absolute;
+  inset: -0.55rem;
+  border-radius: inherit;
+  border: 1px dashed color-mix(in oklab, var(--primary) 45%, transparent);
+  opacity: 0;
+}
+.yona-step[data-visible="true"] .yona-step-badge::before {
+  animation: yona-step-ring 3s var(--ease-obsidian) infinite;
+}
+.yona-step[data-visible="true"] .yona-step-badge::after {
+  animation: yona-step-ring 3s var(--ease-obsidian) infinite 1.5s;
+}
+
+/* Révélations visuelles variées au scroll — les contenus textuels restent inchangés. */
+[data-reveal] {
+  opacity: 0;
+  transition-duration: 620ms;
+  transition-property: opacity, transform, filter;
+  transition-timing-function: var(--ease-obsidian);
+  will-change: opacity, transform, filter;
+}
+
+[data-reveal="up"] {
+  transform: translateY(20px);
+}
+
+[data-reveal="left"] {
+  transform: translateX(-24px);
+}
+
+[data-reveal="right"] {
+  transform: translateX(24px);
+}
+
+[data-reveal="fade"] {
+  transform: translateY(7px);
+}
+
+[data-reveal="scale"] {
+  transform: scale(0.965);
+}
+
+[data-reveal="depth"] {
+  filter: blur(5px);
+  transform: translateY(12px) scale(0.98);
+}
+
+[data-reveal="curtain"] {
+  transform: scaleY(0.94);
+  transform-origin: center top;
+}
+
+[data-reveal][data-visible="true"] {
+  opacity: 1;
+  filter: none;
+  transform: none;
+  will-change: auto;
+}
+
+@media (max-width: 640px) {
+  [data-reveal="up"] {
+    transform: translateY(14px);
+  }
+
+  [data-reveal="left"] {
+    transform: translateX(-14px);
+  }
+
+  [data-reveal="right"] {
+    transform: translateX(14px);
+  }
+
+  [data-reveal="depth"] {
+    filter: blur(3px);
+    transform: translateY(8px) scale(0.99);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-reveal],
+  [data-reveal][data-visible="true"] {
+    opacity: 1;
+    filter: none;
+    transform: none;
+    transition: none;
+  }
+
+  .yona-step,
+  .yona-step[data-visible="true"] {
+    opacity: 1;
+    animation: none;
+  }
+  .yona-step[data-visible="true"] .yona-step-badge,
+  .yona-step[data-visible="true"] .yona-step-badge::before,
+  .yona-step[data-visible="true"] .yona-step-badge::after {
+    animation: none;
+  }
+}

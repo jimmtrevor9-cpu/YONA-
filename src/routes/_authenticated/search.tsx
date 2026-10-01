@@ -1,0 +1,416 @@
+import { useQuery } from "@tanstack/react-query";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { Lock } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+
+import { AppHeader } from "@/components/AppHeader";
+import { BottomNav } from "@/components/BottomNav";
+import { ContactRequestButton } from "@/components/ContactRequestButton";
+import { ProfileCard } from "@/components/ProfileCard";
+import { SearchTextField } from "@/components/SearchTextField";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useAuth } from "@/features/auth/AuthProvider";
+import { useCompatibilityScores } from "@/features/compatibility/queries";
+import { usePremiumBadges } from "@/features/premium/queries";
+import type { Gender } from "@/features/profiles/discovery";
+import {
+  MARITAL_STATUSES,
+  MARITAL_STATUS_LABELS,
+  type MaritalStatus,
+} from "@/features/profiles/facts";
+import {
+  EMPTY_SEARCH_FORM,
+  SEARCH_MAX_AGE,
+  SEARCH_ACTIVE_DAYS,
+  SEARCH_ACTIVE_LABELS,
+  SEARCH_DISTANCES,
+  SEARCH_FAMILY_PROJECT_MAX_LENGTH,
+  SEARCH_MIN_AGE,
+  SEARCH_PLACE_MAX_LENGTH,
+  buildSearchFilters,
+  type SearchFilters,
+  type SearchForm,
+} from "@/features/search/filters";
+import { myLocationQuery } from "@/features/profiles/location";
+import {
+  isLocationRequired,
+  isPremiumRequired,
+  searchPremiumQuery,
+  searchCitiesQuery,
+  searchCountriesQuery,
+  searchDefaultsQuery,
+  searchProfilesQuery,
+} from "@/features/search/queries";
+import { APP_NAME } from "@/lib/config";
+
+export const Route = createFileRoute("/_authenticated/search")({
+  head: () => ({
+    meta: [
+      { title: `Recherche — ${APP_NAME}` },
+      { name: "description", content: "Recherchez des profils selon vos critères." },
+      { property: "og:title", content: `Recherche — ${APP_NAME}` },
+      { property: "og:description", content: "Recherchez des profils selon vos critères." },
+    ],
+  }),
+  component: SearchPage,
+});
+
+function SearchPage() {
+  const { user } = useAuth();
+  const [form, setForm] = useState<SearchForm>(EMPTY_SEARCH_FORM);
+  const [filters, setFilters] = useState<SearchFilters>({});
+  const [formError, setFormError] = useState<string | null>(null);
+  const update = <K extends keyof SearchForm>(key: K, value: SearchForm[K]) =>
+    setForm((current) => ({ ...current, [key]: value }));
+
+  // Sexe recherché : part des préférences enregistrées (modifiable, « Indifférent » possible).
+  const { data: defaults, isLoading: defaultsLoading } = useQuery({
+    ...searchDefaultsQuery(user?.id ?? ""),
+    enabled: !!user?.id,
+  });
+  const defaultsApplied = useRef(false);
+  useEffect(() => {
+    if (!defaults || defaultsApplied.current) return;
+    defaultsApplied.current = true;
+    if (!defaults.gender) return;
+    const gender = defaults.gender;
+    setForm((current) => ({ ...current, gender }));
+    setFilters((current) => ({ ...current, gender }));
+  }, [defaults]);
+
+  const { data: countries } = useQuery({
+    ...searchCountriesQuery(user?.id ?? ""),
+    enabled: !!user?.id,
+  });
+
+  // Suggestions de villes : celles du pays saisi (texte court, pour ne pas multiplier les appels).
+  const countryForCities = form.country.trim().length >= 2 ? form.country.trim() : "";
+  const { data: cities } = useQuery({
+    ...searchCitiesQuery(user?.id ?? "", countryForCities),
+    enabled: !!user?.id,
+  });
+
+  // Recherche par distance : autour de la position enregistrée sur le profil.
+  const { data: myLocation } = useQuery({
+    ...myLocationQuery(user?.id ?? ""),
+    enabled: !!user?.id,
+  });
+
+  // Filtres avancés : réservés aux membres Premium.
+  const { data: premium } = useQuery({
+    ...searchPremiumQuery(user?.id ?? ""),
+    enabled: !!user?.id,
+  });
+
+  // Abonnement terminé : le filtre avancé n'est plus proposé ni envoyé.
+  useEffect(() => {
+    if (premium !== false) return;
+    setForm((current) =>
+      current.activeWithinDays ? { ...current, activeWithinDays: "" } : current,
+    );
+    setFilters((current) => {
+      if (current.active_within_days === undefined) return current;
+      const { active_within_days: _removed, ...rest } = current;
+      return rest;
+    });
+  }, [premium]);
+
+  const { data, isLoading, isError, error } = useQuery({
+    ...searchProfilesQuery(user?.id ?? "", filters),
+    enabled: !!user?.id && !defaultsLoading,
+  });
+  const { data: premiumIds } = usePremiumBadges((data ?? []).map((profile) => profile.user_id));
+  const { data: scores } = useCompatibilityScores((data ?? []).map((profile) => profile.user_id));
+
+  return (
+    <div className="min-h-screen bg-background pb-24">
+      <AppHeader title="Recherche" />
+      <main className="mx-auto max-w-md space-y-5 px-5 py-6">
+        <form
+          className="panel gold-thread space-y-4 p-5"
+          data-testid="search-form"
+          noValidate
+          onSubmit={(e) => {
+            e.preventDefault();
+            const result = buildSearchFilters(form);
+            if (result.error !== undefined) {
+              setFormError(result.error);
+              return;
+            }
+            setFormError(null);
+            setFilters(result.filters);
+          }}
+        >
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium text-foreground">Âge</legend>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="minAge" className="text-xs text-muted-foreground">
+                  De (ans)
+                </Label>
+                <Input
+                  id="minAge"
+                  inputMode="numeric"
+                  min={SEARCH_MIN_AGE}
+                  max={SEARCH_MAX_AGE}
+                  value={form.minAge}
+                  onChange={(e) => update("minAge", e.target.value)}
+                  placeholder={String(SEARCH_MIN_AGE)}
+                  aria-invalid={!!formError}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="maxAge" className="text-xs text-muted-foreground">
+                  À (ans)
+                </Label>
+                <Input
+                  id="maxAge"
+                  inputMode="numeric"
+                  min={SEARCH_MIN_AGE}
+                  max={SEARCH_MAX_AGE}
+                  value={form.maxAge}
+                  onChange={(e) => update("maxAge", e.target.value)}
+                  placeholder={String(SEARCH_MAX_AGE)}
+                  aria-invalid={!!formError}
+                />
+              </div>
+            </div>
+          </fieldset>
+          <div className="space-y-2">
+            <Label htmlFor="country">Pays</Label>
+            <Input
+              id="country"
+              list="search-countries"
+              autoComplete="off"
+              maxLength={SEARCH_PLACE_MAX_LENGTH}
+              value={form.country}
+              onChange={(e) => update("country", e.target.value)}
+              placeholder="Tous les pays"
+            />
+            <datalist id="search-countries" data-testid="search-countries">
+              {(countries ?? []).map((country) => (
+                <option key={country} value={country} />
+              ))}
+            </datalist>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="city">Ville</Label>
+            <Input
+              id="city"
+              list="search-cities"
+              autoComplete="off"
+              maxLength={SEARCH_PLACE_MAX_LENGTH}
+              value={form.city}
+              onChange={(e) => update("city", e.target.value)}
+              placeholder="Toutes les villes"
+            />
+            <datalist id="search-cities" data-testid="search-cities">
+              {(cities ?? []).map((city) => (
+                <option key={city} value={city} />
+              ))}
+            </datalist>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="gender">Sexe — je cherche</Label>
+            <select
+              id="gender"
+              value={form.gender}
+              onChange={(e) => update("gender", e.target.value as Gender | "")}
+              className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm text-foreground"
+            >
+              <option value="">Indifférent</option>
+              <option value="female">Une femme</option>
+              <option value="male">Un homme</option>
+            </select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="distance">Distance</Label>
+            <select
+              id="distance"
+              value={form.distance}
+              disabled={!myLocation}
+              onChange={(e) => update("distance", e.target.value)}
+              className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm text-foreground disabled:opacity-60"
+            >
+              <option value="">Toutes distances</option>
+              {SEARCH_DISTANCES.map((km) => (
+                <option key={km} value={String(km)}>
+                  À moins de {km} km
+                </option>
+              ))}
+            </select>
+            {!myLocation ? (
+              <p className="text-xs text-muted-foreground" data-testid="distance-hint">
+                Pour chercher par distance,{" "}
+                <Link to="/profile" className="text-gold-soft underline-offset-2 hover:underline">
+                  enregistrez votre position sur votre profil
+                </Link>
+                .
+              </p>
+            ) : null}
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="searchMaritalStatus">Situation matrimoniale</Label>
+            <select
+              id="searchMaritalStatus"
+              value={form.maritalStatus}
+              onChange={(e) => update("maritalStatus", e.target.value as MaritalStatus | "")}
+              className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm text-foreground"
+            >
+              <option value="">Indifférente</option>
+              {MARITAL_STATUSES.map((status) => (
+                <option key={status} value={status}>
+                  {MARITAL_STATUS_LABELS[status]}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="searchChildren">Enfants</Label>
+            <select
+              id="searchChildren"
+              value={form.children}
+              onChange={(e) => update("children", e.target.value as SearchForm["children"])}
+              className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm text-foreground"
+            >
+              <option value="">Indifférent</option>
+              <option value="without">Sans enfant</option>
+              <option value="with">Avec enfants</option>
+            </select>
+          </div>
+          <SearchTextField
+            id="searchDenomination"
+            label="Église / dénomination"
+            value={form.denomination}
+            onChange={(value) => update("denomination", value)}
+            placeholder="Toutes"
+            suggestionsFor="denomination"
+            userId={user?.id ?? ""}
+          />
+          <SearchTextField
+            id="searchFaithCommitment"
+            label="Engagement chrétien"
+            value={form.faithCommitment}
+            onChange={(value) => update("faithCommitment", value)}
+            placeholder="Tous"
+            suggestionsFor="faith_commitment"
+            userId={user?.id ?? ""}
+          />
+          <SearchTextField
+            id="searchRelationshipGoal"
+            label="Objectif relationnel"
+            value={form.relationshipGoal}
+            onChange={(value) => update("relationshipGoal", value)}
+            placeholder="Mariage, relation sérieuse…"
+            userId={user?.id ?? ""}
+          />
+          <SearchTextField
+            id="searchFamilyProject"
+            label="Projet familial"
+            value={form.familyProject}
+            onChange={(value) => update("familyProject", value)}
+            placeholder="Fonder une famille, avoir des enfants…"
+            maxLength={SEARCH_FAMILY_PROJECT_MAX_LENGTH}
+            userId={user?.id ?? ""}
+          />
+          <SearchTextField
+            id="searchInterests"
+            label="Centres d'intérêt"
+            value={form.interests}
+            onChange={(value) => update("interests", value)}
+            placeholder="Musique, randonnée… (5 au plus, séparés par des virgules)"
+            suggestionsFor="interests"
+            maxLength={300}
+            userId={user?.id ?? ""}
+          />
+          <fieldset
+            className="space-y-2 border-t border-border pt-4"
+            data-testid="advanced-filters"
+          >
+            <legend className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+              Filtres avancés
+              <span className="rounded-full bg-accent px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gold-soft">
+                Premium
+              </span>
+            </legend>
+            <Label htmlFor="activeWithinDays">Activité récente</Label>
+            <select
+              id="activeWithinDays"
+              value={form.activeWithinDays}
+              disabled={!premium}
+              onChange={(e) => update("activeWithinDays", e.target.value)}
+              className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm text-foreground disabled:opacity-60"
+            >
+              <option value="">Tous les membres</option>
+              {SEARCH_ACTIVE_DAYS.map((days) => (
+                <option key={days} value={String(days)}>
+                  {SEARCH_ACTIVE_LABELS[days]}
+                </option>
+              ))}
+            </select>
+            {!premium ? (
+              <p
+                className="flex items-center gap-1.5 text-xs text-muted-foreground"
+                data-testid="advanced-filters-locked"
+              >
+                <Lock className="size-3 shrink-0 text-gold-soft" aria-hidden />
+                Réservé aux membres Premium.{" "}
+                <Link
+                  to="/premium"
+                  className="font-medium text-gold underline-offset-2 hover:underline"
+                >
+                  Découvrir Premium
+                </Link>
+              </p>
+            ) : null}
+          </fieldset>
+          {formError ? (
+            <p className="text-sm text-destructive" role="alert" data-testid="search-error">
+              {formError}
+            </p>
+          ) : null}
+          <Button type="submit" className="w-full">
+            Rechercher
+          </Button>
+        </form>
+
+        {isLoading ? (
+          <Skeleton className="h-40 w-full rounded-2xl" />
+        ) : isError ? (
+          <p className="text-sm text-destructive" data-testid="search-failed">
+            {isLocationRequired(error)
+              ? "Enregistrez votre position sur votre profil pour chercher par distance."
+              : isPremiumRequired(error)
+                ? "Les filtres avancés sont réservés aux membres Premium."
+                : "La recherche a échoué. Réessayez."}
+          </p>
+        ) : data && data.length > 0 ? (
+          <div className="space-y-4" data-testid="search-results">
+            {data.map((profile) => (
+              <ProfileCard
+                key={profile.user_id}
+                profile={profile}
+                isPremium={premiumIds?.has(profile.user_id) ?? false}
+                compatibility={scores?.get(profile.user_id) ?? null}
+                footer={
+                  <ContactRequestButton
+                    receiverId={profile.user_id}
+                    receiverName={profile.first_name ?? "ce membre"}
+                  />
+                }
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="panel p-6 text-center" data-testid="search-empty">
+            <p className="text-sm text-muted-foreground">Aucun profil ne correspond.</p>
+          </div>
+        )}
+      </main>
+      <BottomNav />
+    </div>
+  );
+}
