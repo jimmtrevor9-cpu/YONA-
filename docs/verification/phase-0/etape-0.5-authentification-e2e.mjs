@@ -203,6 +203,11 @@ if (process.env.DELETE_USER_CMD) {
 
 ok("Aucune erreur JavaScript de page", pageErrors.length === 0, pageErrors.slice(0, 2).join(" | "));
 await browser.close();
+// Le nouveau parcours rend ce compte visible : on le supprime pour ne pas fausser les
+// tests suivants (découverte, filtres).
+execSync(
+  `docker exec supabase_db_yona-local psql -U postgres -c "delete from auth.users where email = '${email}'"`,
+);
 const failed = results.filter((r) => !r.pass).length;
 console.log(`\n${results.length - failed}/${results.length} tests réussis`);
 process.exit(failed ? 1 : 0);
