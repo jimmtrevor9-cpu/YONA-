@@ -35,6 +35,11 @@ clé Anthropic, et un service d'e-mail (voir le README, section « Limites connu
 
 ## Décisions techniques
 
+- **Hébergement (2026-10-01)** : le propriétaire quitte Lovable. Site déployé sur **Vercel**
+  (`vercel.json`, construction testée : préréglage Nitro « vercel », Node 22), base sur son
+  propre projet Supabase `ahljepryelikxepfpnuq` (structure créée avec
+  `YONA_structure_base_complete.sql`). Les migrations futures sont à exécuter à la main.
+
 - **Nouvelle inscription (demande du 2026-10-01)** : parcours des captures d'écran fourni
   par le propriétaire. Le profil est rempli AVANT la création du compte ; les réponses sont
   gardées dans le navigateur (photos dans IndexedDB) et, pour l'e-mail, dans les

@@ -45,10 +45,9 @@ npm run dev          # ouvrir ensuite l'adresse affichée dans le terminal
 
 ## 2. Configurer Supabase
 
-**Option A — Lovable Cloud** : la base et les variables sont fournies automatiquement, et
-les migrations sont appliquées toutes seules.
-
-**Option B — votre propre projet Supabase** :
+**Votre propre projet Supabase** (choix actuel : projet `ahljepryelikxepfpnuq`). Les
+migrations ne s'appliquent pas toutes seules : exécutez chaque nouveau fichier de
+`supabase/migrations/` dans le SQL Editor, ou utilisez la commande ci-dessous.
 
 1. Créez un projet sur <https://supabase.com>.
 2. Appliquez toutes les migrations (tables, sécurité, fonctions, stockage) :
@@ -62,8 +61,7 @@ les migrations sont appliquées toutes seules.
    *Authentication → Providers → Google*, activez Google et collez l'identifiant client
    et le secret créés dans Google Cloud (*API et services → Identifiants → ID client
    OAuth*, type « Application Web », URI de redirection autorisée :
-   `https://<ID_DU_PROJET>.supabase.co/auth/v1/callback`). Avec Lovable Cloud : même
-   réglage dans la partie Cloud (authentification). Aucune clé Google dans `.env`.
+   `https://<ID_DU_PROJET>.supabase.co/auth/v1/callback`). Aucune clé Google dans `.env`.
 5. Créez le premier administrateur (après son inscription dans l'application), dans
    Supabase → *SQL Editor* :
    ```sql
@@ -77,6 +75,13 @@ les migrations sont appliquées toutes seules.
 Plus de détails : [docs/CONNECTER_UNE_BASE_SUPABASE.md](docs/CONNECTER_UNE_BASE_SUPABASE.md).
 
 Pour une base locale (tests) : `npx supabase start` (Docker nécessaire).
+
+## Mise en ligne sur Vercel
+
+Le projet est prêt pour Vercel (`vercel.json` : `npm install` puis `npm run build` ; la
+construction détecte Vercel et produit une fonction serveur Node 22). Importez le dépôt
+GitHub dans Vercel, ajoutez les variables de la section 3 dans *Settings → Environment
+Variables*, puis déployez. Pas à pas détaillé : [docs/GUIDE_MISE_EN_LIGNE.md](docs/GUIDE_MISE_EN_LIGNE.md).
 
 ## 3. Variables d'environnement
 

@@ -33,3 +33,6 @@ dist-ssr
 
 # Variables d'environnement locales (voir .env.example)
 .env
+
+# Construction Vercel locale
+.vercel
