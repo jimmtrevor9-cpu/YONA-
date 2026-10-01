@@ -21,9 +21,11 @@ Modèle : fichier `.env.example` à la racine. Mettre `project_id` à jour dans
 ⚠️ Ne jamais mettre la clé secrète (`sb_secret_…` / `service_role`) dans une
 variable `VITE_…` : tout ce qui commence par `VITE_` est visible dans le navigateur.
 
-## 2. Avec Lovable Cloud
+## 2. Sur Vercel
 
-Lovable gère ces variables automatiquement lorsqu'une base est connectée au projet.
+Mettre ces variables (et `SUPABASE_SERVICE_ROLE_KEY`, `APP_URL`) dans le projet Vercel :
+Settings → Environment Variables, puis relancer un déploiement (« Redeploy »).
+Détail pas à pas : `docs/GUIDE_MISE_EN_LIGNE.md`.
 
 ## 3. Création des tables (migrations)
 
@@ -31,7 +33,7 @@ Toutes les tables, règles de sécurité, fonctions et le stockage `photos` sont
 par les fichiers de `supabase/migrations/`, appliqués **dans l'ordre**
 (vérifié à l'étape 0.4 sur une base Supabase vide) :
 
-- **Avec Lovable Cloud** : les migrations sont appliquées automatiquement.
+- **À la main** : coller chaque fichier, dans l'ordre, dans le SQL Editor de Supabase.
 - **Avec la CLI Supabase** (autre projet) :
   ```sh
   npx supabase link --project-ref <ID_DU_PROJET>

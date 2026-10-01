@@ -20,10 +20,10 @@ Fais les étapes dans l'ordre. Si tu bloques sur une étape, envoie-moi une capt
 
 ## Étape 1 : fusionner le code sur GitHub
 
-Tout mon travail est dans une « demande de fusion » (Pull Request n°1). La fusionner, c'est l'ajouter à la version principale du projet, celle que Vercel va mettre en ligne.
+Chaque lot de travail arrive dans une « demande de fusion » (Pull Request). La fusionner, c'est l'ajouter à la version principale du projet (la branche `main`), celle que Vercel met en ligne. Tant qu'une Pull Request n'est pas fusionnée, Vercel ne la voit pas.
 
-1. Va sur [github.com/jimmtrevor9-cpu/YONA-/pull/1](https://github.com/jimmtrevor9-cpu/YONA-/pull/1) et connecte-toi.
-2. En bas de la page, clique sur le bouton vert **Merge pull request**, puis sur **Confirm merge**.
+1. Va sur [github.com/jimmtrevor9-cpu/YONA-/pulls](https://github.com/jimmtrevor9-cpu/YONA-/pulls) et connecte-toi.
+2. Ouvre la Pull Request que je t'ai indiquée. En bas de la page, clique sur le bouton vert **Merge pull request**, puis sur **Confirm merge**.
 
 - [ ] Pull Request fusionnée
 
@@ -33,7 +33,7 @@ Le projet est déjà prêt pour Vercel (fichier `vercel.json` : installation ave
 
 1. Crée un compte sur [vercel.com](https://vercel.com) avec ton compte GitHub.
 2. Clique sur **Add New… → Project**, choisis le dépôt **YONA-**, puis **Import**.
-3. Ne change pas les réglages de construction. Ouvre **Environment Variables** et ajoute chaque ligne du tableau ci-dessous (le nom à gauche, la valeur à droite).
+3. Ne change pas les réglages de construction (le fichier `vercel.json` les impose : « Framework Preset » = Other, `npm install`, `npm run build`). Ouvre **Environment Variables** et ajoute chaque ligne du tableau ci-dessous (le nom à gauche, la valeur à droite).
 4. Clique sur **Deploy**. Après 2 à 3 minutes, Vercel te donne l'adresse du site (par exemple `https://yona-xxx.vercel.app`). Tu pourras brancher ton propre nom de domaine plus tard dans **Settings → Domains**.
 
 Une clé secrète est comme un mot de passe que le site utilise pour parler à un autre service. On ne la met jamais dans le code : on la range dans les variables de Vercel. Ne la partage avec personne (même pas avec moi).

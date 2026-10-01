@@ -6,15 +6,16 @@ import reactRefresh from "eslint-plugin-react-refresh";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  // Fichiers générés ou gérés par Lovable : ne pas les modifier à la main.
+  // Fichiers générés automatiquement : ne pas les modifier à la main.
   {
     ignores: [
       "dist",
       ".output",
+      ".vercel",
+      ".wrangler",
       ".vinxi",
       "src/routeTree.gen.ts",
       "src/integrations/supabase/types.ts",
-      "src/integrations/supabase/previewAuthStorage.ts",
     ],
   },
   {
