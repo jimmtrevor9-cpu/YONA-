@@ -225,7 +225,11 @@ check(
 sql(
   `update public.subscriptions set expires_at = now() - interval '1 minute', starts_at = now() - interval '31 days' where user_id='${id.p}'`,
 );
-sql(`delete from public.contact_requests where sender_id='${id.p}' and receiver_id='${id.x}'`);
+// 5 demandes aujourd'hui, posées à la main : le résultat ne dépend plus de l'ordre
+// d'arrivée des envois simultanés de la partie C.
+sql(
+  `delete from public.contact_requests where sender_id='${id.p}'; insert into public.contact_requests (sender_id, receiver_id) select '${id.p}', unnest(array['${id.a}','${id.c}','${id.d}','${id.e}','${id.f}']::uuid[])`,
+);
 r = await send("p", "x");
 check(
   "Abonnement expiré : la limite gratuite s'applique de nouveau",
