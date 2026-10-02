@@ -589,6 +589,20 @@
       "when": 1790730000000,
       "tag": "0083_inscription_derniers_inscrits_serveur",
       "breakpoints": true
+    },
+    {
+      "idx": 84,
+      "version": "7",
+      "when": 1790733600000,
+      "tag": "0084_profils_virtuels_et_verification",
+      "breakpoints": true
+    },
+    {
+      "idx": 85,
+      "version": "7",
+      "when": 1790737200000,
+      "tag": "0085_profils_virtuels_donnees",
+      "breakpoints": true
     }
   ]
 }

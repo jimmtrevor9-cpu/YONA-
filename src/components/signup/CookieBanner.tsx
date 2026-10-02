@@ -26,7 +26,7 @@ export function CookieBanner() {
     >
       <p className="flex-1">
         Nous utilisons seulement les cookies nécessaires pour vous garder connecté.{" "}
-        <Link to="/cgu" className="text-gold underline-offset-4 hover:underline">
+        <Link to="/cookies" className="text-gold underline-offset-4 hover:underline">
           En savoir plus
         </Link>
       </p>

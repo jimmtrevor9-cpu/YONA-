@@ -20,7 +20,7 @@ const deleteInput = z.object({
 
 /**
  * 20.9 — Suppression définitive du compte. Le mot de passe est revérifié ici ; puis les
- * fichiers (photos, messages vocaux) sont retirés et le compte est supprimé avec le rôle
+ * fichiers (photos, photos de vérification, messages vocaux) sont retirés et le compte est supprimé avec le rôle
  * service : toutes les données liées (profil, Likes, Matchs, messages, paiements…)
  * disparaissent avec lui (suppression en cascade dans la base).
  */
@@ -63,6 +63,14 @@ export const deleteMyAccount = createServerFn({ method: "POST" })
         await supabaseAdmin.storage
           .from("photos")
           .remove(photos.map((f) => `${context.userId}/${f.name}`));
+      }
+      const { data: checks } = await supabaseAdmin.storage
+        .from("verifications")
+        .list(context.userId, { limit: 100 });
+      if (checks?.length) {
+        await supabaseAdmin.storage
+          .from("verifications")
+          .remove(checks.map((f) => `${context.userId}/${f.name}`));
       }
       const { data: voices } = await supabaseAdmin
         .from("messages")

@@ -1,28 +1,21 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Mail } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
-import heroAsset from "@/assets/yona-story-1.jpg.asset.json";
-import logoAsset from "@/assets/yona-logo.png.asset.json";
 import { AuthShell } from "@/components/AuthShell";
+import { RedirectingScreen } from "@/components/RedirectingScreen";
 import { CookieBanner } from "@/components/signup/CookieBanner";
 import { GoogleIcon } from "@/components/signup/GoogleIcon";
 import { InstallAppButton } from "@/components/signup/InstallAppButton";
 import { RecentSignups } from "@/components/signup/RecentSignups";
-import { SignupWizard, type WizardAccount } from "@/components/signup/SignupWizard";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { signInWithGoogle, signUp, translateAuthError } from "@/features/auth/auth.service";
-import {
-  EMPTY_DRAFT,
-  loadLocalDraft,
-  saveDraftPhotos,
-  saveLocalDraft,
-  type SignupDraft,
-  type SignupMethod,
-} from "@/features/auth/signup-draft";
 import { getPostLoginPath } from "@/features/profiles/queries";
+import { BRAND_LOGO_URL, BRAND_SLIDE_URLS } from "@/lib/brand";
 import { APP_NAME, APP_TAGLINE } from "@/lib/config";
 
 export const Route = createFileRoute("/register")({
@@ -43,20 +36,24 @@ export const Route = createFileRoute("/register")({
   component: RegisterPage,
 });
 
-type Phase = "landing" | "wizard" | "sent";
+type Phase = "landing" | "account" | "sent";
 
+/**
+ * Inscription, dans cet ordre :
+ *   1. Google (ou e-mail + mot de passe) : le compte est créé d'abord ;
+ *   2. redirection automatique vers la création du profil (/onboarding) ;
+ *   3. étapes du profil, puis vérification du profil.
+ */
 function RegisterPage() {
   const navigate = useNavigate();
   const { isAuthenticated, user } = useAuth();
   const [phase, setPhase] = useState<Phase>("landing");
-  const [method, setMethod] = useState<SignupMethod>("email");
-  const [initial, setInitial] = useState<SignupDraft>(EMPTY_DRAFT);
   const [pending, setPending] = useState(false);
   const [sentTo, setSentTo] = useState("");
 
   // Déjà connecté : pas d'inscription, on va directement au bon endroit.
   useEffect(() => {
-    if (!isAuthenticated || !user || pending) return;
+    if (!isAuthenticated || !user) return;
     let cancelled = false;
     void getPostLoginPath(user.id).then((to) => {
       if (!cancelled) navigate({ to, replace: true });
@@ -64,58 +61,38 @@ function RegisterPage() {
     return () => {
       cancelled = true;
     };
-  }, [isAuthenticated, user, navigate, pending]);
+  }, [isAuthenticated, user, navigate]);
 
-  function start(next: SignupMethod) {
-    // Reprise d'un parcours commencé plus tôt sur cet appareil.
-    const saved = loadLocalDraft();
-    setInitial({ ...(saved ?? EMPTY_DRAFT), method: next, termsAcceptedAt: null });
-    setMethod(next);
-    setPhase("wizard");
+  async function google() {
+    setPending(true);
+    const { error } = await signInWithGoogle();
+    if (error) {
+      setPending(false);
+      toast.error(translateAuthError(error.message));
+    }
+    // Sinon le navigateur part chez Google, puis revient pour créer le profil.
   }
 
-  const remember = useCallback((draft: SignupDraft) => {
-    saveLocalDraft({ ...draft, termsAcceptedAt: null });
-  }, []);
-
-  async function finish(draft: SignupDraft, photos: File[], account: WizardAccount | null) {
+  async function createAccount(email: string, password: string) {
     setPending(true);
-    saveLocalDraft(draft);
-    await saveDraftPhotos(photos);
-
-    if (method === "google") {
-      const { error } = await signInWithGoogle();
-      if (error) {
-        setPending(false);
-        toast.error(translateAuthError(error.message));
-      }
-      // Sinon le navigateur part chez Google ; le profil est créé au retour (/onboarding).
-      return;
-    }
-
-    if (!account) {
-      setPending(false);
-      return;
-    }
-    const { data, error } = await signUp({
-      email: account.email,
-      password: account.password,
-      firstName: draft.firstName.trim(),
-      draft,
-    });
+    const { data, error } = await signUp({ email, password });
     if (error) {
       setPending(false);
       toast.error(translateAuthError(error.message));
       return;
     }
     if (!data.session) {
+      // Confirmation d'e-mail activée dans Supabase : le lien mène à la création du profil.
       setPending(false);
-      setSentTo(account.email);
+      setSentTo(email);
       setPhase("sent");
       return;
     }
-    // Confirmation d'e-mail désactivée : la session est ouverte, le profil est créé tout de suite.
-    navigate({ to: "/onboarding", replace: true });
+    // Session ouverte : la redirection vers la création du profil se fait seule (effet).
+  }
+
+  if (isAuthenticated) {
+    return <RedirectingScreen message="Compte créé" detail="Place à ton profil…" />;
   }
 
   if (phase === "sent") {
@@ -123,7 +100,7 @@ function RegisterPage() {
       <AuthShell
         eyebrow="Vérification"
         title="Consultez votre boîte mail"
-        subtitle={`Nous avons envoyé un lien de confirmation à ${sentTo}. Cliquez dessus pour activer votre compte : votre profil sera prêt.`}
+        subtitle={`Nous avons envoyé un lien de confirmation à ${sentTo}. Cliquez dessus pour activer votre compte : vous arriverez directement sur la création de votre profil.`}
         footer={
           <Link to="/login" className="text-gold underline-offset-4 hover:underline">
             Retour à la connexion
@@ -137,29 +114,138 @@ function RegisterPage() {
     );
   }
 
-  if (phase === "wizard") {
+  if (phase === "account") {
     return (
-      <SignupWizard
-        mode="guest"
-        method={method}
-        initial={initial}
+      <AccountForm
         pending={pending}
-        onChange={remember}
-        onExit={() => setPhase("landing")}
-        onFinish={(draft, photos, account) => void finish(draft, photos, account)}
+        onBack={() => setPhase("landing")}
+        onGoogle={() => void google()}
+        onSubmit={(email, password) => void createAccount(email, password)}
       />
     );
   }
 
-  return <Landing onStart={start} />;
+  return (
+    <Landing pending={pending} onEmail={() => setPhase("account")} onGoogle={() => void google()} />
+  );
 }
 
-function Landing({ onStart }: { onStart: (method: SignupMethod) => void }) {
+function AccountForm({
+  pending,
+  onBack,
+  onGoogle,
+  onSubmit,
+}: {
+  pending: boolean;
+  onBack: () => void;
+  onGoogle: () => void;
+  onSubmit: (email: string, password: string) => void;
+}) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
+  function submit(event: React.FormEvent) {
+    event.preventDefault();
+    const cleanEmail = email.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      toast.error("Indique une adresse e-mail valide.");
+      return;
+    }
+    if (password.length < 8) {
+      toast.error("Le mot de passe doit contenir au moins 8 caractères.");
+      return;
+    }
+    onSubmit(cleanEmail, password);
+  }
+
+  return (
+    <AuthShell
+      eyebrow="Inscription"
+      title="Crée ton compte"
+      subtitle="Ton e-mail et un mot de passe : ensuite, place à ton profil."
+      footer={
+        <button
+          type="button"
+          onClick={onBack}
+          className="text-gold underline-offset-4 hover:underline"
+        >
+          Retour
+        </button>
+      }
+    >
+      <form onSubmit={submit} className="space-y-4" data-testid="signup-account">
+        <div className="space-y-2">
+          <Label htmlFor="email">Ton e-mail</Label>
+          <Input
+            id="email"
+            type="email"
+            autoComplete="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="vous@exemple.com"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="password">Mot de passe</Label>
+          <Input
+            id="password"
+            type="password"
+            autoComplete="new-password"
+            required
+            minLength={8}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+          <p className="text-xs text-muted-foreground">8 caractères minimum.</p>
+        </div>
+        <Button
+          type="submit"
+          className="h-12 w-full rounded-full text-base"
+          disabled={pending}
+          data-testid="signup-create-account"
+        >
+          {pending ? "Un instant…" : "Créer mon compte"}
+        </Button>
+      </form>
+      <div className="my-5 flex items-center gap-3 text-xs text-muted-foreground">
+        <span className="h-px flex-1 bg-border" /> ou
+        <span className="h-px flex-1 bg-border" />
+      </div>
+      <Button
+        type="button"
+        variant="outline"
+        className="w-full gap-2"
+        disabled={pending}
+        onClick={onGoogle}
+      >
+        <GoogleIcon className="h-4 w-4" /> Continuer avec Google
+      </Button>
+      <p className="mt-4 text-center text-[11px] text-muted-foreground">
+        En continuant, vous acceptez nos{" "}
+        <Link to="/cgu" className="underline underline-offset-2">
+          conditions d'utilisation
+        </Link>{" "}
+        et confirmez avoir 18 ans ou plus.
+      </p>
+    </AuthShell>
+  );
+}
+
+function Landing({
+  pending,
+  onEmail,
+  onGoogle,
+}: {
+  pending: boolean;
+  onEmail: () => void;
+  onGoogle: () => void;
+}) {
   return (
     <main className="relative flex min-h-screen flex-col bg-background">
       <div className="relative h-[46vh] min-h-72 w-full overflow-hidden">
         <img
-          src={heroAsset.url}
+          src={BRAND_SLIDE_URLS[0]}
           alt="Couple chrétien souriant"
           className="h-full w-full object-cover"
         />
@@ -170,7 +256,7 @@ function Landing({ onStart }: { onStart: (method: SignupMethod) => void }) {
       </div>
 
       <div className="relative -mt-16 flex flex-1 flex-col items-center px-6 pb-28 text-center">
-        <img src={logoAsset.url} alt={APP_NAME} className="h-16 w-auto" />
+        <img src={BRAND_LOGO_URL} alt={APP_NAME} className="h-16 w-auto" />
         <h1 className="mt-3 font-display text-3xl font-semibold text-foreground">{APP_NAME}</h1>
         <p className="mt-1 text-sm text-muted-foreground">{APP_TAGLINE}</p>
         <div className="mt-4 flex flex-wrap justify-center gap-2 text-xs">
@@ -189,7 +275,8 @@ function Landing({ onStart }: { onStart: (method: SignupMethod) => void }) {
         <div className="mt-6 w-full max-w-sm space-y-4">
           <Button
             className="h-12 w-full rounded-full text-base"
-            onClick={() => onStart("email")}
+            onClick={onEmail}
+            disabled={pending}
             data-testid="signup-start"
           >
             Créer mon compte gratuitement
@@ -201,7 +288,8 @@ function Landing({ onStart }: { onStart: (method: SignupMethod) => void }) {
           <div className="flex justify-center gap-5">
             <button
               type="button"
-              onClick={() => onStart("google")}
+              onClick={onGoogle}
+              disabled={pending}
               aria-label="Continuer avec Google"
               data-testid="signup-google"
               className="grid h-14 w-14 place-items-center rounded-full border border-border bg-white shadow-sm"
@@ -210,7 +298,7 @@ function Landing({ onStart }: { onStart: (method: SignupMethod) => void }) {
             </button>
             <button
               type="button"
-              onClick={() => onStart("email")}
+              onClick={onEmail}
               aria-label="Continuer avec mon e-mail"
               data-testid="signup-email"
               className="grid h-14 w-14 place-items-center rounded-full border border-border bg-background text-foreground shadow-sm"

@@ -22,13 +22,25 @@ pour le mobile.
 | Score de compatibilité, notifications, paramètres | Filtres avancés, support prioritaire, badge doré |
 | Bloquer, signaler, supprimer son compte | |
 
-**Inscription** (`/register`) : écran d'accueil (Créer mon compte, Google, E-mail), puis
+**Inscription** (`/register`) : le compte d'abord (Google, avec choix du compte, ou e-mail +
+mot de passe), puis redirection automatique vers la création du profil (`/onboarding`) en
 4 étapes : « Crée ton profil » (photos, prénom, date de naissance, je suis / je cherche,
-âge des profils), « Ta bio en 30 s » (puces → bio proposée), « Où es-tu ? » (pays, région,
-ville, pourquoi tu es là), « Reste au courant » (e-mails d'actualité, e-mail + mot de passe),
-puis les conditions (18 ans et plus). Après l'inscription : bienvenue, 2e photo, position,
-« Complète ton profil en 20 secondes ». Le détail de la foi se complète ensuite dans
-Profil → « Ma foi et mes attentes ».
+âge des profils), « Ta bio en 30 s » (puces → bio proposée), « Où es-tu ? » (pays, région et
+ville du monde entier, listes liées avec recherche), « Reste au courant » (e-mails
+d'actualité, bouton « Confirmer et créer mon profil »), puis les conditions (18 ans et
+plus). Ensuite : « Vérifie ton profil » (`/verification` : selfie express ou pièce
+d'identité, stockage privé), puis Découvrir (bienvenue, 2e photo, position…). Le détail de
+la foi se complète dans Profil → « Ma foi et mes attentes ».
+
+**Profils virtuels** : 675 profils d'exemple (25 par pays, 27 pays francophones),
+`profiles.is_virtual = true`, sans photo ni mot de passe. Chaque vrai membre qui termine son
+profil en retire un (même pays, sinon le plus proche) : déclencheur SQL
+`replace_virtual_profile_on_signup`. Données : `scripts/generate-virtual-profiles.mjs`.
+
+**Fichiers de la marque** : `public/brand/` (logo, images du slider), `public/videos/`
+(vidéo de présentation), `public/geo/` (base géographique GeoNames, générée par
+`scripts/generate-geo.mjs`). Pages légales : `/confidentialite`, `/cgu`,
+`/mentions-legales`, `/cookies` (informations dans `src/lib/legal.ts`).
 
 Espace **/admin** (rôle administrateur) : tableau de bord, membres (suspendre, réactiver,
 bannir), signalements, validation des photos, paiements, abonnements, déblocages, support.

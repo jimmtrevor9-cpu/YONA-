@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { FullProfileEditor } from "@/components/profile/FullProfileEditor";
+import { RedirectingScreen } from "@/components/RedirectingScreen";
 import { SignupWizard } from "@/components/signup/SignupWizard";
 import { useAuth } from "@/features/auth/AuthProvider";
 import {
@@ -72,10 +73,14 @@ function OnboardingPage() {
     },
   });
 
-  const [phase, setPhase] = useState<"loading" | "saving" | "wizard" | "editor">("loading");
+  const [phase, setPhase] = useState<"loading" | "saving" | "done" | "wizard" | "editor">(
+    "loading",
+  );
   const [initial, setInitial] = useState<SignupDraft>(EMPTY_DRAFT);
-  const [pending, setPending] = useState(false);
+  const [initialPhotos, setInitialPhotos] = useState<File[]>([]);
   const started = useRef(false);
+  // Compte créé avec Google ou avec un e-mail : seul le libellé de départ change.
+  const method = user?.app_metadata?.provider === "google" ? "google" : "email";
 
   const save = useCallback(
     async (draft: SignupDraft, photos: File[]) => {
@@ -93,8 +98,9 @@ function OnboardingPage() {
           "Une photo n'a pas pu être ajoutée. Vous pourrez la remettre depuis votre profil.",
         );
       }
-      toast.success("Votre profil est prêt.");
-      navigate({ to: "/discover", replace: true });
+      // Petit écran « profil prêt », puis la vérification du profil (moins de 2 s).
+      setPhase("done");
+      window.setTimeout(() => navigate({ to: "/verification", replace: true }), 1200);
     },
     [userId, queryClient, navigate],
   );
@@ -136,14 +142,14 @@ function OnboardingPage() {
     const base = local ?? EMPTY_DRAFT;
     setInitial({
       ...base,
-      method: "google",
+      method,
       termsAcceptedAt: null,
       firstName: base.firstName || saved.profile?.first_name || "",
       birthDate: base.birthDate || saved.profile?.birth_date || "",
       gender: base.gender || saved.profile?.gender || "",
     });
     setPhase("wizard");
-  }, [saved, photoCount, user, save]);
+  }, [saved, photoCount, user, save, method]);
 
   const remember = useCallback((draft: SignupDraft) => {
     saveLocalDraft({ ...draft, termsAcceptedAt: null });
@@ -155,15 +161,19 @@ function OnboardingPage() {
     return (
       <SignupWizard
         mode="member"
-        method="google"
+        method={method}
         initial={initial}
+        initialPhotos={initialPhotos}
         photoSlots={Math.max(0, FREE_MAX_PHOTOS - (photoCount ?? 0))}
-        pending={pending}
+        pending={false}
         onChange={remember}
         onFinish={(draft, photos) => {
-          setPending(true);
+          // Écran de chargement aussitôt après la validation, pendant l'enregistrement.
+          setInitial({ ...draft, termsAcceptedAt: null });
+          setInitialPhotos(photos);
+          setPhase("saving");
           void save(draft, photos).catch((error: unknown) => {
-            setPending(false);
+            setPhase("wizard");
             toast.error(saveErrorMessage(error));
           });
         }}
@@ -171,14 +181,21 @@ function OnboardingPage() {
     );
   }
 
+  if (phase === "done") {
+    return (
+      <RedirectingScreen
+        message="Ton profil est prêt"
+        detail="Dernière étape : la vérification de ton profil…"
+      />
+    );
+  }
+
   return (
-    <main className="flex min-h-screen items-center justify-center bg-background px-5">
-      <div className="text-center" data-testid="onboarding-saving">
-        <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-gold border-t-transparent" />
-        <p className="mt-4 text-sm text-muted-foreground">
-          {phase === "saving" ? "On prépare votre profil…" : "Chargement…"}
-        </p>
-      </div>
-    </main>
+    <div data-testid="onboarding-saving">
+      <RedirectingScreen
+        message={phase === "saving" ? "On prépare ton profil…" : "Chargement…"}
+        detail={phase === "saving" ? "Encore un instant." : undefined}
+      />
+    </div>
   );
 }

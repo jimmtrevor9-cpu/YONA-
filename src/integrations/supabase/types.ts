@@ -835,6 +835,47 @@ export type Database = {
           },
         ]
       }
+      profile_verifications: {
+        Row: {
+          created_at: string
+          id: string
+          method: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          storage_path: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          method: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          storage_path: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          method?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          storage_path?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profile_verifications_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profile_visits: {
         Row: {
           id: string
@@ -884,6 +925,7 @@ export type Database = {
           gender: Database["public"]["Enums"]["gender"] | null
           has_children: boolean | null
           interests: string[]
+          is_virtual: boolean
           latitude: number | null
           longitude: number | null
           marital_status: string | null
@@ -897,6 +939,7 @@ export type Database = {
           terms_accepted_at: string | null
           updated_at: string
           user_id: string
+          verified_at: string | null
           visibility: Database["public"]["Enums"]["profile_visibility"]
         }
         Insert: {
@@ -911,6 +954,7 @@ export type Database = {
           gender?: Database["public"]["Enums"]["gender"] | null
           has_children?: boolean | null
           interests?: string[]
+          is_virtual?: boolean
           latitude?: number | null
           longitude?: number | null
           marital_status?: string | null
@@ -924,6 +968,7 @@ export type Database = {
           terms_accepted_at?: string | null
           updated_at?: string
           user_id: string
+          verified_at?: string | null
           visibility?: Database["public"]["Enums"]["profile_visibility"]
         }
         Update: {
@@ -938,6 +983,7 @@ export type Database = {
           gender?: Database["public"]["Enums"]["gender"] | null
           has_children?: boolean | null
           interests?: string[]
+          is_virtual?: boolean
           latitude?: number | null
           longitude?: number | null
           marital_status?: string | null
@@ -951,6 +997,7 @@ export type Database = {
           terms_accepted_at?: string | null
           updated_at?: string
           user_id?: string
+          verified_at?: string | null
           visibility?: Database["public"]["Enums"]["profile_visibility"]
         }
         Relationships: [
@@ -1285,6 +1332,17 @@ export type Database = {
           user_id: string
         }[]
       }
+      admin_list_pending_verifications: {
+        Args: never
+        Returns: {
+          created_at: string
+          first_name: string | null
+          id: string
+          method: string
+          storage_path: string
+          user_id: string
+        }[]
+      }
       admin_list_reports: {
         Args: { _status?: string }
         Returns: {
@@ -1368,6 +1426,10 @@ export type Database = {
       admin_resolve_report: {
         Args: { _note?: string; _report_id: string; _status: string }
         Returns: undefined
+      }
+      admin_review_verification: {
+        Args: { _approve: boolean; _verification_id: string }
+        Returns: string
       }
       admin_set_user_status: {
         Args: { _action: string; _reason?: string; _user_id: string }

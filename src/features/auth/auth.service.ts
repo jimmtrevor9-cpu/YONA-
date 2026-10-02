@@ -30,7 +30,8 @@ export function translateAuthError(message: string): string {
 export async function signUp(input: {
   email: string;
   password: string;
-  firstName: string;
+  /** Prénom, s'il est déjà connu (il est sinon demandé à la création du profil). */
+  firstName?: string;
   /** Réponses du parcours d'inscription, gardées avec le compte (sans les photos). */
   draft?: SignupDraft;
 }) {
@@ -38,17 +39,23 @@ export async function signUp(input: {
     email: input.email,
     password: input.password,
     options: {
+      // Après le clic sur le lien de confirmation : /login redirige aussitôt vers la
+      // création du profil.
       emailRedirectTo: `${window.location.origin}/login`,
-      data: input.draft
-        ? { first_name: input.firstName, signup_draft: input.draft }
-        : { first_name: input.firstName },
+      data: {
+        ...(input.firstName ? { first_name: input.firstName } : {}),
+        ...(input.draft ? { signup_draft: input.draft } : {}),
+      },
     },
   });
 }
 
 /**
- * Inscription ou connexion avec Google. Le navigateur part chez Google puis revient sur
- * /login, qui envoie vers /onboarding (profil à créer) ou /discover.
+ * Inscription ou connexion avec Google.
+ * - Un seul compte Google sur l'appareil : Google connecte directement.
+ * - Plusieurs comptes : Google affiche son écran de choix (`prompt: select_account`).
+ * Le navigateur revient ensuite sur /login, qui redirige aussitôt : création du profil
+ * (/onboarding) pour un nouveau membre, /discover si le profil existe déjà.
  * Le fournisseur Google doit être activé dans Supabase (voir docs/GUIDE_MISE_EN_LIGNE.md).
  */
 export async function signInWithGoogle() {

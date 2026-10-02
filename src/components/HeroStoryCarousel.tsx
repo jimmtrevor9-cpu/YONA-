@@ -1,10 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import coupleAsset from "@/assets/yona-story-1.jpg.asset.json";
-import story2 from "@/assets/yona-story-2.jpg.asset.json";
-import story3 from "@/assets/yona-story-3.jpg.asset.json";
-import story4 from "@/assets/yona-story-4.jpg.asset.json";
-import story5 from "@/assets/yona-story-5.jpg.asset.json";
+import { BRAND_SLIDE_URLS } from "@/lib/brand";
 
 type Slide = {
   url: string;
@@ -14,27 +10,27 @@ type Slide = {
 
 const slides: Slide[] = [
   {
-    url: coupleAsset.url,
+    url: BRAND_SLIDE_URLS[0]!,
     alt: "Couple africain chrétien en tenues modernes",
     caption: "Des célibataires chrétiens sérieux, prêts à bâtir une histoire à deux.",
   },
   {
-    url: story2.url,
+    url: BRAND_SLIDE_URLS[1]!,
     alt: "Demande en mariage : un homme à genoux offre une bague à sa compagne",
     caption: "Une rencontre sincère, puis la promesse d'un « oui » pour la vie.",
   },
   {
-    url: story3.url,
+    url: BRAND_SLIDE_URLS[2]!,
     alt: "Mariés chrétiens africains le jour de leur mariage",
     caption: "Le jour du mariage : deux chemins qui n'en font plus qu'un.",
   },
   {
-    url: story4.url,
+    url: BRAND_SLIDE_URLS[3]!,
     alt: "Jeune couple marié tenant son nouveau-né",
     caption: "Les premiers pas d'une famille bénie.",
   },
   {
-    url: story5.url,
+    url: BRAND_SLIDE_URLS[4]!,
     alt: "Famille chrétienne africaine avec deux enfants",
     caption: "Un foyer qui grandit, dans la foi et dans l'amour.",
   },
@@ -45,12 +41,24 @@ const INTERVAL = 5200;
 export function HeroStoryCarousel() {
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
+  // Image absente ou illisible : un fond aux couleurs de YONA la remplace proprement.
+  const [missing, setMissing] = useState<ReadonlySet<string>>(new Set());
   const reduced = useRef(false);
 
   useEffect(() => {
     reduced.current =
       typeof window !== "undefined" &&
       window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  }, []);
+
+  // L'erreur de chargement peut survenir avant que React prenne la main (rendu serveur) :
+  // on revérifie donc chaque image une fois la page affichée.
+  useEffect(() => {
+    for (const s of slides) {
+      const probe = new Image();
+      probe.onerror = () => setMissing((prev) => new Set(prev).add(s.url));
+      probe.src = s.url;
+    }
   }, []);
 
   const go = useCallback((next: number) => {
@@ -67,7 +75,7 @@ export function HeroStoryCarousel() {
 
   return (
     <figure
-      className="panel gold-thread relative overflow-hidden md:col-start-2 md:row-span-2 md:row-start-1 md:h-full md:min-h-[46rem]"
+      className="panel gold-thread relative mx-auto aspect-[4/5] w-full min-w-0 max-w-md overflow-hidden md:col-start-2 md:row-span-2 md:row-start-1 md:aspect-auto md:h-full md:min-h-[46rem] md:max-w-none"
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
       aria-roledescription="carrousel"
@@ -83,19 +91,33 @@ export function HeroStoryCarousel() {
         >
           {slides.map((s, i) => (
             <div key={s.url} className="relative h-full w-full shrink-0 grow-0 basis-full">
-              <img
-                src={s.url}
-                alt={s.alt}
-                width={1024}
-                height={1280}
-                loading="eager"
-                className="h-full w-full object-cover"
-                style={{
-                  transform: i === index ? "scale(1.07)" : "scale(1.01)",
-                  filter: i === index ? "saturate(1.03)" : "saturate(0.9)",
-                  transition: "transform 7000ms cubic-bezier(0.22, 1, 0.36, 1), filter 1400ms ease",
-                }}
-              />
+              {missing.has(s.url) ? (
+                <div
+                  role="img"
+                  aria-label={s.alt}
+                  className="h-full w-full"
+                  style={{
+                    background:
+                      "radial-gradient(120% 80% at 50% 20%, color-mix(in oklab, var(--primary) 30%, var(--surface)) 0%, color-mix(in oklab, var(--gold) 55%, var(--foreground)) 100%)",
+                  }}
+                />
+              ) : (
+                <img
+                  src={s.url}
+                  alt={s.alt}
+                  width={1024}
+                  height={1280}
+                  loading="eager"
+                  className="h-full w-full object-cover"
+                  style={{
+                    transform: i === index ? "scale(1.07)" : "scale(1.01)",
+                    filter: i === index ? "saturate(1.03)" : "saturate(0.9)",
+                    transition:
+                      "transform 7000ms cubic-bezier(0.22, 1, 0.36, 1), filter 1400ms ease",
+                  }}
+                  onError={() => setMissing((prev) => new Set(prev).add(s.url))}
+                />
+              )}
             </div>
           ))}
         </div>

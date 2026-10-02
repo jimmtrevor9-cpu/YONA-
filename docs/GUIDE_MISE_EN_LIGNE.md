@@ -1,6 +1,26 @@
 # YONA — Guide de mise en ligne
 
-1er octobre 2026 · Hébergement : Vercel · Base : Supabase (projet `ahljepryelikxepfpnuq`)
+2 octobre 2026 · Hébergement : Vercel · Base : Supabase (projet `ahljepryelikxepfpnuq`)
+
+## Mise à jour du 2 octobre 2026 (à faire une fois)
+
+Cette version ajoute : logo, images et vidéo hébergés dans le site, pages légales,
+application installable, inscription « compte d'abord » (Google ou e-mail), pays / région /
+ville du monde entier, 675 profils virtuels et page « Vérifie ton profil ». Aucune nouvelle
+variable d'environnement n'est nécessaire.
+
+1. **Fusionner** la Pull Request de la branche `claude/admiring-ride-05jon2` (étape 1 ci-dessous).
+2. **Base de données** : dans Supabase → **SQL Editor**, exécute ces deux fichiers, **dans cet ordre**
+   (copie tout le contenu du fichier, colle, puis **Run**) :
+   1. `supabase/migrations/20261002100000_profils_virtuels_et_verification.sql`
+   2. `supabase/migrations/20261002110000_profils_virtuels_donnees.sql` (gros fichier : 675 profils)
+3. **Adresses de retour** : Supabase → **Authentication → URL Configuration** :
+   - *Site URL* : l'adresse de ton site (par exemple `https://yona-xxx.vercel.app`) ;
+   - *Redirect URLs* : `https://yona-xxx.vercel.app/**` (et la même chose pour ton nom de domaine).
+   Après Google ou après le lien de confirmation, le visiteur revient sur `/login`, qui
+   l'envoie tout seul vers la création du profil.
+4. **Google** : voir l'étape 5 bis. Dans Google Cloud, en plus de l'URI de redirection Supabase,
+   ajoute l'adresse de ton site dans **Origines JavaScript autorisées**.
 
 ## Ce qui manque, expliqué simplement
 
@@ -128,7 +148,7 @@ Le bouton Google est déjà dans le site. Tant que Google n'est pas activé, il 
    - Type : « Application Web ».
    - URI de redirection autorisés : `https://TON-ID-SUPABASE.supabase.co/auth/v1/callback` (Supabase t'affiche cette adresse exacte dans l'écran Google de l'étape 4).
 4. Copie l'**ID client** et le **Code secret**, puis colle-les dans Supabase → **Authentication → Providers → Google** et active Google.
-5. Teste : sur ton téléphone, ouvre `/register`, touche le bouton Google, remplis les étapes, choisis ton compte Google : tu dois arriver sur Découvrir avec ton profil créé.
+5. Teste : sur ton téléphone, ouvre `/register`, touche le bouton Google, choisis ton compte Google (avec un seul compte, Google te connecte directement) : tu dois arriver sur la création du profil, puis, après les 4 étapes, sur « Vérifie ton profil ».
 
 Ces deux codes Google ne vont jamais dans le code ni dans le fichier `.env` : seulement dans Supabase.
 
@@ -138,7 +158,9 @@ Ces deux codes Google ne vont jamais dans le code ni dans le fichier `.env` : se
 
 Fais ce parcours avec deux comptes (par exemple toi et un proche), sur téléphone. Coche chaque ligne qui marche ; si une ligne ne marche pas, envoie-moi une capture d'écran.
 
-- [ ] Inscription en 4 étapes, e-mail de confirmation reçu, profil créé tout seul
+- [ ] Inscription par e-mail : compte créé, e-mail de confirmation reçu, le lien ouvre la création du profil
+- [ ] Après les 4 étapes : écran « Ton profil est prêt », puis « Vérifie ton profil » (selfie envoyé)
+- [ ] Le selfie apparaît dans /admin → Vérifications
 - [ ] Inscription avec Google
 - [ ] Profil complet avec photo, photo validée dans /admin
 - [ ] Chaque compte voit l'autre dans Découvrir
@@ -165,5 +187,5 @@ Ces points n'empêchent pas d'ouvrir le site, mais amélioreront l'expérience :
 - **E-mails de notification** : aujourd'hui, les notifications s'affichent dans le site (la cloche), mais aucun e-mail n'est envoyé.
 - **Paiement Mobile Money** : seul Stripe (carte bancaire) est prêt. Mobile Money demandera un autre prestataire.
 - **Renouvellement automatique du Premium** : pour l'instant, on paie un mois ou un an à la fois.
-- **Mentions légales, conditions d'utilisation et politique de confidentialité** : obligatoires pour un site public qui garde des données personnelles. Fais-les relire par un professionnel.
-- **Notifications sur téléphone** et installation comme une application.
+- **Pages légales** : elles sont en ligne (pied de page). Fais-les relire par un professionnel, et complète la forme juridique et le numéro RCCM dans `src/lib/legal.ts`.
+- **Notifications sur téléphone**.

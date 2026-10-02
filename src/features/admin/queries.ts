@@ -107,6 +107,32 @@ export const adminPhotosQuery = () =>
     },
   });
 
+/** Vérifications de profil en attente (photos privées : liens temporaires de 10 minutes). */
+export const adminVerificationsQuery = () =>
+  queryOptions({
+    queryKey: ["admin", "verifications"],
+    queryFn: async () => {
+      const rows = (await run(supabase.rpc("admin_list_pending_verifications"))) ?? [];
+      if (!rows.length) return [];
+      const { data: signed } = await supabase.storage.from("verifications").createSignedUrls(
+        rows.map((r) => r.storage_path),
+        60 * 10,
+      );
+      return rows.map((r, i) => ({ ...r, url: signed?.[i]?.signedUrl ?? null }));
+    },
+  });
+
+/** Décision sur une vérification, puis suppression de la photo (gardée le temps de l'examen). */
+export async function reviewVerification(verificationId: string, approve: boolean) {
+  const path = await run(
+    supabase.rpc("admin_review_verification", {
+      _verification_id: verificationId,
+      _approve: approve,
+    }),
+  );
+  if (path) await supabase.storage.from("verifications").remove([path]);
+}
+
 export const adminPaymentsQuery = () =>
   queryOptions({
     queryKey: ["admin", "payments"],

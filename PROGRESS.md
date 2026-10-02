@@ -1,6 +1,6 @@
 # YONA — Suivi de progression
 
-Dernière mise à jour : 2026-10-01
+Dernière mise à jour : 2026-10-02
 
 ## État des phases
 
@@ -23,6 +23,7 @@ Dernière mise à jour : 2026-10-01
 | 25 | Tests | ✅ Tous les tests relancés sur une base propre |
 | 26 | Validation finale + README | ✅ Terminé (types, lint, build, migrations à neuf, écrans, README) |
 | + | Nouvelle inscription fluide (captures wazz241) + Google | ✅ Terminé et testé (82/82, 2026-10-01) |
+| + | Corrections visuelles, pages légales, PWA, compte d'abord, pays/régions/villes, profils virtuels, vérification du profil | ✅ Terminé (2026-10-02) : types, lint, build, migrations rejouées sur PostgreSQL 16, écrans 320 à 1 440 px |
 
 ## Tâche en cours
 
@@ -34,6 +35,14 @@ Brancher les vrais services avant la mise en ligne : clés Stripe (`PAYMENT_PROV
 clé Anthropic, et un service d'e-mail (voir le README, section « Limites connues »).
 
 ## Décisions techniques
+
+- **2026-10-02** : logo, images du slider et vidéo servis depuis `public/` (les anciens liens
+  Lovable `/__l5e/…` ne marchent pas sur Vercel). Base géographique GeoNames (CC BY 4.0) en
+  fichiers par pays dans `public/geo/`. Inscription : compte d'abord, retour par `/login`
+  qui redirige seul. Profils virtuels : comptes `auth.users` sans mot de passe, fournisseur
+  « virtual », suppression par déclencheur (une seule par vrai membre, jamais bloquante).
+  Vérification : bucket privé `verifications`, examen dans /admin → Vérifications, photo
+  supprimée après décision, `profiles.verified_at` posé si validé. Migrations 0084-0085.
 
 - **Hébergement (2026-10-01)** : le propriétaire quitte Lovable. Site déployé sur **Vercel**
   (`vercel.json`, construction testée : préréglage Nitro « vercel », Node 22), base sur son
@@ -87,6 +96,13 @@ clé Anthropic, et un service d'e-mail (voir le README, section « Limites connu
   bannir bloque aussi la connexion (Supabase Auth, fonction serveur).
 
 ## Problèmes connus
+
+- Profils virtuels **sans photo** (initiale affichée) : aucune photo réaliste ne peut être
+  générée ici ; à ajouter plus tard (photos libres de droits ou générées, avec accord).
+- Base géographique : certains noms de régions sont en anglais dans GeoNames (ex. « Far
+  North », « Brittany ») ; les villes absentes peuvent être saisies à la main.
+- Scripts de test `docs/verification/inscription/` et 1.x : écrits pour l'ancien ordre
+  (profil puis compte) ; à adapter au parcours « compte d'abord ».
 
 - Non testé en réel : Stripe en ligne (testé avec un faux Stripe local), vraie clé
   Anthropic, envoi d'e-mails (aucun service d'e-mail : la préférence est seulement enregistrée).

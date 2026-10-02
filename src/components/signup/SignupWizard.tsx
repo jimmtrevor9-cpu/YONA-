@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PlaceSelect } from "@/components/signup/PlaceSelect";
 import { Slider } from "@/components/ui/slider";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -33,6 +34,13 @@ import {
   type SignupDraft,
   type SignupMethod,
 } from "@/features/auth/signup-draft";
+import {
+  findCountry,
+  loadCountries,
+  loadRegions,
+  type GeoCountry,
+  type GeoRegion,
+} from "@/features/profiles/geo";
 import { validatePhotoFile } from "@/features/profiles/photos";
 import {
   BIO_MAX_LENGTH,
@@ -47,32 +55,6 @@ import { cn } from "@/lib/utils";
 
 const WIZARD_STEPS = ["Crée ton profil", "Ta bio en 30 s", "Où es-tu ?", "Reste au courant"];
 const MAX_SIGNUP_PHOTOS = 3;
-
-const COUNTRIES = [
-  "Bénin",
-  "Burkina Faso",
-  "Burundi",
-  "Cameroun",
-  "Centrafrique",
-  "Congo",
-  "Côte d'Ivoire",
-  "Gabon",
-  "Guinée",
-  "Guinée équatoriale",
-  "Haïti",
-  "Madagascar",
-  "Mali",
-  "Niger",
-  "RD Congo",
-  "Rwanda",
-  "Sénégal",
-  "Tchad",
-  "Togo",
-  "Belgique",
-  "Canada",
-  "France",
-  "Suisse",
-];
 
 export interface WizardAccount {
   email: string;
@@ -194,8 +176,14 @@ export function SignupWizard({
     );
   }
 
+  // En mode « member », le compte existe déjà (Google ou e-mail) : ce bouton confirme
+  // et crée le profil.
   const finishLabel =
-    mode === "member" ? "Terminer" : method === "google" ? "M'inscrire avec Google" : "M'inscrire";
+    mode === "member"
+      ? "Confirmer et créer mon profil"
+      : method === "google"
+        ? "M'inscrire avec Google"
+        : "M'inscrire";
 
   return (
     <main className="min-h-screen bg-background px-5 pb-28 pt-6">
@@ -686,45 +674,7 @@ function StepPlace({
 }) {
   return (
     <>
-      <div className="space-y-2">
-        <Label htmlFor="country">Pays</Label>
-        <Input
-          id="country"
-          list="signup-countries"
-          autoComplete="country-name"
-          maxLength={PLACE_MAX_LENGTH}
-          value={draft.country}
-          onChange={(e) => update({ country: e.target.value })}
-          placeholder="Cameroun"
-        />
-        <datalist id="signup-countries">
-          {COUNTRIES.map((c) => (
-            <option key={c} value={c} />
-          ))}
-        </datalist>
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="region">Province / région</Label>
-        <Input
-          id="region"
-          autoComplete="address-level1"
-          maxLength={PLACE_MAX_LENGTH}
-          value={draft.region}
-          onChange={(e) => update({ region: e.target.value })}
-          placeholder="Littoral"
-        />
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="city">Ville</Label>
-        <Input
-          id="city"
-          autoComplete="address-level2"
-          maxLength={PLACE_MAX_LENGTH}
-          value={draft.city}
-          onChange={(e) => update({ city: e.target.value })}
-          placeholder="Douala"
-        />
-      </div>
+      <LocationFields draft={draft} update={update} />
       <div className="space-y-2">
         <p className="text-sm font-medium text-foreground">Pourquoi tu es là ?</p>
         <div className="grid grid-cols-2 gap-3" role="radiogroup" data-testid="choice-purpose">
@@ -815,6 +765,141 @@ function StepNews({
           </div>
         </div>
       ) : null}
+    </>
+  );
+}
+
+/**
+ * Pays → région → ville : trois listes liées (tous les pays du monde, puis les régions
+ * du pays choisi, puis les villes de la région choisie), avec recherche.
+ */
+function LocationFields({
+  draft,
+  update,
+}: {
+  draft: SignupDraft;
+  update: (patch: Partial<SignupDraft>) => void;
+}) {
+  const [countries, setCountries] = useState<GeoCountry[] | null>(null);
+  const [regions, setRegions] = useState<GeoRegion[] | null>(null);
+  const [loadingRegions, setLoadingRegions] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadCountries()
+      .then((list) => {
+        if (!cancelled) setCountries(list);
+      })
+      .catch(() => {
+        if (!cancelled) setCountries([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const country = countries ? findCountry(countries, draft.country) : undefined;
+  const countryCode = country?.code;
+
+  useEffect(() => {
+    if (!countryCode) {
+      setRegions(null);
+      return;
+    }
+    let cancelled = false;
+    setLoadingRegions(true);
+    loadRegions(countryCode)
+      .then((list) => {
+        if (!cancelled) setRegions(list);
+      })
+      .catch(() => {
+        if (!cancelled) setRegions([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingRegions(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [countryCode]);
+
+  const countryNames = useMemo(() => (countries ?? []).map((c) => c.name), [countries]);
+  const regionNames = useMemo(() => (regions ?? []).map((r) => r.name), [regions]);
+  const region = regions?.find((r) => r.name === draft.region);
+  const hasRegions = (regions?.length ?? 0) > 0;
+  const cityOptions = region?.cities ?? [];
+
+  return (
+    <>
+      <div className="space-y-2">
+        <Label htmlFor="country">Pays</Label>
+        <PlaceSelect
+          id="country"
+          value={draft.country}
+          options={countryNames}
+          loading={countries === null}
+          onChange={(name) => {
+            if (name !== draft.country) update({ country: name, region: "", city: "" });
+          }}
+          placeholder="Cameroun"
+          searchPlaceholder="Rechercher un pays"
+          emptyText="Aucun pays ne correspond."
+          allowCustom={countries?.length === 0}
+          maxLength={PLACE_MAX_LENGTH}
+        />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="region">Province / région</Label>
+        {draft.country && !loadingRegions && regions !== null && !hasRegions ? (
+          <Input
+            id="region"
+            autoComplete="address-level1"
+            maxLength={PLACE_MAX_LENGTH}
+            value={draft.region}
+            onChange={(e) => update({ region: e.target.value })}
+            placeholder="Facultatif"
+          />
+        ) : (
+          <PlaceSelect
+            id="region"
+            value={draft.region}
+            options={regionNames}
+            loading={loadingRegions}
+            disabled={!draft.country}
+            onChange={(name) => {
+              if (name !== draft.region) update({ region: name, city: "" });
+            }}
+            placeholder={draft.country ? "Choisis ta région" : "Choisis d'abord ton pays"}
+            searchPlaceholder="Rechercher une région"
+            emptyText="Aucune région ne correspond."
+            allowCustom={!country}
+            maxLength={PLACE_MAX_LENGTH}
+          />
+        )}
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="city">Ville</Label>
+        <PlaceSelect
+          id="city"
+          value={draft.city}
+          options={cityOptions}
+          disabled={!draft.country || (hasRegions && !draft.region)}
+          onChange={(name) => update({ city: name })}
+          placeholder={
+            !draft.country
+              ? "Choisis d'abord ton pays"
+              : hasRegions && !draft.region
+                ? "Choisis d'abord ta région"
+                : "Choisis ta ville"
+          }
+          searchPlaceholder={
+            cityOptions.length ? "Rechercher une ville" : "Tape le nom de ta ville"
+          }
+          emptyText="Tape le nom de ta ville."
+          allowCustom
+          maxLength={PLACE_MAX_LENGTH}
+        />
+      </div>
     </>
   );
 }

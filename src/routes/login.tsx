@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { AuthShell } from "@/components/AuthShell";
+import { RedirectingScreen } from "@/components/RedirectingScreen";
 import { GoogleIcon } from "@/components/signup/GoogleIcon";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,7 +30,7 @@ export const Route = createFileRoute("/login")({
 
 function LoginPage() {
   const navigate = useNavigate();
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, user, loading } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [pending, setPending] = useState(false);
@@ -66,6 +67,12 @@ function LoginPage() {
       setPending(false);
       toast.error(translateAuthError(error.message));
     }
+  }
+
+  // Retour de Google ou du lien de confirmation : la session s'ouvre, puis redirection
+  // automatique (création du profil ou découverte). Pas de formulaire entre-temps.
+  if (loading || (isAuthenticated && !pending)) {
+    return <RedirectingScreen message="Connexion en cours…" />;
   }
 
   return (

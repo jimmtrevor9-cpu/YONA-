@@ -14,11 +14,14 @@ import {
   X,
 } from "lucide-react";
 
-import logoAsset from "@/assets/yona-logo.png.asset.json";
 import { HeroStoryCarousel } from "@/components/HeroStoryCarousel";
+import { PresentationVideo } from "@/components/PresentationVideo";
 import { Reveal } from "@/components/Reveal";
+import { SiteFooter } from "@/components/SiteFooter";
 import { StepReveal } from "@/components/StepReveal";
+import { TestimonialMarquee } from "@/components/TestimonialMarquee";
 import { Button } from "@/components/ui/button";
+import { BRAND_LOGO_URL } from "@/lib/brand";
 import { APP_DESCRIPTION, APP_NAME, APP_TAGLINE, APP_VERSE } from "@/lib/config";
 
 export const Route = createFileRoute("/")({
@@ -49,7 +52,7 @@ const reasons = [
   {
     icon: Eye,
     title: "Ta vie privée d'abord",
-    text: "Mode discret, photos floutées : c'est toi qui décides qui peut te voir.",
+    text: "Mode discret, photos floutées : c'est toi qui décides qui peut te voir.",
   },
   {
     icon: Sparkles,
@@ -65,7 +68,7 @@ const safety = [
   },
   {
     title: "Modération attentive",
-    text: "Chaque message est filtré. Contenu déplacé ? Bloqué immédiatement.",
+    text: "Chaque message est filtré. Contenu déplacé ? Bloqué immédiatement.",
   },
   {
     title: "Contrôle total",
@@ -107,7 +110,7 @@ const freeFeatures = [
   "3 messages gratuits après chaque Match",
   "Ton Match peut aussi t'envoyer 3 messages gratuits",
   "Répondre aux messages reçus",
-  "Ice Breaker : idées de messages",
+  "Ice Breaker : idées de messages",
   "Support par email",
 ];
 
@@ -132,7 +135,7 @@ const freeLimits = [
 
 const premiumFeatures = [
   "Demandes de contact illimitées",
-  "Roi Salomon : questions illimitées",
+  "Roi Salomon : questions illimitées",
   "Voir qui t'a ajouté en favoris",
   "Voir qui a visité ton profil",
   "Jusqu'à 10 photos HD sur ton profil",
@@ -158,12 +161,12 @@ const commerce = [
   {
     icon: MessageCircle,
     title: "1 $",
-    text: "Quelqu'un t'intéresse vraiment ? Débloque cette conversation pendant 3 jours.",
+    text: "Quelqu'un t'intéresse vraiment ? Débloque cette conversation pendant 3 jours.",
   },
   {
     icon: Crown,
     title: "Premium",
-    text: "Plus aucune limite, pour maximiser tes chances : 5 $/mois ou 35 $/an.",
+    text: "Plus aucune limite, pour maximiser tes chances : 5 $/mois ou 35 $/an.",
   },
 ];
 
@@ -184,7 +187,7 @@ const testimonials = [
   },
   {
     quote:
-      "J'avais peur de m'exposer en ligne. Ici, le mode discret me rassure : je cherche sereinement.",
+      "J'avais peur de m'exposer en ligne. Ici, le mode discret me rassure : je cherche sereinement.",
     initial: "E",
     name: "Élise R., 25 ans",
     city: "Abidjan, Côte d'Ivoire",
@@ -193,15 +196,19 @@ const testimonials = [
 
 function StoreButtons() {
   return (
-    <div className="flex flex-nowrap items-center gap-3">
-      <Button asChild size="lg" className="btn-sheen h-12 flex-1 px-5 text-sm sm:text-base">
+    <div className="mx-auto flex w-full max-w-md flex-wrap items-center justify-center gap-3">
+      <Button
+        asChild
+        size="lg"
+        className="btn-sheen h-12 flex-[1_1_11rem] px-4 text-sm sm:px-5 sm:text-base"
+      >
         <Link to="/register">Créer mon profil</Link>
       </Button>
       <Button
         asChild
         size="lg"
         variant="secondary"
-        className="h-12 flex-1 px-5 text-sm sm:text-base"
+        className="h-12 flex-[1_1_11rem] px-4 text-sm sm:px-5 sm:text-base"
       >
         <Link to="/login">J'ai déjà un compte</Link>
       </Button>
@@ -228,7 +235,7 @@ function Index() {
             className="flex items-center rounded-md transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <img
-              src={logoAsset.url}
+              src={BRAND_LOGO_URL}
               alt={APP_NAME}
               width={64}
               height={64}
@@ -262,20 +269,25 @@ function Index() {
 
       {/* Hero */}
       <section className="gold-halo mx-auto max-w-5xl px-5 pb-16 pt-10">
-        <div className="grid items-start gap-10 md:grid-cols-2">
-          <div className="animate-rise">
+        <div className="grid grid-cols-1 items-start gap-10 md:grid-cols-2">
+          <div className="animate-rise min-w-0 text-center">
             <p className="eyebrow">{APP_TAGLINE}</p>
             <h1 className="mt-4 font-display text-4xl font-semibold leading-tight text-foreground sm:text-5xl">
               Rencontrer quelqu'un qui marche dans la même direction.
             </h1>
-            <p className="mt-5 max-w-prose text-base text-muted-foreground">{APP_DESCRIPTION}</p>
+            <p className="mx-auto mt-5 max-w-prose text-base text-muted-foreground">
+              {APP_DESCRIPTION}
+            </p>
             <div className="mt-8">
               <StoreButtons />
             </div>
             <p className="mt-8 text-[11px] text-muted-foreground">{APP_VERSE}</p>
           </div>
 
-          <section aria-labelledby="presentation-title" className="md:col-start-1 md:row-start-2">
+          <section
+            aria-labelledby="presentation-title"
+            className="min-w-0 text-center md:col-start-1 md:row-start-2"
+          >
             <div>
               <span className="eyebrow">Découvre YONA</span>
               <h2
@@ -284,7 +296,7 @@ function Index() {
               >
                 Une plateforme pensée pour toi
               </h2>
-              <p className="mt-3 text-sm text-muted-foreground sm:text-base">
+              <p className="mx-auto mt-3 max-w-prose text-sm text-muted-foreground sm:text-base">
                 1 minute pour comprendre comment YONA va t'aider à trouver ta moitié.
               </p>
               <Reveal
@@ -292,20 +304,16 @@ function Index() {
                 className="mt-6 overflow-hidden rounded-2xl border border-border bg-card shadow-sm"
               >
                 <div className="relative aspect-video w-full">
-                  <iframe
-                    src="https://player.vimeo.com/video/1226115080?autoplay=1&loop=1&controls=1&title=0&byline=0&portrait=0"
-                    title="Présentation de YONA"
-                    className="absolute inset-0 h-full w-full"
-                    allow="autoplay; fullscreen; picture-in-picture"
-                    allowFullScreen
-                    loading="lazy"
-                  />
+                  <PresentationVideo />
                 </div>
               </Reveal>
             </div>
           </section>
 
-          <Reveal variant="right" className="md:col-start-2 md:row-span-2 md:row-start-1 md:h-full">
+          <Reveal
+            variant="right"
+            className="min-w-0 md:col-start-2 md:row-span-2 md:row-start-1 md:h-full"
+          >
             <HeroStoryCarousel />
           </Reveal>
         </div>
@@ -340,13 +348,13 @@ function Index() {
 
       {/* Pourquoi */}
       <section id="pourquoi" className="mx-auto max-w-5xl px-5 py-16">
-        <p className="eyebrow">Pourquoi {APP_NAME}</p>
-        <h2 className="mt-3 font-display text-3xl font-semibold text-foreground sm:text-4xl">
+        <p className="eyebrow text-center">Pourquoi {APP_NAME}</p>
+        <h2 className="mt-3 text-balance text-center font-display text-3xl font-semibold text-foreground sm:text-4xl">
           Pas une app de flirt. Une app pour bâtir un foyer.
         </h2>
-        <p className="mt-4 max-w-prose text-muted-foreground">
-          Nous avons créé ce que nous aurions aimé trouver : une plateforme sérieuse, fidèle à nos
-          valeurs, sans les dérives des autres applications.
+        <p className="mx-auto mt-4 max-w-prose text-center text-muted-foreground">
+          Nous avons créé ce que nous aurions aimé trouver&nbsp;: une plateforme sérieuse, fidèle à
+          nos valeurs, sans les dérives des autres applications.
         </p>
         <div className="mt-10 grid gap-5 sm:grid-cols-2">
           {reasons.map((r, index) => (
@@ -354,7 +362,7 @@ function Index() {
               key={r.title}
               variant={index % 2 === 0 ? "left" : "right"}
               delay={(index % 2) * 80}
-              className="panel gold-thread p-6"
+              className="panel gold-thread flex flex-col items-center p-6 text-center"
             >
               <r.icon className="size-5 text-primary" aria-hidden />
               <h3 className="mt-4 font-display text-lg font-semibold text-foreground">{r.title}</h3>
@@ -366,17 +374,22 @@ function Index() {
 
       {/* Sécurité */}
       <section id="securite" className="mx-auto max-w-5xl px-5 py-16">
-        <p className="eyebrow">Sécurité</p>
-        <h2 className="mt-3 font-display text-3xl font-semibold text-foreground sm:text-4xl">
+        <p className="eyebrow text-center">Sécurité</p>
+        <h2 className="mt-3 text-balance text-center font-display text-3xl font-semibold text-foreground sm:text-4xl">
           Ta sécurité n'est pas négociable
         </h2>
-        <p className="mt-4 max-w-prose text-muted-foreground">
-          Faux profils, arnaques, messages déplacés : nous nous en occupons. Toi, concentre-toi sur
-          ta recherche.
+        <p className="mx-auto mt-4 max-w-prose text-center text-muted-foreground">
+          Faux profils, arnaques, messages déplacés&nbsp;: nous nous en occupons. Toi, concentre-toi
+          sur ta recherche.
         </p>
         <div className="mt-10 grid gap-5 sm:grid-cols-3">
           {safety.map((s, index) => (
-            <Reveal key={s.title} variant="fade" delay={index * 85} className="panel-2 p-6">
+            <Reveal
+              key={s.title}
+              variant="fade"
+              delay={index * 85}
+              className="panel-2 flex flex-col items-center p-6 text-center"
+            >
               <ShieldCheck className="size-5 text-primary" aria-hidden />
               <h3 className="mt-4 font-display text-base font-semibold text-foreground">
                 {s.title}
@@ -389,11 +402,11 @@ function Index() {
 
       {/* Étapes */}
       <section id="etapes" className="mx-auto max-w-5xl px-5 py-16">
-        <p className="eyebrow">4 étapes</p>
-        <h2 className="mt-3 font-display text-3xl font-semibold text-foreground sm:text-4xl">
+        <p className="eyebrow text-center">4 étapes</p>
+        <h2 className="mt-3 text-balance text-center font-display text-3xl font-semibold text-foreground sm:text-4xl">
           De l'inscription au mariage
         </h2>
-        <p className="mt-4 max-w-prose text-muted-foreground">
+        <p className="mx-auto mt-4 max-w-prose text-center text-muted-foreground">
           Simple, rapide, sincère. Celle ou celui que tu cherches est peut-être à quelques clics.
         </p>
         <div className="mt-10 grid gap-5 sm:grid-cols-2">
@@ -427,25 +440,27 @@ function Index() {
 
       {/* Tarifs */}
       <section id="tarifs" className="mx-auto max-w-5xl px-5 py-16">
-        <p className="eyebrow">Tarifs</p>
-        <h2 className="mt-3 font-display text-[1.6rem] font-semibold leading-tight text-foreground sm:text-4xl">
-          <span className="whitespace-nowrap">Gratuit pour commencer.</span>{" "}
-          <span className="whitespace-nowrap sm:whitespace-normal">
-            Premium pour aller plus loin.
-          </span>
+        <p className="eyebrow text-center">Tarifs</p>
+        <h2 className="mt-3 text-balance text-center font-display text-[1.6rem] font-semibold leading-tight text-foreground sm:text-4xl">
+          <span className="inline-block">Gratuit pour commencer.</span>{" "}
+          <span className="inline-block">Premium pour aller plus loin.</span>
         </h2>
-        <p className="mt-4 max-w-prose text-muted-foreground">
+        <p className="mx-auto mt-4 max-w-prose text-center text-muted-foreground">
           Tu peux utiliser {APP_NAME} gratuitement. Pour maximiser tes chances, passe en Premium.
         </p>
 
         <div className="mt-10 grid gap-5 md:grid-cols-2">
-          <Reveal variant="left" className="panel-2 p-7">
-            <h3 className="font-display text-xl font-semibold text-foreground">Gratuit</h3>
-            <p className="mt-1 text-sm text-muted-foreground">
+          <Reveal variant="left" className="panel-2 flex flex-col p-7">
+            <h3 className="text-center font-display text-xl font-semibold text-foreground">
+              Gratuit
+            </h3>
+            <p className="mt-1 text-center text-sm text-muted-foreground">
               Découvre la plateforme et commence à faire des rencontres gratuitement.
             </p>
-            <p className="mt-5 font-display text-3xl font-semibold text-foreground">0 $</p>
-            <p className="text-xs text-muted-foreground">Pour toujours</p>
+            <p className="mt-5 text-center font-display text-3xl font-semibold text-foreground">
+              0 $
+            </p>
+            <p className="text-center text-xs text-muted-foreground">Pour toujours</p>
             <ul className="mt-6 space-y-2 text-sm text-muted-foreground">
               {freeFeatures.map((f) => (
                 <li key={f} className="flex gap-2">
@@ -460,12 +475,15 @@ function Index() {
                 </li>
               ))}
             </ul>
-            <div className="mt-6 rounded-xl border border-border bg-accent/40 p-4 text-sm text-muted-foreground">
-              <p className="font-medium text-foreground">Besoin de continuer une conversation ?</p>
+            <div className="mt-6 rounded-xl border border-border bg-accent/40 p-4 text-center text-sm text-muted-foreground">
+              <p className="font-medium text-foreground">
+                Besoin de continuer une conversation&nbsp;?
+              </p>
               <p className="mt-2">
-                Après tes 3 messages gratuits : <strong className="text-foreground">1 $</strong>{" "}
-                pour une messagerie illimitée pendant 3 jours avec cette personne. Le paiement
-                débloque uniquement cette conversation, pour vous deux.
+                Après tes 3 messages gratuits&nbsp;:{" "}
+                <strong className="text-foreground">1 $</strong> pour une messagerie illimitée
+                pendant 3 jours avec cette personne. Le paiement débloque uniquement cette
+                conversation, pour vous deux.
               </p>
             </div>
             <Button asChild variant="secondary" size="lg" className="mt-7 w-full">
@@ -473,20 +491,20 @@ function Index() {
             </Button>
           </Reveal>
 
-          <Reveal variant="right" delay={80} className="panel gold-thread p-7">
-            <span className="eyebrow">Le plus choisi</span>
-            <h3 className="mt-2 flex items-center gap-2 font-display text-xl font-semibold text-foreground">
+          <Reveal variant="right" delay={80} className="panel gold-thread flex flex-col p-7">
+            <span className="eyebrow text-center">Le plus choisi</span>
+            <h3 className="mt-2 flex items-center justify-center gap-2 font-display text-xl font-semibold text-foreground">
               <Crown className="size-5 text-primary" aria-hidden />
               Premium
             </h3>
-            <p className="mt-1 text-sm text-muted-foreground">
+            <p className="mt-1 text-center text-sm text-muted-foreground">
               Maximise tes chances de trouver la bonne personne.
             </p>
-            <p className="mt-5 font-display text-3xl font-semibold text-foreground">
+            <p className="mt-5 text-center font-display text-3xl font-semibold text-foreground">
               5 $ <span className="text-base font-normal text-muted-foreground">/ mois</span>
             </p>
-            <p className="text-xs text-muted-foreground">ou 35 $ / an</p>
-            <p className="mt-6 text-sm font-medium text-foreground">
+            <p className="text-center text-xs text-muted-foreground">ou 35 $ / an</p>
+            <p className="mt-6 text-center text-sm font-medium text-foreground">
               Tout le Gratuit, sans les limites
             </p>
             <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
@@ -505,7 +523,12 @@ function Index() {
 
         <div className="mt-10 grid gap-5 sm:grid-cols-3">
           {commerce.map((c, index) => (
-            <Reveal key={c.title} variant="up" delay={index * 75} className="panel-2 p-6">
+            <Reveal
+              key={c.title}
+              variant="up"
+              delay={index * 75}
+              className="panel-2 flex flex-col items-center p-6 text-center"
+            >
               <c.icon className="size-5 text-primary" aria-hidden />
               <h3 className="mt-4 font-display text-base font-semibold text-foreground">
                 {c.title}
@@ -517,42 +540,22 @@ function Index() {
       </section>
 
       {/* Témoignages */}
-      <section className="mx-auto max-w-5xl px-5 py-16">
-        <p className="eyebrow">Ils l'ont vécu</p>
-        <h2 className="mt-3 font-display text-3xl font-semibold text-foreground sm:text-4xl">
+      <section className="py-16">
+        <p className="eyebrow px-5 text-center">Ils l'ont vécu</p>
+        <h2 className="mt-3 text-balance px-5 text-center font-display text-3xl font-semibold text-foreground sm:text-4xl">
           Des histoires qui finissent bien
         </h2>
-        <p className="mt-4 max-w-prose text-muted-foreground">
-          Ils ont rencontré leur moitié sur {APP_NAME}. Et toi ?
+        <p className="mx-auto mt-4 max-w-prose px-5 text-center text-muted-foreground">
+          Ils ont rencontré leur moitié sur {APP_NAME}. Et toi&nbsp;?
         </p>
-        <div className="mt-10 grid gap-5 sm:grid-cols-3">
-          {testimonials.map((t, index) => (
-            <Reveal
-              as="figure"
-              key={t.name}
-              variant="depth"
-              delay={index * 90}
-              className="panel-2 p-6"
-            >
-              <MessageCircle className="size-5 text-primary" aria-hidden />
-              <blockquote className="mt-4 text-sm text-muted-foreground">“{t.quote}”</blockquote>
-              <figcaption className="mt-5 flex items-center gap-3">
-                <span className="flex size-9 items-center justify-center rounded-full bg-accent font-display text-sm text-accent-foreground">
-                  {t.initial}
-                </span>
-                <span>
-                  <span className="block text-sm font-medium text-foreground">{t.name}</span>
-                  <span className="block text-xs text-muted-foreground">{t.city}</span>
-                </span>
-              </figcaption>
-            </Reveal>
-          ))}
-        </div>
+        <Reveal variant="fade" className="mx-auto mt-10 max-w-6xl">
+          <TestimonialMarquee items={testimonials} />
+        </Reveal>
       </section>
 
       {/* Verset + CTA final */}
       <section className="mx-auto max-w-5xl px-5 pb-20">
-        <Reveal variant="curtain" className="panel gold-halo gold-thread p-10 text-center">
+        <Reveal variant="curtain" className="panel gold-halo gold-thread p-6 text-center sm:p-10">
           <h2 className="font-display text-2xl font-semibold leading-snug text-foreground sm:text-3xl">
             « Il n'est pas bon que l'homme soit seul »
           </h2>
@@ -561,19 +564,18 @@ function Index() {
             Celle ou celui que tu cherches est peut-être ici. Fais le premier pas.
           </p>
           <div className="mt-7 flex justify-center">
-            <Button asChild size="lg" className="btn-sheen">
+            <Button
+              asChild
+              size="lg"
+              className="btn-sheen h-auto min-h-11 max-w-full whitespace-normal py-3 text-center leading-snug"
+            >
               <Link to="/register">Créer mon profil gratuitement</Link>
             </Button>
           </div>
         </Reveal>
       </section>
 
-      <footer className="border-t border-border">
-        <div className="mx-auto flex max-w-5xl flex-col gap-3 px-5 py-8 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-          <span className="font-display text-base text-foreground">{APP_NAME}</span>
-          <span>{APP_TAGLINE}</span>
-        </div>
-      </footer>
+      <SiteFooter />
     </main>
   );
 }

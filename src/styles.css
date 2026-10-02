@@ -413,3 +413,48 @@
     animation: none;
   }
 }
+
+/* Témoignages « Des histoires qui finissent bien » — défilement horizontal continu (ajout) */
+@keyframes yona-marquee-ltr {
+  from {
+    transform: translate3d(-50%, 0, 0);
+  }
+  to {
+    transform: translate3d(0, 0, 0);
+  }
+}
+.yona-marquee {
+  overflow: hidden;
+  padding-block: 0.25rem;
+  mask-image: linear-gradient(to right, transparent, black 6%, black 94%, transparent);
+}
+.yona-marquee-track {
+  display: flex;
+  width: max-content;
+  align-items: stretch;
+  animation: yona-marquee-ltr 60s linear infinite;
+}
+.yona-marquee:hover .yona-marquee-track,
+.yona-marquee[data-held="true"] .yona-marquee-track,
+.yona-marquee:focus-within .yona-marquee-track {
+  animation-play-state: paused;
+}
+.yona-marquee-item {
+  flex: none;
+  width: 17.5rem;
+  margin-right: 1.25rem;
+}
+@media (min-width: 640px) {
+  .yona-marquee-item {
+    width: 21rem;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .yona-marquee {
+    overflow-x: auto;
+    mask-image: none;
+  }
+  .yona-marquee-track {
+    animation: none;
+  }
+}
