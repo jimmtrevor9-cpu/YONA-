@@ -1,4 +1,4 @@
-// Génère la migration des profils virtuels (10 par pays, 27 pays) et des positions de
+// Génère la migration des profils virtuels (3 par pays, 27 pays) et des positions de
 // pays (public.geo_countries), à partir de scripts/data/virtual-profiles-countries.mjs
 // et de la base géographique public/geo/.
 //
@@ -8,7 +8,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 
 import { COUNTRIES } from "./data/virtual-profiles-countries.mjs";
 
-const PER_COUNTRY = 10;
+const PER_COUNTRY = 3;
 const OUT = [
   "supabase/migrations/20261002110000_profils_virtuels_donnees.sql",
   "drizzle/migrations/0085_profils_virtuels_donnees.sql",
@@ -153,7 +153,7 @@ function birthDate(age) {
 
 const rows = [];
 const bios = new Set();
-for (const country of COUNTRIES) {
+for (const [countryIndex, country] of COUNTRIES.entries()) {
   const meta = countries.find((c) => c.code === country.code);
   if (!meta) throw new Error(`Pays inconnu : ${country.code}`);
   const regions = geo(country.code).regions.filter(
@@ -168,7 +168,9 @@ for (const country of COUNTRIES) {
   const men = shuffle(country.men);
   const lastNames = shuffle(country.last);
   for (let i = 0; i < PER_COUNTRY; i++) {
-    const gender = i % 2 === 0 ? "female" : "male";
+    // Nombre impair par pays : on commence une fois par une femme, une fois par un
+    // homme, d'un pays à l'autre, pour garder un total presque égal.
+    const gender = (i + countryIndex) % 2 === 0 ? "female" : "male";
     const firstName = gender === "female" ? women[Math.floor(i / 2)] : men[Math.floor(i / 2)];
     const lastName = lastNames[i % lastNames.length];
     const place = places[i % places.length];
@@ -338,7 +340,7 @@ const header = `-- ============================================================
 --
 -- * public.geo_countries : position de chaque pays (base GeoNames), pour « le pays le
 --   plus proche » quand il n'y a plus de profil virtuel dans le pays d'un nouveau membre.
--- * ${rows.length} profils virtuels : ${PER_COUNTRY} par pays (${PER_COUNTRY / 2} femmes, ${PER_COUNTRY / 2} hommes), ${COUNTRIES.length} pays,
+-- * ${rows.length} profils virtuels : ${PER_COUNTRY} par pays (${rows.filter((r) => r.gender === "female").length} femmes et ${rows.filter((r) => r.gender === "male").length} hommes au total), ${COUNTRIES.length} pays,
 --   22 à 48 ans. Ce sont des comptes sans mot de passe (connexion impossible), marqués
 --   « virtual » dans le compte et is_virtual dans le profil. Aucune photo : la carte
 --   affiche l'initiale, en attendant de vraies photos.
