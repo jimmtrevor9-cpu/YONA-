@@ -3,6 +3,7 @@ import { ArrowLeft, Camera, ImagePlus, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
+import { PlaceSelect } from "@/components/signup/PlaceSelect";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -33,6 +34,13 @@ import {
   type SignupDraft,
   type SignupMethod,
 } from "@/features/auth/signup-draft";
+import {
+  loadCountries,
+  loadRegions,
+  normalizePlace,
+  type GeoCountry,
+  type GeoRegion,
+} from "@/features/geo/geo";
 import { validatePhotoFile } from "@/features/profiles/photos";
 import {
   BIO_MAX_LENGTH,
@@ -47,32 +55,6 @@ import { cn } from "@/lib/utils";
 
 const WIZARD_STEPS = ["Crée ton profil", "Ta bio en 30 s", "Où es-tu ?", "Reste au courant"];
 const MAX_SIGNUP_PHOTOS = 3;
-
-const COUNTRIES = [
-  "Bénin",
-  "Burkina Faso",
-  "Burundi",
-  "Cameroun",
-  "Centrafrique",
-  "Congo",
-  "Côte d'Ivoire",
-  "Gabon",
-  "Guinée",
-  "Guinée équatoriale",
-  "Haïti",
-  "Madagascar",
-  "Mali",
-  "Niger",
-  "RD Congo",
-  "Rwanda",
-  "Sénégal",
-  "Tchad",
-  "Togo",
-  "Belgique",
-  "Canada",
-  "France",
-  "Suisse",
-];
 
 export interface WizardAccount {
   email: string;
@@ -195,7 +177,11 @@ export function SignupWizard({
   }
 
   const finishLabel =
-    mode === "member" ? "Terminer" : method === "google" ? "M'inscrire avec Google" : "M'inscrire";
+    mode === "member"
+      ? "Confirmer la création de mon profil"
+      : method === "google"
+        ? "M'inscrire avec Google"
+        : "M'inscrire";
 
   return (
     <main className="min-h-screen bg-background px-5 pb-28 pt-6">
@@ -273,7 +259,7 @@ export function SignupWizard({
       <div className="fixed inset-x-0 bottom-0 border-t border-border bg-background/95 px-5 py-4 backdrop-blur">
         <div className="mx-auto flex w-full max-w-md flex-col gap-2">
           <Button
-            className="h-12 w-full rounded-full text-base"
+            className="h-auto min-h-12 w-full whitespace-normal rounded-full px-6 py-3 text-base leading-snug"
             disabled={pending}
             onClick={next}
             data-testid="signup-next"
@@ -684,44 +670,74 @@ function StepPlace({
   draft: SignupDraft;
   update: (patch: Partial<SignupDraft>) => void;
 }) {
+  // Listes dépendantes : le pays donne ses régions, la région donne ses villes.
+  const [countries, setCountries] = useState<GeoCountry[] | null>(null);
+  const [regions, setRegions] = useState<{ code: string; list: GeoRegion[] } | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    loadCountries()
+      .then((list) => !cancelled && setCountries(list))
+      .catch(() => !cancelled && setCountries([]));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  const countryCode =
+    countries?.find((c) => normalizePlace(c.name) === normalizePlace(draft.country))?.code ?? "";
+  useEffect(() => {
+    if (!countryCode) return;
+    let cancelled = false;
+    loadRegions(countryCode)
+      .then((list) => !cancelled && setRegions({ code: countryCode, list }))
+      .catch(() => !cancelled && setRegions({ code: countryCode, list: [] }));
+    return () => {
+      cancelled = true;
+    };
+  }, [countryCode]);
+  const regionList = regions && regions.code === countryCode ? regions.list : null;
+  const countryNames = useMemo(() => (countries ?? []).map((c) => c.name), [countries]);
+  const regionNames = useMemo(() => (regionList ?? []).map((r) => r.name), [regionList]);
+  const cityNames = useMemo(() => {
+    if (!regionList) return [];
+    const region = regionList.find((r) => normalizePlace(r.name) === normalizePlace(draft.region));
+    return region ? region.cities : [];
+  }, [regionList, draft.region]);
+
   return (
     <>
       <div className="space-y-2">
         <Label htmlFor="country">Pays</Label>
-        <Input
+        <PlaceSelect
           id="country"
-          list="signup-countries"
-          autoComplete="country-name"
-          maxLength={PLACE_MAX_LENGTH}
           value={draft.country}
-          onChange={(e) => update({ country: e.target.value })}
+          options={countryNames}
+          loading={!countries}
+          maxLength={PLACE_MAX_LENGTH}
+          onChange={(country) => update({ country, region: "", city: "" })}
           placeholder="Cameroun"
         />
-        <datalist id="signup-countries">
-          {COUNTRIES.map((c) => (
-            <option key={c} value={c} />
-          ))}
-        </datalist>
       </div>
       <div className="space-y-2">
         <Label htmlFor="region">Province / région</Label>
-        <Input
+        <PlaceSelect
           id="region"
-          autoComplete="address-level1"
-          maxLength={PLACE_MAX_LENGTH}
           value={draft.region}
-          onChange={(e) => update({ region: e.target.value })}
+          options={regionNames}
+          loading={!!countryCode && !regionList}
+          maxLength={PLACE_MAX_LENGTH}
+          onChange={(region) => update({ region, city: "" })}
           placeholder="Littoral"
         />
       </div>
       <div className="space-y-2">
         <Label htmlFor="city">Ville</Label>
-        <Input
+        <PlaceSelect
           id="city"
-          autoComplete="address-level2"
-          maxLength={PLACE_MAX_LENGTH}
           value={draft.city}
-          onChange={(e) => update({ city: e.target.value })}
+          options={cityNames}
+          loading={!!countryCode && !regionList}
+          maxLength={PLACE_MAX_LENGTH}
+          onChange={(city) => update({ city })}
           placeholder="Douala"
         />
       </div>

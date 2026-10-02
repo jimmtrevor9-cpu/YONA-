@@ -35,6 +35,8 @@ interface ProfileCardProps {
   isPremium?: boolean;
   /** Score de compatibilité (0 à 100), s'il peut être calculé. */
   compatibility?: number | null;
+  /** Visuel affiché en haut de la carte (photo des profils d'exemple). */
+  media?: ReactNode;
 }
 
 /** Carte éditoriale d'un profil avec son action Like. */
@@ -51,12 +53,14 @@ export function ProfileCard({
   footer,
   isPremium = false,
   compatibility = null,
+  media,
 }: ProfileCardProps) {
   const age = computeAge(profile.birth_date);
   const place = [profile.city, profile.country].filter(Boolean).join(", ");
 
   return (
     <article className="panel gold-thread animate-rise p-5">
+      {media}
       <header className="flex items-baseline justify-between gap-3">
         <h3 className="font-display text-lg font-semibold text-foreground">
           {profile.first_name ?? "Profil"}

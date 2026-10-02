@@ -1398,6 +1398,7 @@ export type Database = {
       }
       clear_my_location: { Args: never; Returns: undefined }
       contains_phone_number: { Args: { _text: string }; Returns: boolean }
+      count_registered_members: { Args: never; Returns: number }
       create_support_ticket: {
         Args: { _message: string; _subject: string }
         Returns: string

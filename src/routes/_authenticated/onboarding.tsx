@@ -22,6 +22,7 @@ import {
 import { FREE_MAX_PHOTOS } from "@/features/monetization/rules";
 import { personalInfoServerError } from "@/features/profiles/personal-info";
 import { preferencesServerError } from "@/features/profiles/preferences";
+import { uploadPhoto } from "@/features/profiles/photos";
 import { onboardingDataQuery } from "@/features/profiles/queries";
 import { supabase } from "@/integrations/supabase/client";
 import { APP_NAME } from "@/lib/config";
@@ -79,22 +80,37 @@ function OnboardingPage() {
 
   const save = useCallback(
     async (draft: SignupDraft, photos: File[]) => {
-      const result = await applySignupDraft(userId, draft, photos);
+      // Le profil est enregistré d'abord (rapide), puis on part tout de suite vers les
+      // profils ; les photos continuent de s'envoyer en arrière-plan.
+      await applySignupDraft(userId, draft, []);
       clearLocalDraft();
       try {
         window.localStorage.setItem(welcomeKey(userId), "pending");
+        window.localStorage.setItem(`${welcomeKey(userId)}.photos`, String(photos.length));
       } catch {
         // Les fenêtres d'accueil ne s'afficheront simplement pas.
       }
       await queryClient.invalidateQueries({ queryKey: ["profiles"] });
-      await queryClient.invalidateQueries({ queryKey: ["photos"] });
-      if (result.photoErrors) {
-        toast.error(
-          "Une photo n'a pas pu être ajoutée. Vous pourrez la remettre depuis votre profil.",
-        );
-      }
       toast.success("Votre profil est prêt.");
       navigate({ to: "/discover", replace: true });
+      if (photos.length) {
+        void (async () => {
+          let photoErrors = 0;
+          for (const file of photos) {
+            try {
+              await uploadPhoto(userId, file);
+            } catch {
+              photoErrors += 1;
+            }
+          }
+          await queryClient.invalidateQueries({ queryKey: ["photos"] });
+          if (photoErrors) {
+            toast.error(
+              "Une photo n'a pas pu être ajoutée. Vous pourrez la remettre depuis votre profil.",
+            );
+          }
+        })();
+      }
     },
     [userId, queryClient, navigate],
   );
@@ -162,8 +178,12 @@ function OnboardingPage() {
         onChange={remember}
         onFinish={(draft, photos) => {
           setPending(true);
+          // Écran de chargement le temps d'enregistrer, puis direction les profils.
+          setPhase("saving");
           void save(draft, photos).catch((error: unknown) => {
             setPending(false);
+            setInitial({ ...draft, termsAcceptedAt: null });
+            setPhase("wizard");
             toast.error(saveErrorMessage(error));
           });
         }}

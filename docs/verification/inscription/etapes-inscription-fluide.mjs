@@ -1,13 +1,16 @@
-// YONA — Nouvelle inscription « fluide » (parcours des captures d'écran + Google).
-// Vérifie : écran d'accueil de l'inscription, parcours en 4 étapes, conditions (18 ans),
-// création du compte par e-mail (même appareil et autre appareil), bouton Google,
-// retour de Google (profil créé depuis le brouillon), connexion Google directe,
-// fenêtres d'accueil après inscription, formulaire complet gardé pour la foi.
+// YONA — Inscription (parcours du 2 octobre 2026).
+// Parcours : accueil → compte (Google, ou e-mail + mot de passe) → création du profil en
+// 4 étapes sur /onboarding → conditions (18 ans) → page des profils.
+// Vérifie : écran d'accueil, compte par e-mail (même appareil et autre appareil), bouton
+// Google (ouvre Google tout de suite, sans « choix du compte » imposé), retour de Google,
+// connexion Google directe, listes Pays / Région / Ville, fenêtres d'accueil, formulaire
+// complet gardé pour la foi.
 // Usage : SUPABASE_SERVICE_ROLE_KEY=… PLAYWRIGHT_ROOT="$(npm root -g)" node docs/verification/inscription/etapes-inscription-fluide.mjs
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 
 import { BASE, createAccounts, createChecker, rest, sql } from "../outils/base-favoris.mjs";
+import { choisirLieu } from "../outils/inscription.mjs";
 
 const { chromium } = createRequire(`${process.env.PLAYWRIGHT_ROOT ?? ""}/`)("playwright");
 const MAILPIT = process.env.MAILPIT ?? "http://127.0.0.1:54324";
@@ -88,14 +91,23 @@ async function fillSteps(page, { firstName, gender = "Femme", looking = "Hommes"
   await next(page);
   await page.getByTestId("chips-passions").getByRole("checkbox", { name: "Louange" }).click();
   await page.getByRole("button", { name: "Continuer" }).click();
-  await page.fill("#country", "Cameroun");
-  await page.fill("#region", "Centre");
-  await page.fill("#city", "Yaoundé");
+  await choisirLieu(page, "country", "Cameroun");
+  await choisirLieu(page, "region", "Centre");
+  await choisirLieu(page, "city", "Yaoundé");
   await page
     .getByTestId("choice-purpose")
     .getByRole("radio", { name: "Relation sérieuse" })
     .click();
   await next(page);
+}
+
+/** Crée le compte par e-mail depuis /register (formulaire « Créer mon compte »). */
+async function createAccount(page, email, password = PWD, start = "signup-start") {
+  await page.goto(`${BASE}/register`, { waitUntil: "networkidle" });
+  await page.getByTestId(start).click();
+  await page.fill("#email", email);
+  await page.fill("#password", password);
+  await page.getByTestId("account-submit").click();
 }
 
 async function acceptTerms(page) {
@@ -166,8 +178,48 @@ check(
 /* ------------------------------------------------------------------ */
 await page.getByTestId("signup-start").click();
 check(
-  "B1 : étape 1 sur 4 « Crée ton profil » avec barre de progression",
-  (await page.getByText("Étape 1 sur 4").isVisible()) &&
+  "B0 : « Créer mon compte » → formulaire e-mail + mot de passe d'abord",
+  (await page.getByTestId("account-form").isVisible()) &&
+    (await page.locator("#email").getAttribute("type")) === "email" &&
+    (await page.locator("#password").getAttribute("minlength")) === "8",
+);
+await page.fill("#email", "pas-un-email");
+await page.fill("#password", PWD);
+await page.getByTestId("account-submit").click();
+let t = await toast(page);
+check("B0a : e-mail invalide refusé", t.includes("e-mail"), t);
+const emailB = mail("b");
+await page.fill("#email", emailB);
+await page.fill("#password", "court");
+await page.getByTestId("account-submit").click();
+t = await toast(page);
+check(
+  "B0b : mot de passe de moins de 8 caractères refusé (aucun compte)",
+  t.includes("8 caractères") && userId(emailB) === "",
+  t,
+);
+await page.fill("#password", PWD);
+await page.getByTestId("account-submit").click();
+await page.getByText("Consultez votre boîte mail").waitFor({ timeout: 10000 });
+check(
+  "B0c : compte créé → « Consultez votre boîte mail »",
+  await page.getByText(emailB).isVisible(),
+);
+const idB = userId(emailB);
+check(
+  "B0d : profil pas encore visible avant la création du profil",
+  sql(`select status from public.profiles where user_id='${idB}'`) === "incomplete",
+);
+await page.goto(await confirmLink(emailB), { waitUntil: "networkidle" });
+await page.waitForURL(/\/onboarding$/, { timeout: 20000 }).catch(() => {});
+await page
+  .getByText("Étape 1 sur 4")
+  .waitFor({ timeout: 8000 })
+  .catch(() => {});
+check(
+  "B1 : lien de confirmation → étape 1 sur 4 « Crée ton profil » avec barre de progression",
+  page.url().endsWith("/onboarding") &&
+    (await page.getByText("Étape 1 sur 4").isVisible()) &&
     (await heading(page)) === "Crée ton profil" &&
     (await page.getByTestId("signup-progress").isVisible()),
 );
@@ -180,7 +232,7 @@ check(
   await page.getByText("continuer sans photo").isVisible(),
 );
 await next(page);
-let t = await toast(page);
+t = await toast(page);
 check(
   "B4 : Suivant sans prénom → message clair, on reste",
   t.includes("prénom") && (await heading(page)) === "Crée ton profil",
@@ -267,9 +319,48 @@ check(
     purposes.some((p) => p.includes("Amitié chrétienne")),
   purposes.join(" / "),
 );
-await page.fill("#country", "Cameroun");
-await page.fill("#region", "Littoral");
-await page.fill("#city", "Douala");
+const listsWithChevron = await page.evaluate(() =>
+  ["country", "region", "city"].every((id) =>
+    document.querySelector(`[data-testid=place-${id}] svg.lucide-chevron-down`),
+  ),
+);
+check("B18a : Pays, Province / région, Ville : listes avec la même flèche", listsWithChevron);
+await choisirLieu(page, "country", "Gabon");
+await choisirLieu(page, "region", "Estuaire Province");
+await page.getByTestId("place-city").click();
+const gabonCities = await page.getByRole("option").allTextContents();
+await page.keyboard.press("Escape");
+check(
+  "B18b : villes de la région choisie (Estuaire → Libreville)",
+  gabonCities.includes("Libreville") && !gabonCities.includes("Franceville"),
+  gabonCities.join(", "),
+);
+await choisirLieu(page, "city", "Libreville");
+await choisirLieu(page, "country", "Cameroun");
+check(
+  "B18c : changer de pays vide la région et la ville",
+  (await page.getByTestId("place-region").getAttribute("class")).includes("text-muted") &&
+    (await page.getByTestId("place-city").getAttribute("class")).includes("text-muted"),
+);
+await page.getByTestId("place-country").click();
+await page.getByTestId("place-country-search").fill("cote");
+const found = await page.getByRole("option").allTextContents();
+await page.keyboard.press("Escape");
+check(
+  "B18d : recherche sans accent (« cote » → Côte d'Ivoire), tous les pays du monde",
+  found.includes("Côte d'Ivoire") &&
+    (await (await fetch(`${BASE}/geo/countries.json`)).json()).length >= 240,
+  found.join(", "),
+);
+await choisirLieu(page, "region", "Littoral");
+await choisirLieu(page, "city", "Douala");
+await choisirLieu(page, "region", "Centre");
+check(
+  "B18e : changer de région vide la ville",
+  (await page.getByTestId("place-city").getAttribute("class")).includes("text-muted"),
+);
+await choisirLieu(page, "region", "Littoral");
+await choisirLieu(page, "city", "Douala");
 await next(page);
 t = await toast(page);
 check("B19 : sans « Pourquoi tu es là ? » → message clair", t.includes("pourquoi"), t);
@@ -278,21 +369,10 @@ await next(page);
 check("B20 : étape 4 « Reste au courant »", (await heading(page)) === "Reste au courant");
 await page.getByTestId("choice-marketing").getByRole("radio", { name: "Oui" }).click();
 check(
-  "B21 : bouton « M'inscrire »",
-  (await page.getByTestId("signup-next").textContent()) === "M'inscrire",
+  "B21 : bouton « Confirmer la création de mon profil », sans e-mail ni mot de passe",
+  (await page.getByTestId("signup-next").textContent()) === "Confirmer la création de mon profil" &&
+    (await page.locator("#email").count()) === 0,
 );
-await page.fill("#email", "pas-un-email");
-await page.fill("#password", PWD);
-await next(page);
-t = await toast(page);
-check("B22 : e-mail invalide refusé", t.includes("e-mail"), t);
-const emailB = mail("b");
-await page.fill("#email", emailB);
-await page.fill("#password", "court");
-await next(page);
-t = await toast(page);
-check("B23 : mot de passe de moins de 8 caractères refusé", t.includes("8 caractères"), t);
-await page.fill("#password", PWD);
 await next(page);
 await page.getByTestId("terms-dialog").waitFor();
 check(
@@ -305,31 +385,18 @@ check(
 );
 await page.getByRole("button", { name: "Annuler" }).click();
 await page.getByTestId("terms-dialog").waitFor({ state: "hidden" });
-check("B26 : Annuler → aucun compte créé", userId(emailB) === "");
-await next(page);
-await acceptTerms(page);
-await page.getByText("Consultez votre boîte mail").waitFor({ timeout: 10000 });
 check(
-  "B27 : compte créé → « Consultez votre boîte mail »",
-  await page.getByText(emailB).isVisible(),
-);
-const idB = userId(emailB);
-check(
-  "B28 : réponses gardées avec le compte (métadonnées, sans photo)",
-  sql(`select raw_user_meta_data->'signup_draft'->>'city' from auth.users where id='${idB}'`) ===
-    "Douala",
-);
-check(
-  "B29 : profil pas encore visible avant confirmation",
+  "B26 : Annuler → profil pas encore créé",
   sql(`select status from public.profiles where user_id='${idB}'`) === "incomplete",
 );
-const linkB = await confirmLink(emailB);
-await page.goto(linkB, { waitUntil: "networkidle" });
+await next(page);
+await acceptTerms(page);
+const acceptedAt = Date.now();
 await page.waitForURL(/\/discover$/, { timeout: 20000 }).catch(() => {});
 check(
-  "B30 : lien de confirmation → profil créé automatiquement → /discover",
-  page.url().endsWith("/discover"),
-  page.url(),
+  "B30 : « J'accepte » → page des profils en moins de 2 secondes",
+  page.url().endsWith("/discover") && Date.now() - acceptedAt < 2000,
+  `${Date.now() - acceptedAt} ms`,
 );
 check(
   "B31 : profil complet enregistré",
@@ -350,8 +417,14 @@ check(
   "B34 : « Reste au courant : Oui » enregistré",
   sql(`select marketing_emails from public.user_settings where user_id='${idB}'`) === "t",
 );
+for (
+  let i = 0;
+  i < 40 && sql(`select count(*) from public.photos where user_id='${idB}'`) !== "2";
+  i++
+)
+  await page.waitForTimeout(250);
 check(
-  "B35 : 2 photos envoyées (en attente de vérification)",
+  "B35 : 2 photos envoyées en arrière-plan (en attente de vérification)",
   sql(`select count(*) from public.photos where user_id='${idB}'`) === "2",
 );
 check(
@@ -405,22 +478,30 @@ check("B43 : les fenêtres ne reviennent pas", (await page.getByRole("dialog").c
 /* C. Lien de confirmation ouvert sur un autre appareil                 */
 /* ------------------------------------------------------------------ */
 const pageC = await newPage();
-await pageC.goto(`${BASE}/register`, { waitUntil: "networkidle" });
-await pageC.getByTestId("signup-email").click();
-await fillSteps(pageC, { firstName: "Josué", gender: "Homme", looking: "Femmes", photos: 1 });
-await pageC.getByTestId("choice-marketing").getByRole("radio", { name: "Non merci" }).click();
 const emailC = mail("c");
-await pageC.fill("#email", emailC);
-await pageC.fill("#password", PWD);
-await next(pageC);
-await acceptTerms(pageC);
+await createAccount(pageC, emailC, PWD, "signup-email");
 await pageC.getByText("Consultez votre boîte mail").waitFor({ timeout: 10000 });
 const otherDevice = await newPage();
 await otherDevice.goto(await confirmLink(emailC), { waitUntil: "networkidle" });
+await otherDevice.waitForURL(/\/onboarding$/, { timeout: 20000 }).catch(() => {});
+await otherDevice
+  .getByText("Étape 1 sur 4")
+  .waitFor({ timeout: 8000 })
+  .catch(() => {});
+check(
+  "C0 : icône e-mail → compte ; lien ouvert sur un autre appareil → création du profil",
+  otherDevice.url().endsWith("/onboarding") &&
+    (await otherDevice.getByText("Étape 1 sur 4").isVisible()),
+  otherDevice.url(),
+);
+await fillSteps(otherDevice, { firstName: "Josué", gender: "Homme", looking: "Femmes", photos: 1 });
+await otherDevice.getByTestId("choice-marketing").getByRole("radio", { name: "Non merci" }).click();
+await next(otherDevice);
+await acceptTerms(otherDevice);
 await otherDevice.waitForURL(/\/discover$/, { timeout: 20000 }).catch(() => {});
 const idC = userId(emailC);
 check(
-  "C1 : autre appareil → profil créé depuis le compte → /discover",
+  "C1 : autre appareil → profil créé → /discover",
   otherDevice.url().endsWith("/discover"),
   otherDevice.url(),
 );
@@ -435,17 +516,14 @@ check(
 );
 await otherDevice.getByRole("button", { name: "C'est parti" }).click();
 await otherDevice.waitForTimeout(300);
+for (
+  let i = 0;
+  i < 40 && sql(`select count(*) from public.photos where user_id='${idC}'`) !== "1";
+  i++
+)
+  await otherDevice.waitForTimeout(250);
 check(
-  "C4 : aucune photo → « Ajoute ta première photo »",
-  await otherDevice.getByText("Ajoute ta première photo").isVisible(),
-);
-await otherDevice.getByTestId("welcome-photo-input").setInputFiles([photo(1)]);
-await otherDevice
-  .getByText("Découvre qui est tout près")
-  .waitFor({ timeout: 8000 })
-  .catch(() => {});
-check(
-  "C5 : photo ajoutée depuis la fenêtre",
+  "C4 : photo du parcours envoyée",
   sql(`select count(*) from public.photos where user_id='${idC}'`) === "1",
 );
 
@@ -460,28 +538,21 @@ await pageD.route(/\/auth\/v1\/authorize/, (route) => {
 });
 await pageD.goto(`${BASE}/register`, { waitUntil: "networkidle" });
 await pageD.getByTestId("signup-google").click();
-check(
-  "D1 : Google → même parcours (étape 1 sur 4)",
-  await pageD.getByText("Étape 1 sur 4").isVisible(),
-);
-await fillSteps(pageD, { firstName: "Grâce", photos: 1 });
-check(
-  "D2 : dernière étape sans e-mail ni mot de passe",
-  (await pageD.locator("#email").count()) === 0,
-);
-check(
-  "D3 : bouton « M'inscrire avec Google »",
-  (await pageD.getByTestId("signup-next").textContent()) === "M'inscrire avec Google",
-);
-await next(pageD);
-await acceptTerms(pageD);
 for (let i = 0; i < 50 && !authorizeUrl; i++) await pageD.waitForTimeout(100);
 const auth = authorizeUrl ? new URL(authorizeUrl) : null;
 check(
-  "D4 : départ vers Google (provider=google, retour sur /login)",
+  "D1 : bouton Google → la connexion Google s'ouvre tout de suite (pas « Crée ton profil »)",
+  !!auth && (await pageD.getByText("Étape 1 sur 4").count()) === 0,
+);
+check(
+  "D2 : départ vers Google (provider=google, retour sur /login)",
   auth?.searchParams.get("provider") === "google" &&
     auth?.searchParams.get("redirect_to") === `${BASE}/login`,
   authorizeUrl.slice(0, 140),
+);
+check(
+  "D3 : choix du compte non imposé (pas de prompt=select_account)",
+  !!auth && !authorizeUrl.includes("select_account"),
 );
 // Retour de Google simulé : compte créé par Google (nom complet, pas de first_name).
 const emailD = mail("d");
@@ -495,12 +566,26 @@ check(
 );
 await pageD.unroute(/\/auth\/v1\/authorize/);
 await passwordLogin(pageD, emailD);
-await pageD.waitForURL(/\/discover$/, { timeout: 20000 }).catch(() => {});
+await pageD.waitForURL(/\/onboarding$/, { timeout: 20000 }).catch(() => {});
+await pageD
+  .getByText("Étape 1 sur 4")
+  .waitFor({ timeout: 8000 })
+  .catch(() => {});
 check(
-  "D6 : retour connecté → profil créé depuis le brouillon → /discover",
-  pageD.url().endsWith("/discover"),
+  "D6 : retour de Google, nouveau compte → étape 1 de la création du profil",
+  pageD.url().endsWith("/onboarding") && (await pageD.getByText("Étape 1 sur 4").isVisible()),
   pageD.url(),
 );
+await fillSteps(pageD, { firstName: "Grâce", photos: 1 });
+await next(pageD);
+await acceptTerms(pageD);
+await pageD.waitForURL(/\/discover$/, { timeout: 20000 }).catch(() => {});
+for (
+  let i = 0;
+  i < 40 && sql(`select count(*) from public.photos where user_id='${idD}'`) !== "1";
+  i++
+)
+  await pageD.waitForTimeout(250);
 check(
   "D7 : profil Google complet (prénom choisi dans le parcours)",
   profileOf(idD) === "Grâce|female|1995-06-15|Yaoundé|Centre|Cameroun|active|visible|1|t",
@@ -542,9 +627,9 @@ check(
 );
 await fillSteps(pageE, { firstName: "Samuel", gender: "Homme", looking: "Femmes" });
 check(
-  "E4 : dernière étape « Terminer », sans e-mail",
-  (await pageE.getByTestId("signup-next").textContent()) === "Terminer" &&
-    (await pageE.locator("#email").count()) === 0,
+  "E4 : dernière étape « Confirmer la création de mon profil », sans e-mail",
+  (await pageE.getByTestId("signup-next").textContent()) ===
+    "Confirmer la création de mon profil" && (await pageE.locator("#email").count()) === 0,
 );
 await next(pageE);
 await acceptTerms(pageE);

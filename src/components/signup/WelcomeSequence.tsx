@@ -65,7 +65,14 @@ export function WelcomeSequence({ userId, firstName }: { userId: string; firstNa
         supabase.from("profile_locations").select("user_id").eq("user_id", userId).maybeSingle(),
       ]);
       if (cancelled) return;
-      const count = photos.count ?? 0;
+      // Photos du parcours encore en cours d'envoi (elles partent en arrière-plan).
+      let sending = 0;
+      try {
+        sending = Number(window.localStorage.getItem(`${welcomeKey(userId)}.photos`)) || 0;
+      } catch {
+        sending = 0;
+      }
+      const count = Math.max(photos.count ?? 0, sending);
       setPhotoCount(count);
       const list: Step[] = ["welcome"];
       if (count < 2) list.push("photo");
@@ -88,6 +95,7 @@ export function WelcomeSequence({ userId, firstName }: { userId: string; firstNa
     }
     try {
       window.localStorage.setItem(welcomeKey(userId), "done");
+      window.localStorage.removeItem(`${welcomeKey(userId)}.photos`);
     } catch {
       // Rien à faire.
     }

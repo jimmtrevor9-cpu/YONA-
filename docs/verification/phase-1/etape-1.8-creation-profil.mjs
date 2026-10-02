@@ -1,11 +1,11 @@
 // YONA — Phase 1 / Étape 1.8 — Vérification de la création du profil.
-// Parcours réel (nouvelle inscription) : parcours en 4 étapes → e-mail de confirmation
-// (Mailpit) → profil créé automatiquement. Puis formulaire complet (foi, attentes).
+// Parcours réel (nouvelle inscription) : compte → e-mail de confirmation (Mailpit) →
+// création du profil en 4 étapes. Puis formulaire complet (foi, attentes).
 // Usage : PLAYWRIGHT_ROOT="$(npm root -g)" node docs/verification/phase-1/etape-1.8-creation-profil.mjs
 import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
 
-import { inscrireParEmail } from "../outils/inscription.mjs";
+import { creerCompte, lienDeConfirmation, remplirParcours } from "../outils/inscription.mjs";
 
 const { chromium } = createRequire(`${process.env.PLAYWRIGHT_ROOT ?? ""}/`)("playwright");
 const BASE = process.env.BASE ?? "http://127.0.0.1:4173";
@@ -24,7 +24,7 @@ sql("delete from auth.users where email like 'test-onboarding-%@example.test';")
 const email = `test-onboarding-${Date.now()}@example.test`;
 const pwd = "TestOnb!2026";
 const state = () =>
-  sql(`select p.first_name||'|'||coalesce(p.gender::text,'∅')||'|'||coalesce(p.birth_date::text,'∅')||'|'||coalesce(p.city,'∅')||'|'||coalesce(p.country,'∅')||'|'||coalesce(p.bio,'∅')||'|'||p.status||'|'||p.visibility||'|'||(p.onboarding_completed_at is not null)
+  sql(`select coalesce(p.first_name,'∅')||'|'||coalesce(p.gender::text,'∅')||'|'||coalesce(p.birth_date::text,'∅')||'|'||coalesce(p.city,'∅')||'|'||coalesce(p.country,'∅')||'|'||coalesce(p.bio,'∅')||'|'||p.status||'|'||p.visibility||'|'||(p.onboarding_completed_at is not null)
        ||'#'||coalesce(c.denomination,'∅')||'|'||coalesce(c.church_attendance,'∅')||'|'||coalesce(c.faith_importance,'∅')||'|'||coalesce(c.marriage_vision,'∅')
        ||'#'||coalesce(r.preferred_gender::text,'∅')||'|'||r.min_age||'|'||r.max_age||'|'||coalesce(r.relationship_goal,'∅')
        from public.users u join public.profiles p on p.user_id=u.id join public.christian_profiles c on c.user_id=u.id join public.preferences r on r.user_id=u.id where u.email='${email}'`);
@@ -50,41 +50,28 @@ const clearToasts = async () => {
 };
 const heading = () => page.locator("main h1").textContent();
 
-// 1. Inscription (parcours) + confirmation, avec une panne pendant la création du profil
-await inscrireParEmail(page, {
-  base: BASE,
-  firstName: "Élise",
-  email,
-  password: pwd,
-  birthDate: "1996-04-12",
-  city: "Douala",
-  country: "Cameroun",
-});
+// 1. Compte + confirmation, puis création du profil avec une panne pendant l'enregistrement
+await creerCompte(page, { base: BASE, email, password: pwd });
 await page.getByText("Consultez votre boîte mail").waitFor({ timeout: 8000 });
-check("Parcours terminé → « Consultez votre boîte mail »", true);
+check("Compte créé → « Consultez votre boîte mail »", true);
 check(
-  "Avant confirmation : profil « incomplet »",
+  "Avant la création du profil : profil « incomplet »",
   state().split("#")[0].split("|")[6] === "incomplete",
 );
-let link;
-for (let i = 0; i < 20 && !link; i++) {
-  const list = await (
-    await fetch(`${MAILPIT}/api/v1/search?query=to:${encodeURIComponent(email)}`)
-  ).json();
-  if (list.messages?.[0]) {
-    const full = await (await fetch(`${MAILPIT}/api/v1/message/${list.messages[0].ID}`)).json();
-    link = (full.HTML || full.Text)
-      .match(/href="([^"]*\/auth\/v1\/verify[^"]*)"/)?.[1]
-      ?.replaceAll("&amp;", "&");
-  }
-  if (!link) await page.waitForTimeout(500);
-}
+const link = await lienDeConfirmation(page, email);
+await page.goto(link, { waitUntil: "networkidle" });
+await page.waitForURL(/\/onboarding$/, { timeout: 10000 }).catch(() => {});
 // Panne pendant l'enregistrement des préférences → le profil ne devient PAS visible
 await page.route("**/rest/v1/preferences**", (route) =>
   route.request().method() === "PATCH" ? route.abort("failed") : route.continue(),
 );
-await page.goto(link, { waitUntil: "networkidle" });
-await page.waitForURL(/\/onboarding$/, { timeout: 10000 }).catch(() => {});
+await remplirParcours(page, {
+  firstName: "Élise",
+  birthDate: "1996-04-12",
+  country: "Cameroun",
+  region: "Littoral",
+  city: "Douala",
+});
 const failToast = await toast();
 check(
   "Panne réseau → message « Impossible d'enregistrer. Réessayez. », on reste sur /onboarding",

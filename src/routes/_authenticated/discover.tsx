@@ -9,6 +9,7 @@ import { MatchDialog } from "@/components/MatchDialog";
 import { BottomNav } from "@/components/BottomNav";
 import { ContactRequestButton } from "@/components/ContactRequestButton";
 import { ProfileCard } from "@/components/ProfileCard";
+import { VirtualProfilePhoto } from "@/components/VirtualProfilePhoto";
 import { WelcomeSequence } from "@/components/signup/WelcomeSequence";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -25,8 +26,9 @@ import {
   passErrorMessage,
   sentLikesQuery,
 } from "@/features/profiles/likes";
-import { myProfileQuery } from "@/features/profiles/queries";
+import { myProfileQuery, onboardingDataQuery } from "@/features/profiles/queries";
 import { profileVisibilityState } from "@/features/profiles/visibility";
+import { useVirtualProfiles } from "@/features/virtual-profiles/useVirtualProfiles";
 import { APP_NAME } from "@/lib/config";
 
 export const Route = createFileRoute("/_authenticated/discover")({
@@ -129,6 +131,29 @@ function DiscoverPage() {
   const { data: premiumIds } = usePremiumBadges(profiles.map((profile) => profile.user_id));
   const { data: scores } = useCompatibilityScores(profiles.map((profile) => profile.user_id));
 
+  // Profils d'exemple (fichier local, jamais en base) affichés après les vrais membres,
+  // pour que la page ne soit jamais vide. Mêmes filtres : genre recherché, âge, pays.
+  const { data: onboarding } = useQuery({
+    ...onboardingDataQuery(user?.id ?? ""),
+    enabled: !!user?.id && canBrowse,
+  });
+  const virtual = useVirtualProfiles(
+    user?.id ?? "",
+    canBrowse && onboarding
+      ? {
+          preferredGender:
+            onboarding.prefs?.preferred_gender === "male" ||
+            onboarding.prefs?.preferred_gender === "female"
+              ? onboarding.prefs.preferred_gender
+              : null,
+          minAge: onboarding.prefs?.min_age ?? null,
+          maxAge: onboarding.prefs?.max_age ?? null,
+          country: me?.country ?? null,
+        }
+      : null,
+  );
+  const thisYear = new Date().getFullYear();
+
   const handleLike = (profileId: string) => {
     if (!user?.id || likeMutation.isPending || sentLikes.includes(profileId)) return;
     likeMutation.mutate(profileId);
@@ -167,31 +192,53 @@ function DiscoverPage() {
           <p className="text-sm text-destructive">
             Les profils n'ont pas pu être chargés. Réessayez dans un instant.
           </p>
-        ) : profiles.length > 0 ? (
-          profiles.map((profile) => (
-            <ProfileCard
-              isPremium={premiumIds?.has(profile.user_id) ?? false}
-              compatibility={scores?.get(profile.user_id) ?? null}
-              key={profile.user_id}
-              profile={profile}
-              isLiked={sentLikes.includes(profile.user_id)}
-              isLikePending={likeMutation.isPending && likeMutation.variables === profile.user_id}
-              isLikeStateLoading={isLikeStateLoading || isLikeStateError}
-              onLike={handleLike}
-              onPass={handlePass}
-              isFavorite={favoriteIds?.has(profile.user_id) ?? false}
-              isFavoritePending={favorite.pendingId === profile.user_id}
-              onToggleFavorite={(profileId) =>
-                favorite.toggle(profileId, favoriteIds?.has(profileId) ?? false)
-              }
-              footer={
-                <ContactRequestButton
-                  receiverId={profile.user_id}
-                  receiverName={profile.first_name ?? "ce membre"}
-                />
-              }
-            />
-          ))
+        ) : profiles.length > 0 || virtual.profiles.length > 0 ? (
+          <>
+            {profiles.map((profile) => (
+              <ProfileCard
+                isPremium={premiumIds?.has(profile.user_id) ?? false}
+                compatibility={scores?.get(profile.user_id) ?? null}
+                key={profile.user_id}
+                profile={profile}
+                isLiked={sentLikes.includes(profile.user_id)}
+                isLikePending={likeMutation.isPending && likeMutation.variables === profile.user_id}
+                isLikeStateLoading={isLikeStateLoading || isLikeStateError}
+                onLike={handleLike}
+                onPass={handlePass}
+                isFavorite={favoriteIds?.has(profile.user_id) ?? false}
+                isFavoritePending={favorite.pendingId === profile.user_id}
+                onToggleFavorite={(profileId) =>
+                  favorite.toggle(profileId, favoriteIds?.has(profileId) ?? false)
+                }
+                footer={
+                  <ContactRequestButton
+                    receiverId={profile.user_id}
+                    receiverName={profile.first_name ?? "ce membre"}
+                  />
+                }
+              />
+            ))}
+            {virtual.profiles.map((v) => (
+              <ProfileCard
+                key={v.id}
+                media={<VirtualProfilePhoto profile={v} src={virtual.photoOf(v)} />}
+                profile={{
+                  user_id: v.id,
+                  first_name: v.firstName,
+                  birth_date: `${thisYear - v.age}-01-01`,
+                  city: v.city,
+                  country: v.country,
+                  bio: v.bio,
+                  interests: v.interests,
+                }}
+                onLike={(id) => {
+                  virtual.markHandled(id);
+                  toast.info("C'est un profil d'exemple : aucun like n'est envoyé.");
+                }}
+                onPass={virtual.markHandled}
+              />
+            ))}
+          </>
         ) : (
           <div className="panel p-6 text-center">
             <p className="text-sm text-muted-foreground">

@@ -102,6 +102,14 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "manifest", href: "/manifest.webmanifest" },
       { rel: "apple-touch-icon", href: "/apple-touch-icon.png", sizes: "180x180" },
     ],
+    scripts: [
+      // Chrome propose l'installation très tôt, parfois avant que la page soit prête :
+      // la proposition est gardée de côté pour le bouton « Installer l'application ».
+      {
+        children:
+          "window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();window.__yonaInstallPrompt=e;window.dispatchEvent(new Event('yona:installprompt'));});window.addEventListener('appinstalled',function(){window.__yonaInstallPrompt=null;});",
+      },
+    ],
   }),
   shellComponent: RootShell,
   component: RootComponent,

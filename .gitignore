@@ -36,3 +36,5 @@ dist-ssr
 
 # Construction Vercel locale
 .vercel
+public/geo/
+public/virtual-profiles/index.json

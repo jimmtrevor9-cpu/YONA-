@@ -55,8 +55,10 @@ export async function signInWithGoogle() {
   return supabase.auth.signInWithOAuth({
     provider: "google",
     options: {
+      // Pas de « prompt=select_account » : avec un seul compte Google, la connexion est
+      // directe ; avec plusieurs, Google affiche lui-même le choix du compte.
+      // Cette adresse doit figurer dans Supabase → Authentication → URL Configuration.
       redirectTo: `${window.location.origin}/login`,
-      queryParams: { prompt: "select_account" },
     },
   });
 }

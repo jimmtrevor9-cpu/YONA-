@@ -123,10 +123,16 @@ await page.fill("#birthDate", yearsAgo(18));
 await cont();
 check("Exactement 18 ans aujourd'hui → étape suivante", (await heading()) === "Ta bio en 30 s");
 await cont();
+// Pays et ville sont des listes avec recherche : la saisie libre est limitée à 100 caractères.
+const searchMax = async (id) => {
+  await page.getByTestId(`place-${id}`).click();
+  const max = await page.getAttribute(`[data-testid=place-${id}-search]`, "maxlength");
+  await page.keyboard.press("Escape");
+  return max;
+};
 check(
   "Ville / pays limités à 100 caractères (étape « Où es-tu ? »)",
-  (await page.getAttribute("#city", "maxlength")) === "100" &&
-    (await page.getAttribute("#country", "maxlength")) === "100",
+  (await searchMax("city")) === "100" && (await searchMax("country")) === "100",
 );
 await page.context().close();
 

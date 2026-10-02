@@ -1,0 +1,13 @@
+PHOTOS DES PROFILS D'EXEMPLE
+============================
+
+Un dossier par pays (gabon, cameroun, congo, rd-congo, cote-d-ivoire, france, ...).
+Dans chaque dossier, 25 profils : 13 femmes et 12 hommes.
+
+Nommez les photos ainsi (le début du nom indique le genre) :
+  femme-01.jpg ... femme-13.jpg
+  homme-01.jpg ... homme-12.jpg
+Formats acceptés : .jpg, .jpeg, .png, .webp. Format portrait conseillé (3:4).
+
+Une photo manquante est remplacée par un avatar neutre.
+La liste est mise à jour automatiquement à chaque construction du site (Vercel).

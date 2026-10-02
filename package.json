@@ -4,7 +4,9 @@
   "sideEffects": false,
   "type": "module",
   "scripts": {
+    "predev": "node scripts/generate-geo.mjs && node scripts/generate-virtual-photos.mjs",
     "dev": "vite dev",
+    "prebuild": "node scripts/generate-geo.mjs && node scripts/generate-virtual-photos.mjs",
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
@@ -76,6 +78,7 @@
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^5.2.0",
+    "country-state-city": "^3.2.1",
     "drizzle-kit": "^0.31.10",
     "drizzle-orm": "^0.45.2",
     "eslint": "^9.32.0",
