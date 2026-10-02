@@ -13,7 +13,12 @@ variable d'environnement n'est nécessaire.
 2. **Base de données** : dans Supabase → **SQL Editor**, exécute ces deux fichiers, **dans cet ordre**
    (copie tout le contenu du fichier, colle, puis **Run**) :
    1. `supabase/migrations/20261002100000_profils_virtuels_et_verification.sql`
-   2. `supabase/migrations/20261002110000_profils_virtuels_donnees.sql` (gros fichier : 675 profils)
+   2. puis, **un par un et dans l'ordre**, les 10 petits fichiers du dossier
+      `supabase/profils-virtuels/` (`01-positions-des-pays.sql`, puis `02-…` à `10-…` :
+      675 profils, 3 pays par fichier). Aucun ne crée de table : l'avertissement « RLS »
+      n'apparaît pas. Chaque fichier peut être relancé sans risque.
+      (Le fichier unique `supabase/migrations/20261002110000_profils_virtuels_donnees.sql`
+      contient la même chose, mais il est trop long pour être collé depuis un téléphone.)
 3. **Adresses de retour** : Supabase → **Authentication → URL Configuration** :
    - *Site URL* : l'adresse de ton site (par exemple `https://yona-xxx.vercel.app`) ;
    - *Redirect URLs* : `https://yona-xxx.vercel.app/**` (et la même chose pour ton nom de domaine).
