@@ -17,9 +17,9 @@ Date : 2026-09-25 · Statut : **VALIDÉE** (aucune modification de la page)
 
 ## Non testable dans cet environnement
 
-- Logo et 5 photos du carrousel : servis par le CDN de Lovable (`/__l5e/assets-v1/…`),
-  disponibles uniquement sur l'hébergement Lovable.
-- Vidéo Vimeo et polices Google : bloquées par le réseau de l'environnement de test.
+- Polices Google : bloquées par le réseau de l'environnement de test.
+- (2026-10-02) Le logo, les 5 photos du carrousel et la vidéo sont maintenant des fichiers
+  du projet (`public/images/`, `public/videos/yona.mp4`) : ils s'affichent sur Vercel.
 
 ## Conformité au cahier des charges
 

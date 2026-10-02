@@ -3,8 +3,6 @@ import { Mail } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
-import heroAsset from "@/assets/yona-story-1.jpg.asset.json";
-import logoAsset from "@/assets/yona-logo.png.asset.json";
 import { AuthShell } from "@/components/AuthShell";
 import { CookieBanner } from "@/components/signup/CookieBanner";
 import { GoogleIcon } from "@/components/signup/GoogleIcon";
@@ -23,6 +21,7 @@ import {
   type SignupMethod,
 } from "@/features/auth/signup-draft";
 import { getPostLoginPath } from "@/features/profiles/queries";
+import { LOGO_URL, STORY_IMAGES } from "@/lib/brand-assets";
 import { APP_NAME, APP_TAGLINE } from "@/lib/config";
 
 export const Route = createFileRoute("/register")({
@@ -159,7 +158,7 @@ function Landing({ onStart }: { onStart: (method: SignupMethod) => void }) {
     <main className="relative flex min-h-screen flex-col bg-background">
       <div className="relative h-[46vh] min-h-72 w-full overflow-hidden">
         <img
-          src={heroAsset.url}
+          src={STORY_IMAGES[0]}
           alt="Couple chrétien souriant"
           className="h-full w-full object-cover"
         />
@@ -170,7 +169,7 @@ function Landing({ onStart }: { onStart: (method: SignupMethod) => void }) {
       </div>
 
       <div className="relative -mt-16 flex flex-1 flex-col items-center px-6 pb-28 text-center">
-        <img src={logoAsset.url} alt={APP_NAME} className="h-16 w-auto" />
+        <img src={LOGO_URL} alt={APP_NAME} className="h-16 w-auto" />
         <h1 className="mt-3 font-display text-3xl font-semibold text-foreground">{APP_NAME}</h1>
         <p className="mt-1 text-sm text-muted-foreground">{APP_TAGLINE}</p>
         <div className="mt-4 flex flex-wrap justify-center gap-2 text-xs">
