@@ -128,7 +128,8 @@ Le bouton Google est déjà dans le site. Tant que Google n'est pas activé, il 
    - Type : « Application Web ».
    - URI de redirection autorisés : `https://TON-ID-SUPABASE.supabase.co/auth/v1/callback` (Supabase t'affiche cette adresse exacte dans l'écran Google de l'étape 4).
 4. Copie l'**ID client** et le **Code secret**, puis colle-les dans Supabase → **Authentication → Providers → Google** et active Google.
-5. Teste : sur ton téléphone, ouvre `/register`, touche le bouton Google, remplis les étapes, choisis ton compte Google : tu dois arriver sur Découvrir avec ton profil créé.
+5. Vérifie l'étape 4 ci-dessus : l'adresse de ton site Vercel doit être dans *Site URL* et `https://TON-SITE.vercel.app/**` dans *Redirect URLs*. Sinon, après Google, Supabase renvoie vers une mauvaise adresse.
+6. Teste : sur ton téléphone, ouvre `/register`, touche le bouton Google, choisis ton compte Google (s'il n'y en a qu'un, Google te connecte directement) : tu arrives sur l'étape 1 « Crée ton profil », puis sur la page des profils après l'étape 4.
 
 Ces deux codes Google ne vont jamais dans le code ni dans le fichier `.env` : seulement dans Supabase.
 
@@ -138,7 +139,7 @@ Ces deux codes Google ne vont jamais dans le code ni dans le fichier `.env` : se
 
 Fais ce parcours avec deux comptes (par exemple toi et un proche), sur téléphone. Coche chaque ligne qui marche ; si une ligne ne marche pas, envoie-moi une capture d'écran.
 
-- [ ] Inscription en 4 étapes, e-mail de confirmation reçu, profil créé tout seul
+- [ ] Inscription par e-mail : e-mail de confirmation reçu, puis les 4 étapes du profil
 - [ ] Inscription avec Google
 - [ ] Profil complet avec photo, photo validée dans /admin
 - [ ] Chaque compte voit l'autre dans Découvrir
@@ -157,6 +158,12 @@ Quand tout est coché en mode test, passe Stripe en mode réel (étape 3, point 
 ## Mises à jour futures de la base
 
 Comme tu n'utilises plus Lovable, personne n'applique les changements de base tout seul. Si une future version du code ajoute un fichier dans `supabase/migrations/`, il faudra l'exécuter dans le **SQL Editor** de Supabase (je te le dirai à chaque fois).
+
+- 2 octobre 2026 : `supabase/migrations/20261002130000_profils_virtuels_compteur.sql` (compte les vrais inscrits pour masquer les profils d'exemple). Sans lui, le site marche, mais aucun profil d'exemple ne disparaît.
+
+## Profils d'exemple : ajouter les photos
+
+Dépose les photos dans `public/virtual-profiles/<pays>/` (un dossier par pays existe déjà), nommées `femme-01.jpg` à `femme-13.jpg` et `homme-01.jpg` à `homme-12.jpg`. Le fichier `public/virtual-profiles/LISEZ-MOI.txt` rappelle la règle. Sans photo, un avatar neutre s'affiche.
 
 ## Plus tard : ce qui peut attendre
 

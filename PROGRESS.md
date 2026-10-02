@@ -96,6 +96,17 @@ Compléter les champs entre crochets de la page `/mentions-legales` (éditeur, a
 - **Application installable (2026-10-02)** : `public/manifest.webmanifest`, `public/sw.js`
   (ne garde que les fichiers statiques, jamais les données), icônes tirées du logo.
 
+- **Parcours d'inscription (2026-10-02)** : compte d'abord (Google sans `prompt=select_account`,
+  ou e-mail + mot de passe), puis création du profil en 4 étapes sur `/onboarding`
+  (`SignupWizard` en mode « member »), puis `/discover`. Le mode « guest » du parcours reste
+  dans le code mais n'est plus utilisé par `/register`.
+- **Pays / régions / villes (2026-10-02)** : `scripts/generate-geo.mjs` (lancé par `predev` /
+  `prebuild`) écrit `public/geo/` depuis `country-state-city` ; non versionné.
+- **Profils d'exemple (2026-10-02)** : `src/features/virtual-profiles/` (25 par pays, jamais en
+  base, signalés « Profil d'exemple »). Un de moins par vrai inscrit : fonction
+  `count_registered_members` (rôle service) appelée par une fonction serveur. Photos :
+  `public/virtual-profiles/<pays>/femme-NN.jpg|homme-NN.jpg`, listées à la construction.
+
 ## Problèmes connus
 
 - Non testé en réel : Stripe en ligne (testé avec un faux Stripe local), vraie clé
