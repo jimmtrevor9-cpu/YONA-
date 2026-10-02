@@ -6,19 +6,16 @@
 
 Cette version ajoute : logo, images et vidéo hébergés dans le site, pages légales,
 application installable, inscription « compte d'abord » (Google ou e-mail), pays / région /
-ville du monde entier, 675 profils virtuels et page « Vérifie ton profil ». Aucune nouvelle
+ville du monde entier, 270 profils virtuels et page « Vérifie ton profil ». Aucune nouvelle
 variable d'environnement n'est nécessaire.
 
 1. **Fusionner** la Pull Request de la branche `claude/admiring-ride-05jon2` (étape 1 ci-dessous).
 2. **Base de données** : dans Supabase → **SQL Editor**, exécute ces deux fichiers, **dans cet ordre**
    (copie tout le contenu du fichier, colle, puis **Run**) :
    1. `supabase/migrations/20261002100000_profils_virtuels_et_verification.sql`
-   2. puis, **un par un et dans l'ordre**, les 10 petits fichiers du dossier
-      `supabase/profils-virtuels/` (`01-positions-des-pays.sql`, puis `02-…` à `10-…` :
-      675 profils, 3 pays par fichier). Aucun ne crée de table : l'avertissement « RLS »
-      n'apparaît pas. Chaque fichier peut être relancé sans risque.
-      (Le fichier unique `supabase/migrations/20261002110000_profils_virtuels_donnees.sql`
-      contient la même chose, mais il est trop long pour être collé depuis un téléphone.)
+   2. `supabase/migrations/20261002110000_profils_virtuels_donnees.sql` (270 profils
+      virtuels : 10 par pays). Il ne crée aucune table : l'avertissement « RLS »
+      n'apparaît pas. Il peut être relancé sans risque.
 3. **Adresses de retour** : Supabase → **Authentication → URL Configuration** :
    - *Site URL* : l'adresse de ton site (par exemple `https://yona-xxx.vercel.app`) ;
    - *Redirect URLs* : `https://yona-xxx.vercel.app/**` (et la même chose pour ton nom de domaine).

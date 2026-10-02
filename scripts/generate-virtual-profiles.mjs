@@ -1,14 +1,14 @@
-// Génère la migration des profils virtuels (25 par pays, 27 pays) et des positions de
+// Génère la migration des profils virtuels (10 par pays, 27 pays) et des positions de
 // pays (public.geo_countries), à partir de scripts/data/virtual-profiles-countries.mjs
 // et de la base géographique public/geo/.
 //
 // Le tirage est déterministe (graine fixe) : relancer le script donne le même fichier.
 //   node scripts/generate-virtual-profiles.mjs
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 
 import { COUNTRIES } from "./data/virtual-profiles-countries.mjs";
 
-const PER_COUNTRY = 25;
+const PER_COUNTRY = 10;
 const OUT = [
   "supabase/migrations/20261002110000_profils_virtuels_donnees.sql",
   "drizzle/migrations/0085_profils_virtuels_donnees.sql",
@@ -208,38 +208,52 @@ const geoValues = countries
   .map((c) => `  (${sql(c.code)}, ${sql(c.name)}, ${c.lat}, ${c.lng})`)
   .join(",\n");
 
-// Les profils sont écrits en JSON dans un bloc DO : aucune table n'est créée (pas
-// d'avertissement « RLS » dans l'éditeur SQL de Supabase) et chaque partie se suffit
-// à elle-même. Le JSON est encadré par $seed$ … $seed$ : aucun échappement nécessaire.
+// Les profils sont écrits dans un bloc DO, sous forme de liste JSON compacte (une ligne
+// par profil, valeurs dans un ordre fixe) : aucune table n'est créée, donc pas
+// d'avertissement « RLS » dans l'éditeur SQL de Supabase. Le JSON est encadré par
+// $seed$ … $seed$ : aucun échappement nécessaire.
+// Ordre des valeurs : 0 e-mail, 1 prénom, 2 nom, 3 sexe, 4 naissance, 5 pays, 6 région,
+// 7 ville, 8 bio, 9 centres d'intérêt, 10 église, 11 culte, 12 prière, 13 place de la foi,
+// 14 objectif, 15 sexe recherché, 16 âge min, 17 âge max.
 function seedBlock(list) {
-  const json = JSON.stringify(
-    list.map((r) => ({
-      email: r.email,
-      first_name: r.firstName,
-      last_name: r.lastName,
-      gender: r.gender,
-      birth_date: r.birthDate,
-      country: r.country,
-      region: r.region,
-      city: r.city,
-      bio: r.bio,
-      interests: r.interests,
-      denomination: r.denomination,
-      church_attendance: r.attendance,
-      prayer_practice: r.prayer,
-      faith_importance: r.importance,
-      goal: r.goal,
-      preferred_gender: r.prefGender,
-      min_age: r.minAge,
-      max_age: r.maxAge,
-    })),
-  ).replace(/\},\{/g, "},\n{");
+  const json = `[\n${list
+    .map((r) =>
+      JSON.stringify([
+        r.email,
+        r.firstName,
+        r.lastName,
+        r.gender,
+        r.birthDate,
+        r.country,
+        r.region,
+        r.city,
+        r.bio,
+        r.interests,
+        r.denomination,
+        r.attendance,
+        r.prayer,
+        r.importance,
+        r.goal,
+        r.prefGender,
+        r.minAge,
+        r.maxAge,
+      ]),
+    )
+    .join(",\n")}\n]`;
   if (json.includes("$seed$")) throw new Error("Délimiteur $seed$ présent dans les données");
   return `DO $do$
 DECLARE
   _seed jsonb := $seed$${json}$seed$;
   _col text;
 BEGIN
+  -- 0. Profils virtuels laissés par une version précédente et absents de cette liste :
+  --    retirés (uniquement des comptes virtuels : fournisseur « virtual » + adresse
+  --    @profils-virtuels.yona.invalid). Il reste ainsi exactement ${list.length} profils virtuels.
+  DELETE FROM auth.users u
+  WHERE u.email LIKE '%@profils-virtuels.yona.invalid'
+    AND u.raw_app_meta_data ->> 'provider' = 'virtual'
+    AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(_seed) e WHERE e ->> 0 = u.email);
+
   -- 1. Comptes sans mot de passe (le déclencheur handle_new_user crée users, profiles,
   --    préférences…). Un compte déjà présent (même adresse) n'est pas recréé.
   INSERT INTO auth.users (
@@ -248,12 +262,12 @@ BEGIN
   )
   SELECT
     '00000000-0000-0000-0000-000000000000', gen_random_uuid(), 'authenticated', 'authenticated',
-    s.email, '', now(),
+    e ->> 0, '', now(),
     jsonb_build_object('provider', 'virtual', 'providers', jsonb_build_array('virtual')),
-    jsonb_build_object('first_name', s.first_name, 'last_name', s.last_name, 'is_virtual', true),
+    jsonb_build_object('first_name', e ->> 1, 'last_name', e ->> 2, 'is_virtual', true),
     now(), now()
-  FROM jsonb_to_recordset(_seed) AS s(email text, first_name text, last_name text)
-  WHERE NOT EXISTS (SELECT 1 FROM auth.users u WHERE u.email = s.email);
+  FROM jsonb_array_elements(_seed) e
+  WHERE NOT EXISTS (SELECT 1 FROM auth.users u WHERE u.email = e ->> 0);
 
   -- Colonnes texte du service d'authentification : jamais NULL (sinon l'écran des
   -- utilisateurs de Supabase peut échouer). Seules les colonnes présentes sont touchées.
@@ -274,48 +288,40 @@ BEGIN
 
   -- 2. Profils complets, actifs et visibles.
   UPDATE public.profiles p
-  SET first_name = s.first_name,
-      gender = s.gender::public.gender,
-      birth_date = s.birth_date::date,
-      country = s.country,
-      region = s.region,
-      city = s.city,
-      bio = s.bio,
-      interests = ARRAY(SELECT jsonb_array_elements_text(s.interests)),
+  SET first_name = e ->> 1,
+      gender = (e ->> 3)::public.gender,
+      birth_date = (e ->> 4)::date,
+      country = e ->> 5,
+      region = e ->> 6,
+      city = e ->> 7,
+      bio = e ->> 8,
+      interests = ARRAY(SELECT jsonb_array_elements_text(e -> 9)),
       is_virtual = true,
       terms_accepted_at = now(),
       onboarding_step = 4,
       onboarding_completed_at = coalesce(p.onboarding_completed_at, now()),
       status = 'active',
       visibility = 'visible'
-  FROM jsonb_to_recordset(_seed) AS s(
-    email text, first_name text, gender text, birth_date text, country text, region text,
-    city text, bio text, interests jsonb
-  )
-  JOIN public.users u ON u.email = s.email
+  FROM jsonb_array_elements(_seed) e
+  JOIN public.users u ON u.email = e ->> 0
   WHERE p.user_id = u.id;
 
   UPDATE public.christian_profiles c
-  SET denomination = s.denomination,
-      church_attendance = s.church_attendance,
-      prayer_practice = s.prayer_practice,
-      faith_importance = s.faith_importance
-  FROM jsonb_to_recordset(_seed) AS s(
-    email text, denomination text, church_attendance text, prayer_practice text,
-    faith_importance text
-  )
-  JOIN public.users u ON u.email = s.email
+  SET denomination = e ->> 10,
+      church_attendance = e ->> 11,
+      prayer_practice = e ->> 12,
+      faith_importance = e ->> 13
+  FROM jsonb_array_elements(_seed) e
+  JOIN public.users u ON u.email = e ->> 0
   WHERE c.user_id = u.id;
 
   UPDATE public.preferences pr
-  SET preferred_gender = s.preferred_gender::public.gender,
-      min_age = s.min_age,
-      max_age = s.max_age,
-      relationship_goal = s.goal
-  FROM jsonb_to_recordset(_seed) AS s(
-    email text, preferred_gender text, min_age smallint, max_age smallint, goal text
-  )
-  JOIN public.users u ON u.email = s.email
+  SET relationship_goal = e ->> 14,
+      preferred_gender = (e ->> 15)::public.gender,
+      min_age = (e ->> 16)::smallint,
+      max_age = (e ->> 17)::smallint
+  FROM jsonb_array_elements(_seed) e
+  JOIN public.users u ON u.email = e ->> 0
   WHERE pr.user_id = u.id;
 END
 $do$;
@@ -327,72 +333,21 @@ ${geoValues}
 ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name, lat = EXCLUDED.lat, lng = EXCLUDED.lng;
 `;
 
-// Découpage en petites parties (3 pays chacune) : plus simple à coller dans l'éditeur
-// SQL de Supabase, surtout depuis un téléphone.
-const COUNTRIES_PER_PART = 3;
-const parts = [];
-for (let i = 0; i < COUNTRIES.length; i += COUNTRIES_PER_PART) {
-  const codes = COUNTRIES.slice(i, i + COUNTRIES_PER_PART).map((c) => c.code.toLowerCase());
-  const list = rows.filter((r) => codes.includes(r.email.split(".")[1]));
-  const names = [...new Set(list.map((r) => r.country))];
-  parts.push({ names, list });
-}
-
 const header = `-- ============================================================
 -- Profils virtuels : données (générées par scripts/generate-virtual-profiles.mjs)
 --
 -- * public.geo_countries : position de chaque pays (base GeoNames), pour « le pays le
 --   plus proche » quand il n'y a plus de profil virtuel dans le pays d'un nouveau membre.
--- * ${rows.length} profils virtuels : ${PER_COUNTRY} par pays, ${COUNTRIES.length} pays, femmes et hommes à parts
---   presque égales, 22 à 48 ans. Ce sont des comptes sans mot de passe (connexion
---   impossible), marqués « virtual » dans le compte et is_virtual dans le profil.
---   Aucune photo : la carte affiche l'initiale, en attendant de vraies photos.
--- Rejouable : un profil déjà présent (même adresse) n'est pas recréé.
--- Aucune table n'est créée. Le même contenu existe en petits fichiers dans
--- supabase/profils-virtuels/ (à coller un par un dans l'éditeur SQL de Supabase).
+-- * ${rows.length} profils virtuels : ${PER_COUNTRY} par pays (${PER_COUNTRY / 2} femmes, ${PER_COUNTRY / 2} hommes), ${COUNTRIES.length} pays,
+--   22 à 48 ans. Ce sont des comptes sans mot de passe (connexion impossible), marqués
+--   « virtual » dans le compte et is_virtual dans le profil. Aucune photo : la carte
+--   affiche l'initiale, en attendant de vraies photos.
+-- Aucune table n'est créée. Rejouable sans risque : un profil déjà présent n'est pas
+-- recréé, et les profils virtuels d'une version précédente absents de la liste sont retirés.
 -- À exécuter APRÈS 20261002100000_profils_virtuels_et_verification.sql.
 -- ============================================================
 `;
 
-const output = [
-  header,
-  geoSql,
-  ...parts.map((p) => `-- ${p.names.join(", ")}\n${seedBlock(p.list)}`),
-].join("\n");
+const output = [header, geoSql, seedBlock(rows)].join("\n");
 for (const path of OUT) writeFileSync(new URL(`../${path}`, import.meta.url), output);
-
-// Petits fichiers, un par étape, pour l'éditeur SQL de Supabase.
-const DIR = new URL("../supabase/profils-virtuels/", import.meta.url);
-rmSync(DIR, { recursive: true, force: true });
-mkdirSync(DIR, { recursive: true });
-const total = parts.length + 1;
-const intro = (n, what) => `-- ============================================================
--- YONA — profils virtuels : fichier ${n} sur ${total}
--- ${what}
--- À coller tel quel dans Supabase → SQL Editor, puis « Run ».
--- Rejouable sans risque. À faire APRÈS le fichier de structure
--- (supabase/migrations/20261002100000_profils_virtuels_et_verification.sql).
--- ============================================================
-`;
-const slug = (text) =>
-  text
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z]+/g, "-")
-    .replace(/^-|-$/g, "");
-writeFileSync(
-  new URL("01-positions-des-pays.sql", DIR),
-  `${intro(1, "Position des pays (pour trouver le pays le plus proche).")}\n${geoSql}`,
-);
-parts.forEach((p, index) => {
-  const n = index + 2;
-  const name = `${String(n).padStart(2, "0")}-profils-${p.names.map(slug).join("-")}.sql`;
-  writeFileSync(
-    new URL(name, DIR),
-    `${intro(n, `${p.list.length} profils : ${p.names.join(", ")}.`)}\n${seedBlock(p.list)}`,
-  );
-});
-console.log(
-  `${rows.length} profils virtuels, ${countries.length} pays → ${OUT.join(", ")} + ${total} fichiers dans supabase/profils-virtuels/`,
-);
+console.log(`${rows.length} profils virtuels, ${countries.length} pays → ${OUT.join(", ")}`);

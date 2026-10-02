@@ -32,7 +32,7 @@ plus). Ensuite : « Vérifie ton profil » (`/verification` : selfie express ou 
 d'identité, stockage privé), puis Découvrir (bienvenue, 2e photo, position…). Le détail de
 la foi se complète dans Profil → « Ma foi et mes attentes ».
 
-**Profils virtuels** : 675 profils d'exemple (25 par pays, 27 pays francophones),
+**Profils virtuels** : 270 profils d'exemple (10 par pays, 27 pays francophones),
 `profiles.is_virtual = true`, sans photo ni mot de passe. Chaque vrai membre qui termine son
 profil en retire un (même pays, sinon le plus proche) : déclencheur SQL
 `replace_virtual_profile_on_signup`. Données : `scripts/generate-virtual-profiles.mjs`.
