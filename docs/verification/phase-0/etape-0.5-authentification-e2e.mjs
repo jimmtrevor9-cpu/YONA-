@@ -6,7 +6,7 @@
 import { execSync } from "node:child_process";
 import { createRequire } from "node:module";
 
-import { inscrireParEmail } from "../outils/inscription.mjs";
+import { creerCompte, remplirParcours } from "../outils/inscription.mjs";
 
 const { chromium } = createRequire(`${process.env.PLAYWRIGHT_ROOT ?? ""}/`)("playwright");
 const BASE = process.env.BASE ?? "http://127.0.0.1:4173";
@@ -58,8 +58,8 @@ ok("Route protégée /discover sans session → /login", page.url().endsWith("/l
 
 // 2. Inscription
 const signupAt = Date.now();
-// Nouveau parcours d'inscription en 4 étapes (voir outils/inscription.mjs).
-await inscrireParEmail(page, { base: BASE, firstName: "TestE2E", email, password: pwd1 });
+// Parcours : compte d'abord, profil en 4 étapes après la confirmation (outils/inscription.mjs).
+await creerCompte(page, { base: BASE, email, password: pwd1 });
 await page
   .getByText("Consultez votre boîte mail")
   .waitFor({ timeout: 10000 })
@@ -81,11 +81,14 @@ ok("Connexion avant confirmation refusée (message FR)", t.includes("confirmer v
 const confirmLink = await lastMailLink(email, "confirm");
 ok("Email de confirmation reçu", !!confirmLink);
 await page.goto(confirmLink, { waitUntil: "networkidle" });
-// Le profil rempli pendant l'inscription est créé automatiquement (/onboarding → /discover).
+// Session ouverte → création du profil en 4 étapes (/onboarding) → /discover.
+await page.waitForURL(/\/onboarding/, { timeout: 15000 }).catch(() => {});
+const onOnboarding = page.url().includes("/onboarding");
+await remplirParcours(page, { firstName: "TestE2E" });
 await page.waitForURL(/\/discover/, { timeout: 15000 }).catch(() => {});
 ok(
-  "Lien de confirmation → session ouverte, profil créé depuis le parcours (/discover)",
-  page.url().includes("/discover"),
+  "Lien de confirmation → session ouverte, création du profil puis /discover",
+  onOnboarding && page.url().includes("/discover"),
   page.url(),
 );
 // Profil considéré comme créé (la création du profil est testée à l'étape 1.8).

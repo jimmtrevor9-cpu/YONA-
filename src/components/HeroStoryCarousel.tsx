@@ -1,10 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import coupleAsset from "@/assets/yona-story-1.jpg.asset.json";
-import story2 from "@/assets/yona-story-2.jpg.asset.json";
-import story3 from "@/assets/yona-story-3.jpg.asset.json";
-import story4 from "@/assets/yona-story-4.jpg.asset.json";
-import story5 from "@/assets/yona-story-5.jpg.asset.json";
+import { STORY_IMAGES } from "@/lib/brand-assets";
 
 type Slide = {
   url: string;
@@ -14,27 +10,27 @@ type Slide = {
 
 const slides: Slide[] = [
   {
-    url: coupleAsset.url,
+    url: STORY_IMAGES[0],
     alt: "Couple africain chrétien en tenues modernes",
     caption: "Des célibataires chrétiens sérieux, prêts à bâtir une histoire à deux.",
   },
   {
-    url: story2.url,
+    url: STORY_IMAGES[1],
     alt: "Demande en mariage : un homme à genoux offre une bague à sa compagne",
     caption: "Une rencontre sincère, puis la promesse d'un « oui » pour la vie.",
   },
   {
-    url: story3.url,
+    url: STORY_IMAGES[2],
     alt: "Mariés chrétiens africains le jour de leur mariage",
     caption: "Le jour du mariage : deux chemins qui n'en font plus qu'un.",
   },
   {
-    url: story4.url,
+    url: STORY_IMAGES[3],
     alt: "Jeune couple marié tenant son nouveau-né",
     caption: "Les premiers pas d'une famille bénie.",
   },
   {
-    url: story5.url,
+    url: STORY_IMAGES[4],
     alt: "Famille chrétienne africaine avec deux enfants",
     caption: "Un foyer qui grandit, dans la foi et dans l'amour.",
   },
@@ -67,7 +63,7 @@ export function HeroStoryCarousel() {
 
   return (
     <figure
-      className="panel gold-thread relative overflow-hidden md:col-start-2 md:row-span-2 md:row-start-1 md:h-full md:min-h-[46rem]"
+      className="panel gold-thread relative mx-auto w-full min-w-0 max-w-full overflow-hidden md:col-start-2 md:row-span-2 md:row-start-1 md:h-full md:min-h-[46rem]"
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
       aria-roledescription="carrousel"

@@ -413,3 +413,59 @@
     animation: none;
   }
 }
+
+/* Témoignages : bande qui défile lentement de gauche à droite, en boucle.
+   La piste contient deux copies identiques ; on la décale de -50 % à 0. */
+.yona-marquee {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  padding-block: 0.75rem;
+  mask-image: linear-gradient(to right, transparent, #000 6%, #000 94%, transparent);
+}
+
+.yona-marquee-track {
+  display: flex;
+  width: max-content;
+  animation: yona-marquee 90s linear infinite;
+}
+
+.yona-marquee-group {
+  display: flex;
+  gap: 1.25rem;
+  padding-right: 1.25rem;
+}
+
+.yona-marquee:hover .yona-marquee-track,
+.yona-marquee:focus-within .yona-marquee-track,
+.yona-marquee[data-paused="true"] .yona-marquee-track {
+  animation-play-state: paused;
+}
+
+@keyframes yona-marquee {
+  from {
+    transform: translateX(-50%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .yona-marquee {
+    overflow-x: auto;
+    mask-image: none;
+    scroll-snap-type: x mandatory;
+  }
+  .yona-marquee-track {
+    animation: none;
+    padding-inline: 1.25rem;
+  }
+  .yona-marquee-group[aria-hidden="true"],
+  .yona-marquee-group > [data-repeat] {
+    display: none;
+  }
+  .yona-marquee-group > * {
+    scroll-snap-align: center;
+  }
+}

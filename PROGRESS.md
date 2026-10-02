@@ -32,6 +32,7 @@ Aucune : toutes les phases du plan (0 à 26) sont terminées.
 
 Brancher les vrais services avant la mise en ligne : clés Stripe (`PAYMENT_PROVIDER=stripe`),
 clé Anthropic, et un service d'e-mail (voir le README, section « Limites connues »).
+Compléter les champs entre crochets de la page `/mentions-legales` (éditeur, adresse, contact).
 
 ## Décisions techniques
 
@@ -85,6 +86,26 @@ clé Anthropic, et un service d'e-mail (voir le README, section « Limites connu
 - **Blocage** : ferme le Match et la conversation, annule les demandes, retire les favoris.
 - **Admin** : toutes les fonctions `admin_*` revérifient le rôle en base ; suspendre ou
   bannir bloque aussi la connexion (Supabase Auth, fonction serveur).
+
+- **Images et vidéo (2026-10-02)** : logo, photos du slider et vidéo de présentation sont
+  des fichiers du projet (`public/images/`, `public/videos/yona.mp4`, chemins dans
+  `src/lib/brand-assets.ts`) ; plus aucun lien vers le CDN de Lovable ni vers Vimeo.
+- **Pages légales (2026-10-02)** : `/confidentialite`, `/conditions-utilisation`,
+  `/mentions-legales`, `/cookies` (mise en page `src/components/legal/LegalPage.tsx`),
+  liées depuis le pied de page commun `src/components/SiteFooter.tsx`. `/cgu` est conservée.
+- **Application installable (2026-10-02)** : `public/manifest.webmanifest`, `public/sw.js`
+  (ne garde que les fichiers statiques, jamais les données), icônes tirées du logo.
+
+- **Parcours d'inscription (2026-10-02)** : compte d'abord (Google sans `prompt=select_account`,
+  ou e-mail + mot de passe), puis création du profil en 4 étapes sur `/onboarding`
+  (`SignupWizard` en mode « member »), puis `/discover`. Le mode « guest » du parcours reste
+  dans le code mais n'est plus utilisé par `/register`.
+- **Pays / régions / villes (2026-10-02)** : `scripts/generate-geo.mjs` (lancé par `predev` /
+  `prebuild`) écrit `public/geo/` depuis `country-state-city` ; non versionné.
+- **Profils d'exemple (2026-10-02)** : `src/features/virtual-profiles/` (25 par pays, jamais en
+  base, signalés « Profil d'exemple »). Un de moins par vrai inscrit : fonction
+  `count_registered_members` (rôle service) appelée par une fonction serveur. Photos :
+  `public/virtual-profiles/<pays>/femme-NN.jpg|homme-NN.jpg`, listées à la construction.
 
 ## Problèmes connus
 

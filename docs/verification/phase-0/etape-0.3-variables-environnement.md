@@ -38,6 +38,7 @@ secrets optionnels), avec l'avertissement sur le préfixe `VITE_`.
 - Les images de l'accueil (logo, 5 photos) sont servies par le CDN de Lovable
   (`/__l5e/assets-v1/…`) : elles s'affichent sur l'hébergement Lovable, pas sur un
   autre hébergement. À garder en tête si le site quitte Lovable.
+  (Corrigé le 2026-10-02 : ces fichiers sont désormais dans `public/images/`.)
 - Polices Google et vidéo Vimeo non chargées dans l'environnement de test
   (restriction réseau de l'environnement, pas un défaut du projet).
 

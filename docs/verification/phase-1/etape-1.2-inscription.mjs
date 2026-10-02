@@ -6,7 +6,12 @@
 import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
 
-import { inscrireParEmail } from "../outils/inscription.mjs";
+import {
+  creerCompte,
+  inscrireParEmail,
+  lienDeConfirmation,
+  remplirParcours,
+} from "../outils/inscription.mjs";
 
 const { chromium } = createRequire(`${process.env.PLAYWRIGHT_ROOT ?? ""}/`)("playwright");
 const BASE = process.env.BASE ?? "http://127.0.0.1:4173";
@@ -29,30 +34,33 @@ const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
 const jsErrors = [];
 page.on("pageerror", (e) => jsErrors.push(String(e).slice(0, 120)));
 
-// Nouveau parcours d'inscription en 4 étapes (voir outils/inscription.mjs).
-async function fill(firstName, email, password) {
-  await inscrireParEmail(page, { base: BASE, firstName, email, password });
+// Parcours (2 octobre 2026) : compte d'abord (e-mail + mot de passe), puis création du
+// profil en 4 étapes (voir outils/inscription.mjs).
+async function account(email, password) {
+  await creerCompte(page, { base: BASE, email, password });
 }
 async function toast() {
   const t = page.locator("[data-sonner-toast]").last();
   await t.waitFor({ timeout: 6000 }).catch(() => {});
   return ((await t.textContent().catch(() => "")) ?? "").trim();
 }
-const account = (email) =>
+const row = (email) =>
   sql(
     `select coalesce(p.first_name,'∅')||'|'||(select count(*) from public.user_roles r where r.user_id=u.id)||'|'||(select count(*) from public.christian_profiles c where c.user_id=u.id)||'|'||(select count(*) from public.preferences c where c.user_id=u.id)||'|'||p.status from public.users u join public.profiles p on p.user_id=u.id where u.email='${email}'`,
   );
+/** Confirme le compte (si besoin) et arrive sur la création du profil. */
+async function toProfile(email) {
+  if (MODE === "confirmation") {
+    const link = await lienDeConfirmation(page, email);
+    if (link) await page.goto(link, { waitUntil: "networkidle" });
+  }
+  await page.waitForURL(/\/onboarding$/, { timeout: 10000 }).catch(() => {});
+}
 
-// 1. Page et champs (le prénom est demandé à l'étape 1, l'e-mail et le mot de passe à
-// la dernière étape du parcours)
+// 1. Page et champs (e-mail et mot de passe d'abord ; le prénom vient à l'étape 1)
 await page.goto(`${BASE}/register`, { waitUntil: "networkidle" });
 check("Page /register affichée", (await page.title()).includes("Créer un compte"));
 await page.getByTestId("signup-start").click();
-const firstLabel = await page.evaluate(() => !!document.querySelector("label[for=firstName]"));
-
-// 2. Validations côté navigateur (aucun compte créé)
-await fill("Test", mail("court"), "Court1!");
-check("Mot de passe de 7 caractères refusé (aucun compte créé)", account(mail("court")) === "");
 const attrs = await page.evaluate(() => ({
   email: document.querySelector("#email")?.type,
   pwdMin: document.querySelector("#password")?.minLength,
@@ -62,70 +70,89 @@ const attrs = await page.evaluate(() => ({
     .join(","),
 }));
 check(
-  "Champs : prénom (étape 1), email de type email, mot de passe 8 min (dernière étape)",
-  firstLabel && attrs.email === "email" && attrs.pwdMin === 8,
+  "Champs : e-mail de type email, mot de passe 8 caractères minimum",
+  attrs.email === "email" && attrs.pwdMin === 8,
   JSON.stringify(attrs),
 );
 check("Chaque champ a une étiquette", attrs.labels === "email,password", attrs.labels);
-await fill("Test", "pas-un-email", "TestInscr!2026");
+
+// 2. Validations côté navigateur (aucun compte créé)
+await account(mail("court"), "Court1!");
+check("Mot de passe de 7 caractères refusé (aucun compte créé)", row(mail("court")) === "");
+await account("pas-un-email", "TestInscr!2026");
 check(
   "Email invalide refusé",
   page.url().endsWith("/register") &&
     !(await page.getByText("Consultez votre boîte mail").isVisible()),
 );
 
-// 4. Inscription normale
+// 3. Inscription normale
 const ok = mail("ok");
-await fill("  Élise  ", ok, "TestInscr!2026");
+await account(ok, "TestInscr!2026");
 if (MODE === "confirmation") {
-  await page
-    .getByText("Consultez votre boîte mail")
-    .waitFor({ timeout: 8000 })
-    .catch(() => {});
   check(
     "Inscription → écran « Consultez votre boîte mail »",
     await page.getByText("Consultez votre boîte mail").isVisible(),
   );
   check("L'écran rappelle l'adresse saisie", await page.getByText(ok).isVisible());
 } else {
-  await page.waitForURL(/\/onboarding$/, { timeout: 8000 }).catch(() => {});
   check(
     "Inscription (sans confirmation) → redirection vers /onboarding",
     page.url().endsWith("/onboarding"),
     page.url(),
   );
 }
-const acc = account(ok);
 check(
-  "Fiche créée : prénom nettoyé, rôle, profil chrétien, préférences, profil incomplet",
-  acc === "Élise|1|1|1|incomplete",
-  acc,
+  "Fiche créée : rôle, profil chrétien, préférences, profil incomplet (prénom à l'étape 1)",
+  row(ok) === "∅|1|1|1|incomplete",
+  row(ok),
 );
+await toProfile(ok);
+check("Compte confirmé → création du profil (/onboarding)", page.url().endsWith("/onboarding"));
 
-// 5. Prénom très long (au-delà de 60 caractères)
-const long = mail("long");
-await fill("A".repeat(80), long, "TestInscr!2026");
-await page.waitForTimeout(2500);
-const accLong = account(long);
-check(
-  "Prénom de 80 caractères : pas d'erreur, prénom limité à 60",
-  accLong.startsWith("A".repeat(60) + "|"),
-  accLong.slice(0, 70),
-);
-
-// 6. Prénom composé uniquement d'espaces
-await fill("    ", mail("espaces"), "TestInscr!2026");
-await page.waitForTimeout(1500);
+// 4. Prénom composé uniquement d'espaces (étape 1)
+await page.getByText("Étape 1 sur 4").waitFor({ timeout: 10000 });
+await page.fill("#firstName", "    ");
+await page.fill("#birthDate", "1995-06-15");
+await page.getByTestId("choice-gender").getByRole("radio", { name: "Femme", exact: true }).click();
+await page.getByTestId("signup-next").click();
 const blankToast = await toast();
 check(
   "Prénom vide (espaces) refusé avec un message clair",
-  account(mail("espaces")) === "" && blankToast.includes("Indiquez votre prénom"),
+  blankToast.includes("Indiquez votre prénom") &&
+    (await page.getByText("Étape 1 sur 4").isVisible()),
   blankToast,
 );
 
+// 5. Prénom nettoyé puis profil créé
+await remplirParcours(page, { firstName: "  Élise  " });
+await page.waitForURL(/\/discover$/, { timeout: 10000 }).catch(() => {});
+check("Profil créé : prénom nettoyé, profil actif", row(ok) === "Élise|1|1|1|active", row(ok));
+
+// 6. Prénom très long (au-delà de 60 caractères)
+const long = mail("long");
+const second = await browser.newPage({ viewport: { width: 390, height: 844 } });
+second.on("pageerror", (e) => jsErrors.push(String(e).slice(0, 120)));
+await inscrireParEmail(second, {
+  base: BASE,
+  firstName: "A".repeat(80),
+  email: long,
+  password: "TestInscr!2026",
+});
+await second.waitForURL(/\/discover$/, { timeout: 10000 }).catch(() => {});
+const accLong = row(long);
+check(
+  "Prénom de 80 caractères : pas d'erreur, prénom limité à 60",
+  accLong.startsWith("A".repeat(60) + "|") && !accLong.startsWith("A".repeat(61)),
+  accLong.slice(0, 70),
+);
+await second.close();
+
 // 7. Email déjà utilisé
-await fill("Autre", ok, "TestInscr!2026");
-await page.waitForTimeout(2500);
+await page.evaluate(() => localStorage.clear());
+await page.context().clearCookies();
+await account(ok, "TestInscr!2026");
+await page.waitForTimeout(1500);
 const dupToast = await toast();
 check(
   "Email déjà utilisé : aucun second compte",

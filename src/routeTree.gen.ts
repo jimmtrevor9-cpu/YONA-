@@ -12,8 +12,12 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as CguRouteImport } from './routes/cgu'
+import { Route as ConditionsUtilisationRouteImport } from './routes/conditions-utilisation'
+import { Route as ConfidentialiteRouteImport } from './routes/confidentialite'
+import { Route as CookiesRouteImport } from './routes/cookies'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as MentionsLegalesRouteImport } from './routes/mentions-legales'
 import { Route as RegisterRouteImport } from './routes/register'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
@@ -50,6 +54,21 @@ const CguRoute = CguRouteImport.update({
   path: '/cgu',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ConditionsUtilisationRoute = ConditionsUtilisationRouteImport.update({
+  id: '/conditions-utilisation',
+  path: '/conditions-utilisation',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConfidentialiteRoute = ConfidentialiteRouteImport.update({
+  id: '/confidentialite',
+  path: '/confidentialite',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CookiesRoute = CookiesRouteImport.update({
+  id: '/cookies',
+  path: '/cookies',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
   id: '/forgot-password',
   path: '/forgot-password',
@@ -58,6 +77,11 @@ const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MentionsLegalesRoute = MentionsLegalesRouteImport.update({
+  id: '/mentions-legales',
+  path: '/mentions-legales',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RegisterRoute = RegisterRouteImport.update({
@@ -173,8 +197,12 @@ const AuthenticatedMessagesConversationIdDebloquerRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/cgu': typeof CguRoute
+  '/conditions-utilisation': typeof ConditionsUtilisationRoute
+  '/confidentialite': typeof ConfidentialiteRoute
+  '/cookies': typeof CookiesRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
+  '/mentions-legales': typeof MentionsLegalesRoute
   '/register': typeof RegisterRoute
   '/reset-password': typeof ResetPasswordRoute
   '/admin': typeof AuthenticatedAdminRoute
@@ -200,8 +228,12 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/cgu': typeof CguRoute
+  '/conditions-utilisation': typeof ConditionsUtilisationRoute
+  '/confidentialite': typeof ConfidentialiteRoute
+  '/cookies': typeof CookiesRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
+  '/mentions-legales': typeof MentionsLegalesRoute
   '/register': typeof RegisterRoute
   '/reset-password': typeof ResetPasswordRoute
   '/admin': typeof AuthenticatedAdminRoute
@@ -229,8 +261,12 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/cgu': typeof CguRoute
+  '/conditions-utilisation': typeof ConditionsUtilisationRoute
+  '/confidentialite': typeof ConfidentialiteRoute
+  '/cookies': typeof CookiesRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
+  '/mentions-legales': typeof MentionsLegalesRoute
   '/register': typeof RegisterRoute
   '/reset-password': typeof ResetPasswordRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRoute
@@ -258,8 +294,12 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/cgu'
+    | '/conditions-utilisation'
+    | '/confidentialite'
+    | '/cookies'
     | '/forgot-password'
     | '/login'
+    | '/mentions-legales'
     | '/register'
     | '/reset-password'
     | '/admin'
@@ -285,8 +325,12 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/cgu'
+    | '/conditions-utilisation'
+    | '/confidentialite'
+    | '/cookies'
     | '/forgot-password'
     | '/login'
+    | '/mentions-legales'
     | '/register'
     | '/reset-password'
     | '/admin'
@@ -313,8 +357,12 @@ export interface FileRouteTypes {
     | '/'
     | '/_authenticated'
     | '/cgu'
+    | '/conditions-utilisation'
+    | '/confidentialite'
+    | '/cookies'
     | '/forgot-password'
     | '/login'
+    | '/mentions-legales'
     | '/register'
     | '/reset-password'
     | '/_authenticated/admin'
@@ -342,8 +390,12 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   CguRoute: typeof CguRoute
+  ConditionsUtilisationRoute: typeof ConditionsUtilisationRoute
+  ConfidentialiteRoute: typeof ConfidentialiteRoute
+  CookiesRoute: typeof CookiesRoute
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   LoginRoute: typeof LoginRoute
+  MentionsLegalesRoute: typeof MentionsLegalesRoute
   RegisterRoute: typeof RegisterRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   ApiStripeWebhookRoute: typeof ApiStripeWebhookRoute
@@ -372,6 +424,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CguRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/conditions-utilisation': {
+      id: '/conditions-utilisation'
+      path: '/conditions-utilisation'
+      fullPath: '/conditions-utilisation'
+      preLoaderRoute: typeof ConditionsUtilisationRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/confidentialite': {
+      id: '/confidentialite'
+      path: '/confidentialite'
+      fullPath: '/confidentialite'
+      preLoaderRoute: typeof ConfidentialiteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/cookies': {
+      id: '/cookies'
+      path: '/cookies'
+      fullPath: '/cookies'
+      preLoaderRoute: typeof CookiesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/forgot-password': {
       id: '/forgot-password'
       path: '/forgot-password'
@@ -384,6 +457,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/mentions-legales': {
+      id: '/mentions-legales'
+      path: '/mentions-legales'
+      fullPath: '/mentions-legales'
+      preLoaderRoute: typeof MentionsLegalesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/register': {
@@ -587,8 +667,12 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   CguRoute: CguRoute,
+  ConditionsUtilisationRoute: ConditionsUtilisationRoute,
+  ConfidentialiteRoute: ConfidentialiteRoute,
+  CookiesRoute: CookiesRoute,
   ForgotPasswordRoute: ForgotPasswordRoute,
   LoginRoute: LoginRoute,
+  MentionsLegalesRoute: MentionsLegalesRoute,
   RegisterRoute: RegisterRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   ApiStripeWebhookRoute: ApiStripeWebhookRoute,

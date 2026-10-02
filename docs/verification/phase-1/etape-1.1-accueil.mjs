@@ -69,9 +69,11 @@ const s = await page.evaluate(() => ({
     .map((a) => a.getAttribute("href"))
     .filter((h) => !document.querySelector(h)),
   ctas: [...document.querySelectorAll("a[href]")]
-    .filter((a) => !a.getAttribute("href").startsWith("#"))
+    .filter((a) => !a.getAttribute("href").startsWith("#") && !a.closest("footer"))
     .map((a) => `${a.textContent.trim()}→${a.getAttribute("href")}`),
-  iframeTitle: document.querySelector("iframe")?.getAttribute("title") ?? "",
+  footerLinks: [...document.querySelectorAll("footer a[href]")].map((a) => a.getAttribute("href")),
+  footerLogo: !!document.querySelector('footer img[src="/images/yona-logo.png"]'),
+  videoTitle: document.querySelector("video")?.getAttribute("title") ?? "",
   buttonsNoName: [...document.querySelectorAll("button")].filter(
     (b) => !(b.textContent.trim() || b.getAttribute("aria-label")),
   ).length,
@@ -82,8 +84,16 @@ check("Description pour les moteurs de recherche", s.desc.length > 50, s.desc);
 check("Un seul titre principal (h1)", s.h1 === 1, `${s.h1}`);
 check("Toutes les images ont un texte alternatif", s.imgNoAlt === 0, `${s.imgNoAlt} sans alt`);
 check("Tous les boutons ont un nom accessible", s.buttonsNoName === 0, `${s.buttonsNoName}`);
-check("La vidéo a un titre accessible", s.iframeTitle.length > 0, s.iframeTitle);
+check("La vidéo a un titre accessible", s.videoTitle.length > 0, s.videoTitle);
 check("Liens du menu → sections existantes", s.missingTargets.length === 0, s.anchors.join(" "));
+check(
+  "Pied de page : logo + liens vers les 4 pages légales",
+  s.footerLogo &&
+    ["/confidentialite", "/conditions-utilisation", "/mentions-legales", "/cookies"].every((h) =>
+      s.footerLinks.includes(h),
+    ),
+  s.footerLinks.join(" "),
+);
 const allowed = new Set(["/register", "/login"]);
 const bad = s.ctas.filter((c) => !allowed.has(c.split("→")[1]));
 check(
