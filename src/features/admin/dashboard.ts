@@ -337,7 +337,8 @@ export type LogTable =
   | "payment_events"
   | "activity_events"
   | "admin_audit_log"
-  | "server_errors";
+  | "server_errors"
+  | "ad_events";
 
 export interface LogColumn {
   key: string;
@@ -396,6 +397,9 @@ export const EVENT_LABELS: Record<string, string> = {
   account_reactivated: "Compte réactivé",
   account_deleted: "Compte supprimé",
   delete_account: "Suppression par l'admin",
+  view: "Vue",
+  click: "Clic",
+  skip: "Passer",
 };
 
 const kinds = (...values: string[]) =>
@@ -499,6 +503,25 @@ export const LOGS: LogDefinition[] = [
       { key: "target_user_id", label: "Cible" },
       { key: "country", label: "Pays", sortable: true },
       { key: "ip", label: "IP" },
+    ],
+  },
+  {
+    table: "ad_events",
+    label: "Publicités",
+    kindColumn: "event",
+    kinds: [
+      { value: "view", label: "Vue" },
+      { value: "click", label: "Clic" },
+      { value: "skip", label: "Passer" },
+    ],
+    searchColumns: ["country", "placement"],
+    columns: [
+      { key: "created_at", label: "Date", sortable: true },
+      { key: "event", label: "Événement", sortable: true },
+      { key: "ad_id", label: "Publicité" },
+      { key: "placement", label: "Emplacement", sortable: true },
+      { key: "country", label: "Pays", sortable: true },
+      { key: "user_id", label: "Membre" },
     ],
   },
   {

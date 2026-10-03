@@ -1,11 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { Fragment, useState } from "react";
 
+import { SponsoredBanner } from "@/components/ads/SponsoredBanner";
 import { AppHeader } from "@/components/AppHeader";
 import { BottomNav } from "@/components/BottomNav";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { adSlots, useSponsoredAds } from "@/features/ads/ads";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { myConversationsQuery } from "@/features/messaging/queries";
 import { unreadBadge, unreadCountsQuery, unreadLabel } from "@/features/messaging/unread";
@@ -45,6 +48,13 @@ function MessagesPage() {
     ...myConversationsQuery(user?.id ?? ""),
     enabled: !!user?.id,
   });
+  // Publicités (membres gratuits seulement, règle appliquée par le serveur).
+  const ads = useSponsoredAds("messages");
+  const [hiddenAds, setHiddenAds] = useState<string[]>([]);
+  const slots = adSlots(
+    data?.length ?? 0,
+    ads.filter((ad) => !hiddenAds.includes(ad.id)),
+  );
   const { data: unreadCounts } = useQuery({
     ...unreadCountsQuery(user?.id ?? ""),
     enabled: !!user?.id,
@@ -67,70 +77,84 @@ function MessagesPage() {
           </p>
         ) : data && data.length > 0 ? (
           <ul className="space-y-3" aria-label="Liste de vos conversations">
-            {data.map((conversation) => {
+            {data.map((conversation, index) => {
               const name = conversation.firstName ?? "Membre";
               const last = conversation.lastMessage;
               const unread = unreadCounts?.[conversation.conversationId] ?? 0;
               const unreadId = `non-lus-${conversation.conversationId}`;
+              const slot = slots.get(index);
               return (
-                <li key={conversation.conversationId}>
-                  <Link
-                    to="/messages/$conversationId"
-                    params={{ conversationId: conversation.conversationId }}
-                    aria-label={`Ouvrir la conversation avec ${name}`}
-                    aria-describedby={unread > 0 ? unreadId : undefined}
-                    data-unread={unread}
-                    className="panel gold-thread flex items-center gap-4 p-4 transition-colors hover:bg-surface-2"
-                  >
-                    <Avatar className="size-12 ring-1 ring-gold/20">
-                      {conversation.photoUrl ? (
-                        <AvatarImage
-                          src={conversation.photoUrl}
-                          alt={`Photo de ${name}`}
-                          className="object-cover"
-                        />
-                      ) : null}
-                      <AvatarFallback className="bg-accent font-display text-lg text-gold-soft">
-                        {name.charAt(0).toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-baseline justify-between gap-2">
-                        <h2 className="truncate font-display text-base font-semibold text-foreground">
-                          {name}
-                        </h2>
-                        <time
-                          dateTime={conversation.activityAt}
-                          className="shrink-0 text-[11px] text-muted-foreground"
-                        >
-                          {formatActivity(conversation.activityAt)}
-                        </time>
-                      </div>
-                      <div className="mt-0.5 flex items-center gap-2">
-                        <p
-                          className={cn(
-                            "min-w-0 flex-1 truncate text-xs",
-                            unread > 0 ? "font-semibold text-foreground" : "text-muted-foreground",
-                          )}
-                        >
-                          {last
-                            ? `${last.fromMe ? "Vous : " : ""}${last.content}`
-                            : `Nouveau Match : dites bonjour à ${name} !`}
-                        </p>
-                        {unread > 0 ? (
-                          <span
-                            id={unreadId}
-                            className="shrink-0 rounded-full bg-gold px-1.5 text-[10px] font-semibold leading-4 text-primary-foreground"
-                            data-testid="unread-count"
-                          >
-                            {unreadBadge(unread)}
-                            <span className="sr-only"> — {unreadLabel(unread)}</span>
-                          </span>
+                <Fragment key={conversation.conversationId}>
+                  <li>
+                    <Link
+                      to="/messages/$conversationId"
+                      params={{ conversationId: conversation.conversationId }}
+                      aria-label={`Ouvrir la conversation avec ${name}`}
+                      aria-describedby={unread > 0 ? unreadId : undefined}
+                      data-unread={unread}
+                      className="panel gold-thread flex items-center gap-4 p-4 transition-colors hover:bg-surface-2"
+                    >
+                      <Avatar className="size-12 ring-1 ring-gold/20">
+                        {conversation.photoUrl ? (
+                          <AvatarImage
+                            src={conversation.photoUrl}
+                            alt={`Photo de ${name}`}
+                            className="object-cover"
+                          />
                         ) : null}
+                        <AvatarFallback className="bg-accent font-display text-lg text-gold-soft">
+                          {name.charAt(0).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-baseline justify-between gap-2">
+                          <h2 className="truncate font-display text-base font-semibold text-foreground">
+                            {name}
+                          </h2>
+                          <time
+                            dateTime={conversation.activityAt}
+                            className="shrink-0 text-[11px] text-muted-foreground"
+                          >
+                            {formatActivity(conversation.activityAt)}
+                          </time>
+                        </div>
+                        <div className="mt-0.5 flex items-center gap-2">
+                          <p
+                            className={cn(
+                              "min-w-0 flex-1 truncate text-xs",
+                              unread > 0
+                                ? "font-semibold text-foreground"
+                                : "text-muted-foreground",
+                            )}
+                          >
+                            {last
+                              ? `${last.fromMe ? "Vous : " : ""}${last.content}`
+                              : `Nouveau Match : dites bonjour à ${name} !`}
+                          </p>
+                          {unread > 0 ? (
+                            <span
+                              id={unreadId}
+                              className="shrink-0 rounded-full bg-gold px-1.5 text-[10px] font-semibold leading-4 text-primary-foreground"
+                              data-testid="unread-count"
+                            >
+                              {unreadBadge(unread)}
+                              <span className="sr-only"> — {unreadLabel(unread)}</span>
+                            </span>
+                          ) : null}
+                        </div>
                       </div>
-                    </div>
-                  </Link>
-                </li>
+                    </Link>
+                  </li>
+                  {slot ? (
+                    <li>
+                      <SponsoredBanner
+                        ad={slot}
+                        placement="messages"
+                        onHide={() => setHiddenAds((current) => [...current, slot.id])}
+                      />
+                    </li>
+                  ) : null}
+                </Fragment>
               );
             })}
           </ul>

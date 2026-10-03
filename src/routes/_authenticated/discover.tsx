@@ -5,6 +5,7 @@ import { Crown, SearchX } from "lucide-react";
 import { useRef, useState, type PointerEvent } from "react";
 import { toast } from "sonner";
 
+import { SponsoredCard } from "@/components/ads/SponsoredCard";
 import { BottomNav } from "@/components/BottomNav";
 import { ContactRequestDialog } from "@/components/ContactRequestButton";
 import { DiscoverActions } from "@/components/discover/DiscoverActions";
@@ -15,6 +16,7 @@ import { NotificationBell } from "@/components/NotificationBell";
 import { WelcomeSequence } from "@/components/signup/WelcomeSequence";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { recordAdEvent, useSponsoredAds } from "@/features/ads/ads";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { useCompatibilityScores } from "@/features/compatibility/queries";
 import { contactRequestQuotaQuery } from "@/features/contacts/requests";
@@ -111,6 +113,23 @@ function DiscoverPage() {
   const next = profiles[1] ?? null;
   const { data: premiumIds } = usePremiumBadges(profiles.slice(0, 5).map((p) => p.user_id));
   const { data: scores } = useCompatibilityScores(profiles.slice(0, 5).map((p) => p.user_id));
+
+  // Publicités sponsorisées (membres gratuits seulement, règle appliquée par le serveur) :
+  // une carte de publicité toutes les N cartes traitées pendant cette visite.
+  const ads = useSponsoredAds("discover");
+  const [adsDoneAt, setAdsDoneAt] = useState<number[]>([]);
+  const handled = doneIds.length;
+  const adEvery = ads[0]?.everyN ?? 5;
+  const currentAd =
+    !viewerPremium &&
+    ads.length &&
+    top &&
+    handled > 0 &&
+    handled % adEvery === 0 &&
+    !adsDoneAt.includes(handled)
+      ? (ads[(handled / adEvery - 1) % ads.length] ?? null)
+      : null;
+  const closeAd = () => setAdsDoneAt((current) => [...current, handled]);
 
   const restore = (profileId: string) =>
     setDoneIds((current) => current.filter((id) => id !== profileId));
@@ -228,6 +247,14 @@ function DiscoverPage() {
     origin.current = null;
     const { x, y } = drag;
     setDrag({ x: 0, y: 0, active: false });
+    if (currentAd) {
+      // Glisser une publicité, dans un sens ou dans l'autre, revient à « Passer ».
+      if (Math.abs(x) > SWIPE_X) {
+        recordAdEvent(currentAd.id, "skip", "discover");
+        closeAd();
+      }
+      return;
+    }
     if (x > SWIPE_X) handleLike(top);
     else if (x < -SWIPE_X) handlePass(top);
     else if (y < -SWIPE_UP && Math.abs(x) < 60) setDetailsOpen(true);
@@ -268,6 +295,36 @@ function DiscoverPage() {
             </Notice>
           ) : isError ? (
             <Notice>Les profils n'ont pas pu être chargés. Réessayez dans un instant.</Notice>
+          ) : top && currentAd ? (
+            <>
+              <div className="absolute inset-0 scale-[0.95] opacity-70" aria-hidden inert>
+                <DiscoverCard
+                  profile={top}
+                  isPremium={false}
+                  compatibility={null}
+                  isFavorite={false}
+                  isFavoritePending={false}
+                  onToggleFavorite={() => undefined}
+                  filterCount={criteriaCount}
+                  onOpenDetails={() => undefined}
+                  actions={null}
+                />
+              </div>
+              <div
+                key={`pub-${currentAd.id}-${handled}`}
+                className="absolute inset-0 animate-rise touch-none"
+                style={{
+                  transform: `translate(${drag.x}px, 0px) rotate(${drag.x / 22}deg)`,
+                  transition: drag.active ? "none" : "transform 250ms var(--ease-obsidian)",
+                }}
+                onPointerDown={onPointerDown}
+                onPointerMove={onPointerMove}
+                onPointerUp={onPointerUp}
+                onPointerCancel={onPointerUp}
+              >
+                <SponsoredCard ad={currentAd} dragX={drag.x} onSkip={closeAd} onClicked={closeAd} />
+              </div>
+            </>
           ) : top ? (
             <>
               {next ? (
@@ -354,7 +411,7 @@ function DiscoverPage() {
         profile={top}
         viewerId={userId}
         isPremium={top ? (premiumIds?.has(top.user_id) ?? false) : false}
-        open={detailsOpen && !!top}
+        open={detailsOpen && !!top && !currentAd}
         onOpenChange={setDetailsOpen}
       />
       {contact ? (

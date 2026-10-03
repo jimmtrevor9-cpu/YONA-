@@ -5,6 +5,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { AppHeader } from "@/components/AppHeader";
+import { AdsTab } from "@/components/admin/AdsTab";
 import { DemoProfilesTab } from "@/components/admin/DemoProfilesTab";
 import { LogsTab } from "@/components/admin/LogsTab";
 import { MembersTable } from "@/components/admin/MembersTable";
@@ -95,6 +96,9 @@ function AdminPage() {
             <TabsTrigger value="demo" data-testid="admin-tab-demo">
               Profils de démo
             </TabsTrigger>
+            <TabsTrigger value="ads" data-testid="admin-tab-ads">
+              Publicités
+            </TabsTrigger>
             <TabsTrigger value="logs" data-testid="admin-tab-logs">
               Journaux
             </TabsTrigger>
@@ -131,6 +135,9 @@ function AdminPage() {
           </TabsContent>
           <TabsContent value="demo">
             <DemoProfilesTab />
+          </TabsContent>
+          <TabsContent value="ads">
+            <AdsTab />
           </TabsContent>
           <TabsContent value="logs">
             <LogsTab />

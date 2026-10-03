@@ -645,6 +645,13 @@
       "when": 1791036000000,
       "tag": "0091_tableau_de_bord",
       "breakpoints": true
+    },
+    {
+      "idx": 92,
+      "version": "7",
+      "when": 1791039600000,
+      "tag": "0092_publicites",
+      "breakpoints": true
     }
   ]
 }

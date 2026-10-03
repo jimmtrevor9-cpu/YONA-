@@ -50,6 +50,57 @@ export type Database = {
         }
         Relationships: []
       }
+      ad_events: {
+        Row: {
+          ad_id: string
+          country: string | null
+          created_at: string
+          event: string
+          id: number
+          placement: string
+          user_id: string | null
+        }
+        Insert: {
+          ad_id: string
+          country?: string | null
+          created_at?: string
+          event: string
+          id?: number
+          placement: string
+          user_id?: string | null
+        }
+        Update: {
+          ad_id?: string
+          country?: string | null
+          created_at?: string
+          event?: string
+          id?: number
+          placement?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      ad_settings: {
+        Row: {
+          discover_every: number
+          id: boolean
+          list_every: number
+          updated_at: string
+        }
+        Insert: {
+          discover_every?: number
+          id?: boolean
+          list_every?: number
+          updated_at?: string
+        }
+        Update: {
+          discover_every?: number
+          id?: boolean
+          list_every?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       admin_audit_log: {
         Row: {
           action: string
@@ -83,6 +134,84 @@ export type Database = {
           target_id?: string | null
           target_table?: string | null
           user_agent?: string | null
+        }
+        Relationships: []
+      }
+      ads: {
+        Row: {
+          advertiser: string | null
+          body: string | null
+          created_at: string
+          created_by: string | null
+          cta_icon: string
+          cta_label: string
+          cta_url: string
+          daily_cap: number
+          ends_at: string | null
+          id: string
+          max_age: number | null
+          media_path: string
+          media_type: string
+          min_age: number | null
+          placements: string[]
+          poster_path: string | null
+          priority: number
+          starts_at: string
+          status: string
+          target_countries: string[]
+          target_gender: Database["public"]["Enums"]["gender"] | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          advertiser?: string | null
+          body?: string | null
+          created_at?: string
+          created_by?: string | null
+          cta_icon?: string
+          cta_label?: string
+          cta_url: string
+          daily_cap?: number
+          ends_at?: string | null
+          id?: string
+          max_age?: number | null
+          media_path: string
+          media_type: string
+          min_age?: number | null
+          placements?: string[]
+          poster_path?: string | null
+          priority?: number
+          starts_at?: string
+          status?: string
+          target_countries?: string[]
+          target_gender?: Database["public"]["Enums"]["gender"] | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          advertiser?: string | null
+          body?: string | null
+          created_at?: string
+          created_by?: string | null
+          cta_icon?: string
+          cta_label?: string
+          cta_url?: string
+          daily_cap?: number
+          ends_at?: string | null
+          id?: string
+          max_age?: number | null
+          media_path?: string
+          media_type?: string
+          min_age?: number | null
+          placements?: string[]
+          poster_path?: string | null
+          priority?: number
+          starts_at?: string
+          status?: string
+          target_countries?: string[]
+          target_gender?: Database["public"]["Enums"]["gender"] | null
+          title?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -1562,6 +1691,10 @@ export type Database = {
     }
     Functions: {
       activate_profile_boost: { Args: never; Returns: string }
+      admin_ad_stats: {
+        Args: { _ad_id: string | null; _bucket?: string; _from: string; _to: string; _tz?: string }
+        Returns: Json
+      }
       admin_dashboard: {
         Args: { _bucket?: string; _from: string; _to: string; _tz?: string }
         Returns: Json
@@ -1807,6 +1940,22 @@ export type Database = {
         Returns: number
       }
       expire_subscriptions: { Args: never; Returns: number }
+      get_ads_for_me: {
+        Args: { _limit?: number; _placement?: string }
+        Returns: {
+          advertiser: string | null
+          body: string | null
+          cta_icon: string
+          cta_label: string
+          cta_url: string
+          every_n: number
+          id: string
+          media_path: string
+          media_type: string
+          poster_path: string | null
+          title: string
+        }[]
+      }
       get_ai_quota: { Args: { _feature?: string }; Returns: Json }
       get_compatibility: { Args: { _other: string }; Returns: Json }
       get_compatibility_scores: {
@@ -1981,6 +2130,10 @@ export type Database = {
           created_at: string
           first_name: string
         }[]
+      }
+      record_ad_event: {
+        Args: { _ad_id: string; _event: string; _placement?: string }
+        Returns: boolean
       }
       record_login_failure: {
         Args: { _email: string; _method?: string }

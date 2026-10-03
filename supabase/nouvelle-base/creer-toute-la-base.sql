@@ -2,9 +2,10 @@
 -- YONA — CRÉER TOUTE LA BASE DE DONNÉES (projet Supabase neuf et vide)
 --
 -- Ce fichier installe en une seule fois tout ce dont le site a besoin :
---   38 tables, 152 fonctions, 94 règles d'accès, les droits de chaque rôle,
---   la création automatique du profil à l'inscription (e-mail ou Google), 4 espaces de
---   fichiers privés (photos, messages vocaux, vérifications), les messages en temps réel,
+--   41 tables, 156 fonctions, 105 règles d'accès, les droits de chaque rôle,
+--   la création automatique du profil à l'inscription (e-mail ou Google), 5 espaces de
+--   fichiers (privés : photos, messages vocaux, vérifications ; publics : images des profils
+--   de démonstration, publicités), les messages en temps réel,
 --   les tâches automatiques, les 247 pays et les 40 profils virtuels.
 --
 -- Mode d'emploi : Supabase → SQL Editor → New query → coller TOUT le fichier → Run.
@@ -20,7 +21,7 @@
 -- Le déclencheur de la section « Comptes » relie chaque nouveau compte à son profil.
 --
 -- Fichier généré par scripts/generate-base-complete.py à partir de supabase/migrations/
--- (93 migrations). Ne pas modifier à la main.
+-- (94 migrations). Ne pas modifier à la main.
 -- ============================================================================
 
 -- ============================================================================
@@ -295,6 +296,79 @@ BEGIN
   VALUES (_uid, now(), now() + interval '1 hour')
   RETURNING expires_at INTO _end;
   RETURN _end;
+END;
+$$;
+
+CREATE FUNCTION public.admin_ad_stats(_ad_id uuid, _from timestamp with time zone, _to timestamp with time zone, _bucket text DEFAULT 'day'::text, _tz text DEFAULT 'UTC'::text) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE
+  _unit text := CASE WHEN _bucket IN ('hour', 'day', 'week', 'month', 'year') THEN _bucket ELSE 'day' END;
+BEGIN
+  PERFORM public.assert_admin();
+  IF _from IS NULL OR _to IS NULL OR _to <= _from THEN
+    RAISE EXCEPTION 'invalid_period' USING ERRCODE = '22023';
+  END IF;
+  IF _to - _from > interval '5 years' THEN
+    RAISE EXCEPTION 'period_too_long' USING ERRCODE = '22023';
+  END IF;
+  IF _unit = 'hour' AND _to - _from > interval '31 days' THEN _unit := 'day'; END IF;
+  IF _tz IS NULL OR NOT EXISTS (SELECT 1 FROM pg_catalog.pg_timezone_names WHERE name = _tz) THEN
+    _tz := 'UTC';
+  END IF;
+
+  RETURN (
+    WITH ev AS (
+      SELECT e.ad_id, e.user_id, e.event, e.country, e.created_at FROM public.ad_events e
+      WHERE e.created_at >= _from AND e.created_at < _to AND (_ad_id IS NULL OR e.ad_id = _ad_id)
+    )
+    SELECT jsonb_build_object(
+      'period', jsonb_build_object('from', _from, 'to', _to, 'bucket', _unit, 'timezone', _tz),
+      'ads', (
+        SELECT coalesce(jsonb_agg(jsonb_build_object(
+          'id', a.id, 'title', a.title, 'status', a.status,
+          'views', coalesce(s.views, 0), 'clicks', coalesce(s.clicks, 0), 'skips', coalesce(s.skips, 0),
+          'viewers', coalesce(s.viewers, 0),
+          'ctr', CASE WHEN coalesce(s.views, 0) = 0 THEN 0
+                      ELSE round(100.0 * s.clicks / s.views, 2) END
+        ) ORDER BY coalesce(s.views, 0) DESC, a.created_at DESC), '[]'::jsonb)
+        FROM public.ads a
+        LEFT JOIN (
+          SELECT ad_id, count(*) FILTER (WHERE event = 'view') AS views,
+                 count(*) FILTER (WHERE event = 'click') AS clicks,
+                 count(*) FILTER (WHERE event = 'skip') AS skips,
+                 count(DISTINCT user_id) FILTER (WHERE event = 'view') AS viewers
+          FROM ev GROUP BY ad_id
+        ) s ON s.ad_id = a.id
+        WHERE _ad_id IS NULL OR a.id = _ad_id
+      ),
+      'series', (
+        SELECT coalesce(jsonb_agg(jsonb_build_object(
+          'start', b.start, 'views', coalesce(x.views, 0), 'clicks', coalesce(x.clicks, 0)
+        ) ORDER BY b.start), '[]'::jsonb)
+        FROM generate_series(date_trunc(_unit, _from AT TIME ZONE _tz),
+                             (_to AT TIME ZONE _tz) - interval '1 microsecond',
+                             ('1 ' || _unit)::interval) AS b(start)
+        LEFT JOIN (
+          SELECT date_trunc(_unit, created_at AT TIME ZONE _tz) AS start,
+                 count(*) FILTER (WHERE event = 'view') AS views,
+                 count(*) FILTER (WHERE event = 'click') AS clicks
+          FROM ev GROUP BY 1
+        ) x ON x.start = b.start
+      ),
+      'by_country', (
+        SELECT coalesce(jsonb_agg(jsonb_build_object(
+          'name', name, 'views', views, 'clicks', clicks,
+          'ctr', CASE WHEN views = 0 THEN 0 ELSE round(100.0 * clicks / views, 2) END
+        ) ORDER BY views DESC, name), '[]'::jsonb)
+        FROM (SELECT coalesce(country, 'Inconnu') AS name,
+                     count(*) FILTER (WHERE event = 'view') AS views,
+                     count(*) FILTER (WHERE event = 'click') AS clicks
+              FROM ev GROUP BY 1 ORDER BY 2 DESC, 1 LIMIT 20) c
+      )
+    )
+  );
 END;
 $$;
 
@@ -1877,6 +1951,57 @@ BEGIN
 END;
 $$;
 
+CREATE FUNCTION public.get_ads_for_me(_placement text DEFAULT 'discover'::text, _limit integer DEFAULT 3) RETURNS TABLE(id uuid, title text, body text, advertiser text, media_type text, media_path text, poster_path text, cta_label text, cta_url text, cta_icon text, every_n integer)
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+#variable_conflict use_column
+DECLARE
+  _me uuid := auth.uid();
+  _gender public.gender;
+  _birth date;
+  _virtual boolean;
+  _age integer;
+  _country text;
+  _every integer;
+BEGIN
+  IF _me IS NULL OR _placement IS NULL OR _placement NOT IN ('discover', 'matches', 'messages') THEN
+    RETURN;
+  END IF;
+  IF public.is_premium(_me) OR public.has_role(_me, 'admin') OR NOT public.is_active_account(_me) THEN
+    RETURN;
+  END IF;
+  SELECT p.gender, p.birth_date, p.is_virtual INTO _gender, _birth, _virtual
+  FROM public.profiles p WHERE p.user_id = _me;
+  IF NOT FOUND OR _virtual THEN
+    RETURN;
+  END IF;
+  _age := CASE WHEN _birth IS NULL THEN NULL ELSE extract(year FROM age(_birth))::integer END;
+  _country := public.member_country(_me);
+  SELECT CASE WHEN _placement = 'discover' THEN s.discover_every ELSE s.list_every END
+  INTO _every FROM public.ad_settings s WHERE s.id;
+
+  RETURN QUERY
+  SELECT a.id, a.title, a.body, a.advertiser, a.media_type, a.media_path, a.poster_path,
+         a.cta_label, a.cta_url, a.cta_icon, coalesce(_every, 5)
+  FROM public.ads a
+  CROSS JOIN LATERAL (
+    SELECT count(*) AS n FROM public.ad_events e
+    WHERE e.user_id = _me AND e.ad_id = a.id AND e.event = 'view'
+      AND e.created_at > now() - interval '24 hours'
+  ) v
+  WHERE a.status = 'active' AND a.starts_at <= now() AND (a.ends_at IS NULL OR a.ends_at > now())
+    AND _placement = ANY (a.placements)
+    AND (cardinality(a.target_countries) = 0 OR _country = ANY (a.target_countries))
+    AND (a.target_gender IS NULL OR a.target_gender = _gender)
+    AND (a.min_age IS NULL OR _age >= a.min_age)
+    AND (a.max_age IS NULL OR _age <= a.max_age)
+    AND v.n < a.daily_cap
+  ORDER BY a.priority DESC, v.n, random()
+  LIMIT least(greatest(coalesce(_limit, 3), 1), 10);
+END;
+$$;
+
 CREATE FUNCTION public.get_ai_quota(_feature text DEFAULT 'roi_salomon'::text) RETURNS jsonb
     LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path TO 'public'
@@ -3212,6 +3337,26 @@ BEGIN
   RETURN _n;
 END; $$;
 
+CREATE FUNCTION public.queue_ad_media_cleanup() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    INSERT INTO public.storage_cleanup_queue (bucket_id, path, reason)
+    SELECT 'ads', p, 'publicité supprimée'
+    FROM unnest(ARRAY[OLD.media_path, OLD.poster_path]) AS p WHERE p IS NOT NULL;
+    RETURN OLD;
+  END IF;
+  INSERT INTO public.storage_cleanup_queue (bucket_id, path, reason)
+  SELECT 'ads', p, 'média de publicité remplacé'
+  FROM unnest(ARRAY[
+         CASE WHEN OLD.media_path IS DISTINCT FROM NEW.media_path THEN OLD.media_path END,
+         CASE WHEN OLD.poster_path IS DISTINCT FROM NEW.poster_path THEN OLD.poster_path END]) AS p
+  WHERE p IS NOT NULL;
+  RETURN NEW;
+END; $$;
+
 CREATE FUNCTION public.recent_signups() RETURNS TABLE(first_name text, country text, created_at timestamp with time zone)
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path TO 'public'
@@ -3226,6 +3371,42 @@ CREATE FUNCTION public.recent_signups() RETURNS TABLE(first_name text, country t
     AND p.created_at > now() - interval '7 days'
   ORDER BY p.created_at DESC
   LIMIT 8;
+$$;
+
+CREATE FUNCTION public.record_ad_event(_ad_id uuid, _event text, _placement text DEFAULT 'discover'::text) RETURNS boolean
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE
+  _me uuid := auth.uid();
+  _country text;
+BEGIN
+  IF _me IS NULL THEN
+    RAISE EXCEPTION 'not_authenticated' USING ERRCODE = '42501';
+  END IF;
+  IF _event IS NULL OR _event NOT IN ('view', 'click', 'skip')
+     OR _placement IS NULL OR _placement NOT IN ('discover', 'matches', 'messages') THEN
+    RAISE EXCEPTION 'invalid_event' USING ERRCODE = '22023';
+  END IF;
+  -- Un membre Premium ou un administrateur ne reçoit pas de publicité : rien à compter.
+  IF public.is_premium(_me) OR public.has_role(_me, 'admin') THEN
+    RETURN false;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.ads a WHERE a.id = _ad_id AND a.status = 'active') THEN
+    RETURN false;
+  END IF;
+  IF EXISTS (SELECT 1 FROM public.ad_events e
+             WHERE e.user_id = _me AND e.ad_id = _ad_id AND e.event = _event
+               AND e.created_at > now() - interval '5 minutes') THEN
+    RETURN false;
+  END IF;
+  _country := coalesce(
+    public.member_country(_me),
+    (SELECT g.name FROM public.geo_countries g WHERE g.code = upper(public.request_context() ->> 'country')));
+  INSERT INTO public.ad_events (ad_id, user_id, event, placement, country)
+  VALUES (_ad_id, _me, _event, _placement, left(_country, 80));
+  RETURN true;
+END;
 $$;
 
 CREATE FUNCTION public.record_login_failure(_email text, _method text DEFAULT 'email'::text) RETURNS void
@@ -4435,6 +4616,39 @@ ALTER TABLE public.activity_events ALTER COLUMN id ADD GENERATED ALWAYS AS IDENT
     CACHE 1
 );
 
+CREATE TABLE public.ad_events (
+    id bigint NOT NULL,
+    ad_id uuid NOT NULL,
+    user_id uuid,
+    event text NOT NULL,
+    placement text NOT NULL,
+    country text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ad_events_country_check CHECK (((country IS NULL) OR (char_length(country) <= 80))),
+    CONSTRAINT ad_events_event_check CHECK ((event = ANY (ARRAY['view'::text, 'click'::text, 'skip'::text]))),
+    CONSTRAINT ad_events_placement_check CHECK ((placement = ANY (ARRAY['discover'::text, 'matches'::text, 'messages'::text])))
+);
+COMMENT ON TABLE public.ad_events IS 'Journal des publicités : vues, clics et « Passer ».';
+ALTER TABLE public.ad_events ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.ad_events_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+CREATE TABLE public.ad_settings (
+    id boolean DEFAULT true NOT NULL,
+    discover_every integer DEFAULT 5 NOT NULL,
+    list_every integer DEFAULT 6 NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ad_settings_discover_every_check CHECK (((discover_every >= 2) AND (discover_every <= 50))),
+    CONSTRAINT ad_settings_id_check CHECK (id),
+    CONSTRAINT ad_settings_list_every_check CHECK (((list_every >= 2) AND (list_every <= 50)))
+);
+COMMENT ON TABLE public.ad_settings IS 'Publicités : une toutes les N cartes de Découvrir (discover_every), une toutes les N lignes des listes (list_every).';
+
 CREATE TABLE public.admin_audit_log (
     id bigint NOT NULL,
     admin_id uuid,
@@ -4455,6 +4669,51 @@ ALTER TABLE public.admin_audit_log ALTER COLUMN id ADD GENERATED ALWAYS AS IDENT
     NO MAXVALUE
     CACHE 1
 );
+
+CREATE TABLE public.ads (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    title text NOT NULL,
+    body text,
+    advertiser text,
+    media_type text NOT NULL,
+    media_path text NOT NULL,
+    poster_path text,
+    cta_label text DEFAULT 'En savoir plus'::text NOT NULL,
+    cta_url text NOT NULL,
+    cta_icon text DEFAULT 'external'::text NOT NULL,
+    placements text[] DEFAULT ARRAY['discover'::text] NOT NULL,
+    status text DEFAULT 'draft'::text NOT NULL,
+    starts_at timestamp with time zone DEFAULT now() NOT NULL,
+    ends_at timestamp with time zone,
+    target_countries text[] DEFAULT '{}'::text[] NOT NULL,
+    target_gender public.gender,
+    min_age integer,
+    max_age integer,
+    priority integer DEFAULT 0 NOT NULL,
+    daily_cap integer DEFAULT 3 NOT NULL,
+    created_by uuid,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ads_advertiser_check CHECK (((advertiser IS NULL) OR (char_length(advertiser) <= 40))),
+    CONSTRAINT ads_ages_check CHECK (((min_age IS NULL) OR (max_age IS NULL) OR (min_age <= max_age))),
+    CONSTRAINT ads_body_check CHECK (((body IS NULL) OR (char_length(body) <= 300))),
+    CONSTRAINT ads_cta_icon_check CHECK ((cta_icon = ANY (ARRAY['external'::text, 'message'::text, 'phone'::text]))),
+    CONSTRAINT ads_cta_label_check CHECK (((char_length(btrim(cta_label)) >= 1) AND (char_length(btrim(cta_label)) <= 24))),
+    CONSTRAINT ads_cta_url_check CHECK (((cta_url ~ '^https://[A-Za-z0-9.-]+(:[0-9]+)?([/?#][^[:space:]]*)?$'::text) AND (char_length(cta_url) <= 500))),
+    CONSTRAINT ads_daily_cap_check CHECK (((daily_cap >= 1) AND (daily_cap <= 50))),
+    CONSTRAINT ads_dates_check CHECK (((ends_at IS NULL) OR (ends_at > starts_at))),
+    CONSTRAINT ads_max_age_check CHECK (((max_age IS NULL) OR ((max_age >= 18) AND (max_age <= 99)))),
+    CONSTRAINT ads_media_folder_check CHECK (((split_part(media_path, '/'::text, 1) = (id)::text) AND ((poster_path IS NULL) OR (split_part(poster_path, '/'::text, 1) = (id)::text)))),
+    CONSTRAINT ads_media_path_check CHECK ((media_path ~ '^[0-9a-f-]{36}/[A-Za-z0-9._-]{1,100}$'::text)),
+    CONSTRAINT ads_media_type_check CHECK ((media_type = ANY (ARRAY['image'::text, 'video'::text]))),
+    CONSTRAINT ads_min_age_check CHECK (((min_age IS NULL) OR ((min_age >= 18) AND (min_age <= 99)))),
+    CONSTRAINT ads_placements_check CHECK (((cardinality(placements) >= 1) AND (placements <@ ARRAY['discover'::text, 'matches'::text, 'messages'::text]))),
+    CONSTRAINT ads_poster_path_check CHECK (((poster_path IS NULL) OR (poster_path ~ '^[0-9a-f-]{36}/[A-Za-z0-9._-]{1,100}$'::text))),
+    CONSTRAINT ads_priority_check CHECK (((priority >= 0) AND (priority <= 100))),
+    CONSTRAINT ads_status_check CHECK ((status = ANY (ARRAY['draft'::text, 'active'::text, 'paused'::text]))),
+    CONSTRAINT ads_title_check CHECK (((char_length(btrim(title)) >= 1) AND (char_length(btrim(title)) <= 90)))
+);
+COMMENT ON TABLE public.ads IS 'Publicités sponsorisées, montrées uniquement aux membres gratuits (get_ads_for_me).';
 
 CREATE TABLE public.ai_usage (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
@@ -4957,8 +5216,17 @@ CREATE TABLE public.virtual_profile_removals (
 ALTER TABLE ONLY public.activity_events
     ADD CONSTRAINT activity_events_pkey PRIMARY KEY (id);
 
+ALTER TABLE ONLY public.ad_events
+    ADD CONSTRAINT ad_events_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.ad_settings
+    ADD CONSTRAINT ad_settings_pkey PRIMARY KEY (id);
+
 ALTER TABLE ONLY public.admin_audit_log
     ADD CONSTRAINT admin_audit_log_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.ads
+    ADD CONSTRAINT ads_pkey PRIMARY KEY (id);
 
 ALTER TABLE ONLY public.ai_usage
     ADD CONSTRAINT ai_usage_pkey PRIMARY KEY (id);
@@ -5111,7 +5379,15 @@ CREATE INDEX activity_events_event_idx ON public.activity_events USING btree (ev
 
 CREATE INDEX activity_events_user_idx ON public.activity_events USING btree (user_id, created_at DESC);
 
+CREATE INDEX ad_events_ad_idx ON public.ad_events USING btree (ad_id, created_at DESC);
+
+CREATE INDEX ad_events_created_idx ON public.ad_events USING btree (created_at DESC);
+
+CREATE INDEX ad_events_user_idx ON public.ad_events USING btree (user_id, ad_id, created_at DESC);
+
 CREATE INDEX admin_audit_log_created_idx ON public.admin_audit_log USING btree (created_at DESC);
+
+CREATE INDEX ads_live_idx ON public.ads USING btree (status, starts_at) WHERE (status = 'active'::text);
 
 CREATE INDEX ai_usage_feature_date_idx ON public.ai_usage USING btree (feature, usage_date);
 
@@ -5214,6 +5490,16 @@ CREATE INDEX unlocks_conversation_idx ON public.conversation_unlocks USING btree
 -- ============================================================================
 -- 10. Déclencheurs : actions automatiques à chaque ajout ou modification
 -- ============================================================================
+
+CREATE TRIGGER ad_settings_audit_admin AFTER UPDATE ON public.ad_settings FOR EACH ROW EXECUTE FUNCTION public.audit_admin_change();
+
+CREATE TRIGGER ad_settings_set_updated_at BEFORE UPDATE ON public.ad_settings FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+CREATE TRIGGER ads_audit_admin AFTER INSERT OR DELETE OR UPDATE ON public.ads FOR EACH ROW EXECUTE FUNCTION public.audit_admin_change();
+
+CREATE TRIGGER ads_queue_media_cleanup AFTER DELETE OR UPDATE OF media_path, poster_path ON public.ads FOR EACH ROW EXECUTE FUNCTION public.queue_ad_media_cleanup();
+
+CREATE TRIGGER ads_set_updated_at BEFORE UPDATE ON public.ads FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
 CREATE TRIGGER ai_usage_updated_at BEFORE UPDATE ON public.ai_usage FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
@@ -5348,6 +5634,15 @@ CREATE TRIGGER users_updated_at BEFORE UPDATE ON public.users FOR EACH ROW EXECU
 -- ============================================================================
 -- 11. Liens entre les tables (clés étrangères)
 -- ============================================================================
+
+ALTER TABLE ONLY public.ad_events
+    ADD CONSTRAINT ad_events_ad_id_fkey FOREIGN KEY (ad_id) REFERENCES public.ads(id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY public.ad_events
+    ADD CONSTRAINT ad_events_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE SET NULL;
+
+ALTER TABLE ONLY public.ads
+    ADD CONSTRAINT ads_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id) ON DELETE SET NULL;
 
 ALTER TABLE ONLY public.ai_usage
     ADD CONSTRAINT ai_usage_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
@@ -5504,7 +5799,10 @@ ALTER TABLE ONLY public.virtual_profile_removals
 -- ============================================================================
 
 ALTER TABLE public.activity_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ad_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ad_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.admin_audit_log ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ads ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ai_usage ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.auth_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.blocks ENABLE ROW LEVEL SECURITY;
@@ -5549,8 +5847,25 @@ ALTER TABLE public.virtual_profile_removals ENABLE ROW LEVEL SECURITY;
 -- activity_events
 CREATE POLICY activity_events_select_admin ON public.activity_events FOR SELECT TO authenticated USING (public.is_admin());
 
+-- ad_events
+CREATE POLICY ad_events_admin_select ON public.ad_events FOR SELECT TO authenticated USING (public.is_admin());
+
+-- ad_settings
+CREATE POLICY ad_settings_admin_select ON public.ad_settings FOR SELECT TO authenticated USING (public.is_admin());
+
+CREATE POLICY ad_settings_admin_update ON public.ad_settings FOR UPDATE TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
+
 -- admin_audit_log
 CREATE POLICY admin_audit_log_select_admin ON public.admin_audit_log FOR SELECT TO authenticated USING (public.is_admin());
+
+-- ads
+CREATE POLICY ads_admin_delete ON public.ads FOR DELETE TO authenticated USING (public.is_admin());
+
+CREATE POLICY ads_admin_insert ON public.ads FOR INSERT TO authenticated WITH CHECK (public.is_admin());
+
+CREATE POLICY ads_admin_select ON public.ads FOR SELECT TO authenticated USING (public.is_admin());
+
+CREATE POLICY ads_admin_update ON public.ads FOR UPDATE TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
 
 -- ai_usage
 CREATE POLICY ai_usage_select_admin ON public.ai_usage FOR SELECT TO authenticated USING (public.is_admin());
@@ -5854,9 +6169,10 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
   public.users
 TO authenticated;
 
--- 7 compteurs — serveur du site : tout
+-- 8 compteurs — serveur du site : tout
 REVOKE ALL ON SEQUENCE
   public.activity_events_id_seq,
+  public.ad_events_id_seq,
   public.admin_audit_log_id_seq,
   public.auth_events_id_seq,
   public.payment_events_id_seq,
@@ -5866,6 +6182,7 @@ REVOKE ALL ON SEQUENCE
 FROM PUBLIC, anon, authenticated, service_role;
 GRANT ALL ON SEQUENCE
   public.activity_events_id_seq,
+  public.ad_events_id_seq,
   public.admin_audit_log_id_seq,
   public.auth_events_id_seq,
   public.payment_events_id_seq,
@@ -5890,6 +6207,18 @@ GRANT SELECT, TRUNCATE, REFERENCES, TRIGGER ON TABLE
   public.profile_boosts,
   public.support_tickets
 TO anon, authenticated;
+
+-- 3 tables — membres connectés : tout · serveur du site : tout
+REVOKE ALL ON TABLE
+  public.ad_events,
+  public.ad_settings,
+  public.ads
+FROM PUBLIC, anon, authenticated, service_role;
+GRANT ALL ON TABLE
+  public.ad_events,
+  public.ad_settings,
+  public.ads
+TO authenticated, service_role;
 
 -- 3 tables — serveur du site : tout
 REVOKE ALL ON TABLE
@@ -5933,9 +6262,10 @@ GRANT SELECT, INSERT, DELETE ON TABLE
   public.favorites
 TO authenticated;
 
--- 86 fonctions — membres connectés : exécution · serveur du site : exécution
+-- 89 fonctions — membres connectés : exécution · serveur du site : exécution
 REVOKE ALL ON FUNCTION
   public.activate_profile_boost(),
+  public.admin_ad_stats(uuid,timestamp with time zone,timestamp with time zone,text,text),
   public.admin_dashboard(timestamp with time zone,timestamp with time zone,text,text),
   public.admin_list_demo_profiles(),
   public.admin_list_payments(),
@@ -5967,6 +6297,7 @@ REVOKE ALL ON FUNCTION
   public.create_support_ticket(text,text),
   public.discover_profiles(integer),
   public.distance_km(double precision,double precision,double precision,double precision),
+  public.get_ads_for_me(text,integer),
   public.get_ai_quota(text),
   public.get_compatibility(uuid),
   public.get_compatibility_scores(uuid[]),
@@ -6004,6 +6335,7 @@ REVOKE ALL ON FUNCTION
   public.mark_notification_read(uuid),
   public.mark_offline(),
   public.normalize_place(text),
+  public.record_ad_event(uuid,text,text),
   public.record_logout(),
   public.record_profile_visit(uuid),
   public.record_session_context(text),
@@ -6024,6 +6356,7 @@ REVOKE ALL ON FUNCTION
 FROM PUBLIC, anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION
   public.activate_profile_boost(),
+  public.admin_ad_stats(uuid,timestamp with time zone,timestamp with time zone,text,text),
   public.admin_dashboard(timestamp with time zone,timestamp with time zone,text,text),
   public.admin_list_demo_profiles(),
   public.admin_list_payments(),
@@ -6055,6 +6388,7 @@ GRANT EXECUTE ON FUNCTION
   public.create_support_ticket(text,text),
   public.discover_profiles(integer),
   public.distance_km(double precision,double precision,double precision,double precision),
+  public.get_ads_for_me(text,integer),
   public.get_ai_quota(text),
   public.get_compatibility(uuid),
   public.get_compatibility_scores(uuid[]),
@@ -6092,6 +6426,7 @@ GRANT EXECUTE ON FUNCTION
   public.mark_notification_read(uuid),
   public.mark_offline(),
   public.normalize_place(text),
+  public.record_ad_event(uuid,text,text),
   public.record_logout(),
   public.record_profile_visit(uuid),
   public.record_session_context(text),
@@ -6111,7 +6446,7 @@ GRANT EXECUTE ON FUNCTION
   public.undo_last_pass()
 TO authenticated, service_role;
 
--- 57 fonctions — serveur du site : exécution
+-- 58 fonctions — serveur du site : exécution
 REVOKE ALL ON FUNCTION
   public.activate_conversation_unlock(),
   public.activate_premium_subscription(),
@@ -6158,6 +6493,7 @@ REVOKE ALL ON FUNCTION
   public.protect_terms_accepted_at(),
   public.protect_user_columns(),
   public.purge_old_logs(),
+  public.queue_ad_media_cleanup(),
   public.recent_signups(),
   public.record_login_failure(text,text),
   public.record_payment_webhook(text,uuid,text,text),
@@ -6217,6 +6553,7 @@ GRANT EXECUTE ON FUNCTION
   public.protect_terms_accepted_at(),
   public.protect_user_columns(),
   public.purge_old_logs(),
+  public.queue_ad_media_cleanup(),
   public.recent_signups(),
   public.record_login_failure(text,text),
   public.record_payment_webhook(text,uuid,text,text),
@@ -6267,16 +6604,34 @@ CREATE TRIGGER on_auth_user_created AFTER INSERT ON auth.users FOR EACH ROW EXEC
 CREATE TRIGGER on_auth_user_logged AFTER INSERT OR UPDATE ON auth.users FOR EACH ROW EXECUTE FUNCTION public.log_auth_user_change();
 
 -- ============================================================================
--- 16. Fichiers : espaces privés (photos, messages vocaux, vérifications) et leurs règles
+-- 16. Fichiers : espaces de stockage (privés et publics) et leurs règles
 -- ============================================================================
 
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types) VALUES
+  ('ads', 'ads', true, 15728640, '{image/jpeg,image/png,image/webp,video/mp4,video/webm}'),
   ('demo-profils', 'demo-profils', true, 2097152, '{image/jpeg,image/png,image/webp}'),
   ('photos', 'photos', false, 5242880, '{image/jpeg,image/png,image/webp}'),
   ('verifications', 'verifications', false, 8388608, '{image/jpeg,image/png,image/webp}'),
   ('voice-messages', 'voice-messages', false, 2097152, '{audio/webm,audio/ogg,audio/mp4,audio/mpeg}')
 ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, public = EXCLUDED.public,
   file_size_limit = EXCLUDED.file_size_limit, allowed_mime_types = EXCLUDED.allowed_mime_types;
+
+CREATE POLICY ads_storage_delete_admin ON storage.objects
+  FOR DELETE TO authenticated
+  USING (((bucket_id = 'ads'::text) AND public.is_admin()));
+
+CREATE POLICY ads_storage_insert_admin ON storage.objects
+  FOR INSERT TO authenticated
+  WITH CHECK (((bucket_id = 'ads'::text) AND public.is_admin()));
+
+CREATE POLICY ads_storage_select_admin ON storage.objects
+  FOR SELECT TO authenticated
+  USING (((bucket_id = 'ads'::text) AND public.is_admin()));
+
+CREATE POLICY ads_storage_update_admin ON storage.objects
+  FOR UPDATE TO authenticated
+  USING (((bucket_id = 'ads'::text) AND public.is_admin()))
+  WITH CHECK (((bucket_id = 'ads'::text) AND public.is_admin()));
 
 CREATE POLICY demo_storage_delete_admin ON storage.objects
   FOR DELETE TO authenticated
@@ -6387,7 +6742,13 @@ END;
 $cron$;
 
 -- ============================================================================
--- 19. Données de départ : 247 pays (position, pour le pays le plus proche)
+-- 19. Données de départ : réglages (fréquence des publicités)
+-- ============================================================================
+
+INSERT INTO public.ad_settings (id) VALUES (true) ON CONFLICT (id) DO NOTHING;
+
+-- ============================================================================
+-- 20. Données de départ : 247 pays (position, pour le pays le plus proche)
 -- ============================================================================
 
 INSERT INTO public.geo_countries (code, name, lat, lng) VALUES
@@ -6641,7 +7002,7 @@ INSERT INTO public.geo_countries (code, name, lat, lng) VALUES
 ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name, lat = EXCLUDED.lat, lng = EXCLUDED.lng;
 
 -- ============================================================================
--- 20. Données de départ : 40 profils virtuels (comptes sans mot de passe)
+-- 21. Données de départ : 40 profils virtuels (comptes sans mot de passe)
 -- ============================================================================
 
 DO $do$
@@ -6769,7 +7130,7 @@ END
 $do$;
 
 -- ============================================================================
--- 21. Bilan
+-- 22. Bilan
 -- ============================================================================
 
 -- Tâches automatiques : comptées à part (pg_cron peut être absent ou non lisible).
@@ -6788,13 +7149,17 @@ SELECT b.element AS "Élément", b.trouve AS "Dans la base", b.attendu AS "Atten
             WHEN b.facultatif THEN '⚠️ facultatif'
             ELSE '❌' END AS "État"
 FROM (VALUES
-  (1, 'Tables', (SELECT count(*) FROM pg_catalog.pg_tables WHERE schemaname = 'public')::text, '38', false),
-  (2, 'Fonctions', (SELECT count(*) FROM pg_catalog.pg_proc WHERE pronamespace = 'public'::regnamespace)::text, '152', false),
-  (3, 'Règles d''accès des tables', (SELECT count(*) FROM pg_catalog.pg_policies WHERE schemaname = 'public')::text, '81', false),
-  (4, 'Tables protégées (RLS)', (SELECT count(*) FROM pg_catalog.pg_class WHERE relnamespace = 'public'::regnamespace AND relkind = 'r' AND relrowsecurity)::text, '38', false),
+  (1, 'Tables', (SELECT count(*) FROM pg_catalog.pg_tables WHERE schemaname = 'public')::text, '41', false),
+  (2, 'Fonctions', (SELECT count(*) FROM pg_catalog.pg_proc WHERE pronamespace = 'public'::regnamespace)::text, '156', false),
+  (3, 'Règles d''accès des tables', (SELECT count(*) FROM pg_catalog.pg_policies WHERE schemaname = 'public')::text, '88', false),
+  (4, 'Tables protégées (RLS)', (SELECT count(*) FROM pg_catalog.pg_class WHERE relnamespace = 'public'::regnamespace AND relkind = 'r' AND relrowsecurity)::text, '41', false),
   (5, 'Profil créé à l''inscription', (SELECT CASE WHEN count(*) > 0 THEN 'oui' ELSE 'non' END FROM pg_catalog.pg_trigger WHERE tgrelid = 'auth.users'::regclass AND tgname = 'on_auth_user_created'), 'oui', false),
-  (6, 'Espaces de fichiers', (SELECT count(*) FROM storage.buckets WHERE id IN ('demo-profils', 'photos', 'verifications', 'voice-messages'))::text, '4', false),
-  (7, 'Règles d''accès des fichiers', (SELECT count(*) FROM pg_catalog.pg_policies WHERE schemaname = 'storage' AND policyname IN ('demo_storage_delete_admin',
+  (6, 'Espaces de fichiers', (SELECT count(*) FROM storage.buckets WHERE id IN ('ads', 'demo-profils', 'photos', 'verifications', 'voice-messages'))::text, '5', false),
+  (7, 'Règles d''accès des fichiers', (SELECT count(*) FROM pg_catalog.pg_policies WHERE schemaname = 'storage' AND policyname IN ('ads_storage_delete_admin',
+      'ads_storage_insert_admin',
+      'ads_storage_select_admin',
+      'ads_storage_update_admin',
+      'demo_storage_delete_admin',
       'demo_storage_insert_admin',
       'demo_storage_select_admin',
       'demo_storage_update_admin',
@@ -6806,7 +7171,7 @@ FROM (VALUES
       'verifications_storage_select',
       'voice_storage_delete_own',
       'voice_storage_insert_premium',
-      'voice_storage_select_participant'))::text, '13', false),
+      'voice_storage_select_participant'))::text, '17', false),
   (8, 'Messages en temps réel', (SELECT CASE WHEN count(*) > 0 THEN 'oui' ELSE 'non' END FROM pg_catalog.pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'messages'), 'oui', false),
   (9, 'Tâches automatiques', current_setting('yona.taches', true), '2', true),
   (10, 'Pays', (SELECT count(*) FROM public.geo_countries)::text, '247', false),

@@ -30,6 +30,11 @@ OUT = os.path.join(ROOT, "supabase", "nouvelle-base", "creer-toute-la-base.sql")
 DB = os.environ.get("YONA_GEN_DB", "yona_generation_base")
 GEO_MIG = "20261002110000_profils_virtuels_donnees.sql"
 SEED_MIG = "20261003100100_profils_demo_donnees.sql"
+# Lignes de réglages créées par les migrations (une seule ligne par table).
+SETTINGS_ROWS = [
+    ("20261003150000_publicites.sql",
+     r"^INSERT INTO public\.ad_settings \(id\) VALUES \(true\) ON CONFLICT \(id\) DO NOTHING;"),
+]
 CRON_MIGS = [
     ("20260928090000_phase7_expirer_deblocage.sql", "fin des déblocages de conversation"),
     ("20260930120000_phase14_premium.sql", "fin des abonnements Premium"),
@@ -345,6 +350,16 @@ def seed_sql():
     return geo[0], seed_block
 
 
+def settings_sql():
+    found = []
+    for name, pattern in SETTINGS_ROWS:
+        rows_found = re.findall(pattern, read_mig(name), flags=re.M)
+        if len(rows_found) != 1:
+            raise SystemExit(f"Ligne de réglages introuvable dans {name}")
+        found.append(rows_found[0])
+    return "\n".join(found)
+
+
 # ---------------------------------------------------------------------------
 # Écriture
 # ---------------------------------------------------------------------------
@@ -388,7 +403,8 @@ def main():
 -- Ce fichier installe en une seule fois tout ce dont le site a besoin :
 --   {expected['tables']} tables, {expected['functions']} fonctions, {expected['policies'] + expected['storage_policies']} règles d'accès, les droits de chaque rôle,
 --   la création automatique du profil à l'inscription (e-mail ou Google), {n_buckets} espaces de
---   fichiers privés (photos, messages vocaux, vérifications), les messages en temps réel,
+--   fichiers (privés : photos, messages vocaux, vérifications ; publics : images des profils
+--   de démonstration, publicités), les messages en temps réel,
 --   les tâches automatiques, les {expected['countries']} pays et les {expected['virtual']} profils virtuels.
 --
 -- Mode d'emploi : Supabase → SQL Editor → New query → coller TOUT le fichier → Run.
@@ -442,7 +458,7 @@ SET search_path = pg_catalog;""")
     out.section("Comptes : chaque nouveau compte (e-mail ou Google) reçoit son profil")
     out.write(auth_triggers_sql())
 
-    out.section("Fichiers : espaces privés (photos, messages vocaux, vérifications) et leurs règles")
+    out.section("Fichiers : espaces de stockage (privés et publics) et leurs règles")
     out.write(storage)
 
     out.section("Temps réel : nouveaux messages affichés sans recharger la page")
@@ -450,6 +466,9 @@ SET search_path = pg_catalog;""")
 
     out.section("Tâches automatiques (pg_cron, si Supabase le permet ; sinon les dates suffisent)")
     out.write(cron_sql())
+
+    out.section("Données de départ : réglages (fréquence des publicités)")
+    out.write(settings_sql())
 
     out.section(f"Données de départ : {expected['countries']} pays (position, pour le pays le plus proche)")
     out.write(geo)

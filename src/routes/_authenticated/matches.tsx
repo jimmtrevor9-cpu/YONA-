@@ -1,12 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { Fragment, useState } from "react";
 import { ChevronRight, MapPin, Send } from "lucide-react";
 
+import { SponsoredBanner } from "@/components/ads/SponsoredBanner";
 import { AppHeader } from "@/components/AppHeader";
 import { BottomNav } from "@/components/BottomNav";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { adSlots, useSponsoredAds } from "@/features/ads/ads";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { myMatchesQuery } from "@/features/matches/queries";
 import { computeAge } from "@/features/profiles/queries";
@@ -40,6 +43,13 @@ function MatchesPage() {
     ...myMatchesQuery(user?.id ?? ""),
     enabled: !!user?.id,
   });
+  // Publicités (membres gratuits seulement, règle appliquée par le serveur).
+  const ads = useSponsoredAds("matches");
+  const [hiddenAds, setHiddenAds] = useState<string[]>([]);
+  const slots = adSlots(
+    data?.length ?? 0,
+    ads.filter((ad) => !hiddenAds.includes(ad.id)),
+  );
 
   return (
     <div className="min-h-screen bg-background pb-24">
@@ -73,47 +83,59 @@ function MatchesPage() {
           </p>
         ) : data && data.length > 0 ? (
           <ul className="space-y-3" aria-label="Liste de vos Matchs">
-            {data.map((match) => {
+            {data.map((match, index) => {
               const age = computeAge(match.birthDate);
               const place = [match.city, match.country].filter(Boolean).join(", ");
               const name = match.firstName ?? "Membre";
+              const slot = slots.get(index);
               return (
-                <li key={match.matchId}>
-                  <Link
-                    to="/matches/$matchId"
-                    params={{ matchId: match.matchId }}
-                    aria-label={`Voir le profil de ${name}`}
-                    className="panel gold-thread flex items-center gap-4 p-4 transition-colors hover:bg-surface-2"
-                  >
-                    <Avatar className="size-14 ring-1 ring-gold/20">
-                      {match.photoUrl ? (
-                        <AvatarImage
-                          src={match.photoUrl}
-                          alt={`Photo de ${name}`}
-                          className="object-cover"
-                        />
-                      ) : null}
-                      <AvatarFallback className="bg-accent font-display text-lg text-gold-soft">
-                        {name.charAt(0).toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="min-w-0 flex-1">
-                      <h2 className="truncate font-display text-lg font-semibold text-foreground">
-                        {name}
-                        {age ? <span className="text-muted-foreground"> · {age} ans</span> : null}
-                      </h2>
-                      {place ? (
-                        <p className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-muted-foreground">
-                          <MapPin className="size-3.5 shrink-0" aria-hidden />
-                          {place}
+                <Fragment key={match.matchId}>
+                  <li>
+                    <Link
+                      to="/matches/$matchId"
+                      params={{ matchId: match.matchId }}
+                      aria-label={`Voir le profil de ${name}`}
+                      className="panel gold-thread flex items-center gap-4 p-4 transition-colors hover:bg-surface-2"
+                    >
+                      <Avatar className="size-14 ring-1 ring-gold/20">
+                        {match.photoUrl ? (
+                          <AvatarImage
+                            src={match.photoUrl}
+                            alt={`Photo de ${name}`}
+                            className="object-cover"
+                          />
+                        ) : null}
+                        <AvatarFallback className="bg-accent font-display text-lg text-gold-soft">
+                          {name.charAt(0).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0 flex-1">
+                        <h2 className="truncate font-display text-lg font-semibold text-foreground">
+                          {name}
+                          {age ? <span className="text-muted-foreground"> · {age} ans</span> : null}
+                        </h2>
+                        {place ? (
+                          <p className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-muted-foreground">
+                            <MapPin className="size-3.5 shrink-0" aria-hidden />
+                            {place}
+                          </p>
+                        ) : null}
+                        <p className="mt-1 text-[11px] text-muted-foreground">
+                          Match le {matchedOn.format(new Date(match.matchedAt))}
                         </p>
-                      ) : null}
-                      <p className="mt-1 text-[11px] text-muted-foreground">
-                        Match le {matchedOn.format(new Date(match.matchedAt))}
-                      </p>
-                    </div>
-                  </Link>
-                </li>
+                      </div>
+                    </Link>
+                  </li>
+                  {slot ? (
+                    <li>
+                      <SponsoredBanner
+                        ad={slot}
+                        placement="matches"
+                        onHide={() => setHiddenAds((current) => [...current, slot.id])}
+                      />
+                    </li>
+                  ) : null}
+                </Fragment>
               );
             })}
           </ul>
