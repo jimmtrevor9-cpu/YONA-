@@ -3,6 +3,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 
 import { readAiModel, type AiProviderId } from "./provider";
+import { logServerError } from "@/features/journal/server-errors.server";
 
 export interface AiTurn {
   role: "user" | "assistant";
@@ -56,9 +57,9 @@ export async function generateText(options: {
   } catch (error) {
     if (error instanceof AiProviderError) throw error;
     if (error instanceof Anthropic.APIError) {
-      console.error(`[IA] Erreur du fournisseur (${error.status}) : ${error.message}`);
+      await logServerError("ia", `Erreur du fournisseur (${error.status}) : ${error.message}`);
     } else {
-      console.error("[IA] Erreur réseau du fournisseur", error);
+      await logServerError("ia", error);
     }
     throw new AiProviderError("provider_error");
   }

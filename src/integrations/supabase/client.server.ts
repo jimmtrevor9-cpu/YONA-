@@ -66,3 +66,17 @@ export const supabaseAdmin = new Proxy({} as ReturnType<typeof createSupabaseAdm
     return Reflect.get(_supabaseAdmin, prop, receiver);
   },
 });
+
+/**
+ * Client « service » qui transmet en plus des en-têtes (contexte du navigateur pour le
+ * journal, voir request-context.ts). Même règle que supabaseAdmin : serveur uniquement.
+ */
+export function createSupabaseServiceClient(headers: Record<string, string>) {
+  const SUPABASE_URL = process.env['SUPABASE_URL'];
+  const SUPABASE_SERVICE_ROLE_KEY = process.env['SUPABASE_SERVICE_ROLE_KEY'];
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return null;
+  return createClient<Database>(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    global: { fetch: createSupabaseFetch(SUPABASE_SERVICE_ROLE_KEY), headers },
+    auth: { storage: undefined, persistSession: false, autoRefreshToken: false },
+  });
+}

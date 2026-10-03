@@ -3,7 +3,25 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import type { Session, User } from "@supabase/supabase-js";
 
+import { recordSessionContext } from "@/features/journal/journal.functions";
 import { supabase } from "@/integrations/supabase/client";
+
+/**
+ * Journal de l'administration : appareil, IP, pays et fuseau de la connexion, envoyés une
+ * fois par session (sans effet sur la connexion si l'envoi échoue).
+ */
+function recordSessionOnce(session: Session | null) {
+  if (!session || typeof window === "undefined") return;
+  const key = `yona.session-context.${session.user.id}.${session.user.last_sign_in_at ?? ""}`;
+  try {
+    if (window.sessionStorage.getItem(key)) return;
+    window.sessionStorage.setItem(key, "1");
+  } catch {
+    // Stockage indisponible : envoi quand même (la base ignore les doublons).
+  }
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  void recordSessionContext({ data: { timezone } }).catch(() => {});
+}
 
 interface AuthState {
   session: Session | null;
@@ -35,6 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } = supabase.auth.onAuthStateChange((event, next) => {
       setSession(next);
       setLoading(false);
+      if (event === "SIGNED_IN") recordSessionOnce(next);
       if (event !== "SIGNED_IN" && event !== "SIGNED_OUT" && event !== "USER_UPDATED") return;
       router.invalidate();
       if (event !== "SIGNED_OUT") queryClient.invalidateQueries();

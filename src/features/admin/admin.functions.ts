@@ -46,7 +46,10 @@ export const adminSetUserStatus = createServerFn({ method: "POST" })
       ban_duration: data.action === "reactivate" ? "none" : "876000h",
     });
     if (authError) {
-      console.error("admin ban_duration", authError.message);
+      const { logServerError } = await import("@/features/journal/server-errors.server");
+      await logServerError("admin", `Blocage de la connexion impossible : ${authError.message}`, {
+        details: { membre: data.userId, action: data.action },
+      });
       throw new Error(
         "Le statut est enregistré, mais la connexion n'a pas pu être mise à jour. Réessayez.",
       );

@@ -1,3 +1,5 @@
+import { logServerError } from "@/features/journal/server-errors.server";
+
 /**
  * Vide la file `storage_cleanup_queue` : fichiers à supprimer du stockage (photo d'un
  * profil de démonstration retiré, pièces d'identité après décision…). La base ne peut pas
@@ -25,7 +27,10 @@ export async function processStorageCleanup(limit = 100): Promise<number> {
   for (const [bucket, { ids, paths }] of byBucket) {
     const { error: removeError } = await supabaseAdmin.storage.from(bucket).remove(paths);
     if (removeError) {
-      console.error("storage cleanup", bucket, removeError.message);
+      await logServerError(
+        "stockage",
+        `Suppression de fichiers impossible (${bucket}) : ${removeError.message}`,
+      );
       continue;
     }
     await supabaseAdmin

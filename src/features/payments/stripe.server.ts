@@ -45,7 +45,11 @@ export async function createStripeCheckout(input: CheckoutInput): Promise<string
   });
   const json = (await res.json()) as { url?: string; error?: { message?: string } };
   if (!res.ok || !json.url) {
-    console.error("[Stripe] Création du paiement impossible :", json.error?.message ?? res.status);
+    const { logServerError } = await import("@/features/journal/server-errors.server");
+    await logServerError(
+      "stripe",
+      `Création du paiement impossible : ${json.error?.message ?? res.status}`,
+    );
     throw new Error("stripe_checkout_failed");
   }
   return json.url;

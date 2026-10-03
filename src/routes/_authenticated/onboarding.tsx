@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { FullProfileEditor } from "@/components/profile/FullProfileEditor";
 import { RedirectingScreen } from "@/components/RedirectingScreen";
 import { SignupWizard } from "@/components/signup/SignupWizard";
+import { recordSignupStep } from "@/features/journal/signup-steps";
 import { useAuth } from "@/features/auth/AuthProvider";
 import {
   EMPTY_DRAFT,
@@ -167,6 +168,7 @@ function OnboardingPage() {
         photoSlots={Math.max(0, FREE_MAX_PHOTOS - (photoCount ?? 0))}
         pending={false}
         onChange={remember}
+        onStepDone={recordSignupStep}
         onFinish={(draft, photos) => {
           // Écran de chargement aussitôt après la validation, pendant l'enregistrement.
           setInitial({ ...draft, termsAcceptedAt: null });

@@ -123,7 +123,11 @@ export const askRoiSalomon = createServerFn({ method: "POST" })
           _feature: "roi_salomon",
         });
       } catch (refundError) {
-        console.error("[IA] Remboursement de la question impossible", refundError);
+        const { logServerError } = await import("@/features/journal/server-errors.server");
+        await logServerError("ia", refundError, {
+          userId: context.userId,
+          details: { étape: "remboursement de la question" },
+        });
       }
       throw new Error(ROI_SALOMON_ERRORS.provider_error);
     }

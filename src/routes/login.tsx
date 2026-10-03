@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { signIn, signInWithGoogle, translateAuthError } from "@/features/auth/auth.service";
+import { recordLoginFailure } from "@/features/journal/journal.functions";
 import { getPostLoginPath } from "@/features/profiles/queries";
 import { APP_NAME } from "@/lib/config";
 
@@ -54,6 +55,8 @@ function LoginPage() {
     setPending(false);
     if (error) {
       toast.error(translateAuthError(error.message));
+      // Journal de l'administration : connexion échouée (adresse saisie, jamais le mot de passe).
+      void recordLoginFailure({ data: { email: email.trim(), method: "email" } }).catch(() => {});
       return;
     }
     toast.success("Bon retour parmi nous.");

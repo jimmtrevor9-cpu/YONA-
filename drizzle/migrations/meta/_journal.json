@@ -631,6 +631,13 @@
       "when": 1790848800000,
       "tag": "0089_page_decouvrir",
       "breakpoints": true
+    },
+    {
+      "idx": 90,
+      "version": "7",
+      "when": 1790852400000,
+      "tag": "0090_journal_activite",
+      "breakpoints": true
     }
   ]
 }

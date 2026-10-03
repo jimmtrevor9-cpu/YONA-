@@ -39,6 +39,7 @@ SELECT essai_b.membre('b0000000-0000-0000-0000-000000000012', 'Berthe', 'female'
 SELECT essai_b.membre('b0000000-0000-0000-0000-000000000013', 'Carole', 'female', NULL);
 SELECT essai_b.membre('b0000000-0000-0000-0000-000000000014', 'Fanny', 'female', 'female');
 -- Profils de démonstration : photo pour 6 femmes et 2 hommes ; les autres restent cachés.
+UPDATE public.profiles SET demo_photo_path = NULL, demo_photo_source = NULL WHERE is_virtual;
 UPDATE public.profiles p SET demo_photo_path = p.user_id || '/x.webp', demo_photo_source = 'generated'
 WHERE p.user_id IN (
   (SELECT user_id FROM public.profiles WHERE is_virtual AND gender = 'female' ORDER BY user_id LIMIT 6)

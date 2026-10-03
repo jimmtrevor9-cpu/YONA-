@@ -14,6 +14,78 @@ export type Database = {
   }
   public: {
     Tables: {
+      activity_events: {
+        Row: {
+          country: string | null
+          created_at: string
+          event: string
+          id: number
+          ip: string | null
+          ref_id: string | null
+          target_user_id: string | null
+          user_agent: string | null
+          user_id: string | null
+        }
+        Insert: {
+          country?: string | null
+          created_at?: string
+          event: string
+          id?: number
+          ip?: string | null
+          ref_id?: string | null
+          target_user_id?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          country?: string | null
+          created_at?: string
+          event?: string
+          id?: number
+          ip?: string | null
+          ref_id?: string | null
+          target_user_id?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      admin_audit_log: {
+        Row: {
+          action: string
+          admin_id: string | null
+          changes: Json
+          created_at: string
+          id: number
+          ip: string | null
+          target_id: string | null
+          target_table: string | null
+          user_agent: string | null
+        }
+        Insert: {
+          action: string
+          admin_id?: string | null
+          changes?: Json
+          created_at?: string
+          id?: number
+          ip?: string | null
+          target_id?: string | null
+          target_table?: string | null
+          user_agent?: string | null
+        }
+        Update: {
+          action?: string
+          admin_id?: string | null
+          changes?: Json
+          created_at?: string
+          id?: number
+          ip?: string | null
+          target_id?: string | null
+          target_table?: string | null
+          user_agent?: string | null
+        }
+        Relationships: []
+      }
       ai_usage: {
         Row: {
           created_at: string
@@ -51,6 +123,48 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      auth_events: {
+        Row: {
+          city: string | null
+          country: string | null
+          created_at: string
+          email: string | null
+          event: string
+          id: number
+          ip: string | null
+          method: string | null
+          timezone: string | null
+          user_agent: string | null
+          user_id: string | null
+        }
+        Insert: {
+          city?: string | null
+          country?: string | null
+          created_at?: string
+          email?: string | null
+          event: string
+          id?: number
+          ip?: string | null
+          method?: string | null
+          timezone?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          city?: string | null
+          country?: string | null
+          created_at?: string
+          email?: string | null
+          event?: string
+          id?: number
+          ip?: string | null
+          method?: string | null
+          timezone?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
       }
       blocks: {
         Row: {
@@ -638,6 +752,57 @@ export type Database = {
         }
         Relationships: []
       }
+      payment_events: {
+        Row: {
+          amount: number | null
+          country: string | null
+          created_at: string
+          currency: string | null
+          event: string
+          id: number
+          ip: string | null
+          payment_id: string | null
+          product: string | null
+          provider: string | null
+          provider_ref: string | null
+          reason: string | null
+          user_agent: string | null
+          user_id: string | null
+        }
+        Insert: {
+          amount?: number | null
+          country?: string | null
+          created_at?: string
+          currency?: string | null
+          event: string
+          id?: number
+          ip?: string | null
+          payment_id?: string | null
+          product?: string | null
+          provider?: string | null
+          provider_ref?: string | null
+          reason?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          amount?: number | null
+          country?: string | null
+          created_at?: string
+          currency?: string | null
+          event?: string
+          id?: number
+          ip?: string | null
+          payment_id?: string | null
+          product?: string | null
+          provider?: string | null
+          provider_ref?: string | null
+          reason?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       payments: {
         Row: {
           amount: number
@@ -1081,6 +1246,63 @@ export type Database = {
           },
         ]
       }
+      server_errors: {
+        Row: {
+          created_at: string
+          details: Json
+          id: number
+          message: string
+          path: string | null
+          source: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          details?: Json
+          id?: number
+          message: string
+          path?: string | null
+          source: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          details?: Json
+          id?: number
+          message?: string
+          path?: string | null
+          source?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      signup_events: {
+        Row: {
+          country: string | null
+          created_at: string
+          id: number
+          method: string | null
+          step: string
+          user_id: string
+        }
+        Insert: {
+          country?: string | null
+          created_at?: string
+          id?: number
+          method?: string | null
+          step: string
+          user_id: string
+        }
+        Update: {
+          country?: string | null
+          created_at?: string
+          id?: number
+          method?: string | null
+          step?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       storage_cleanup_queue: {
         Row: {
           bucket_id: string
@@ -1462,6 +1684,10 @@ export type Database = {
           status: Database["public"]["Enums"]["account_status"]
         }[]
       }
+      admin_log_action: {
+        Args: { _action: string; _details?: Json; _target_id: string; _target_table: string }
+        Returns: undefined
+      }
       admin_moderate_photo: {
         Args: { _approve: boolean; _photo_id: string; _reason?: string }
         Returns: Database["public"]["Enums"]["photo_status"]
@@ -1662,6 +1888,10 @@ export type Database = {
           type: string
         }[]
       }
+      log_server_error: {
+        Args: { _details?: Json; _message: string; _path?: string; _source: string; _user_id?: string }
+        Returns: undefined
+      }
       mark_all_notifications_read: { Args: never; Returns: number }
       mark_notification_read: { Args: { _id: string }; Returns: boolean }
       mark_offline: { Args: never; Returns: undefined }
@@ -1695,6 +1925,10 @@ export type Database = {
         Args: { _plan: Database["public"]["Enums"]["subscription_plan"] }
         Returns: number
       }
+      purge_old_logs: {
+        Args: never
+        Returns: number
+      }
       recent_signups: {
         Args: never
         Returns: {
@@ -1703,9 +1937,29 @@ export type Database = {
           first_name: string
         }[]
       }
+      record_login_failure: {
+        Args: { _email: string; _method?: string }
+        Returns: undefined
+      }
+      record_logout: {
+        Args: never
+        Returns: undefined
+      }
+      record_payment_webhook: {
+        Args: { _event_type: string; _payment_id?: string; _provider_ref?: string; _reason?: string }
+        Returns: undefined
+      }
       record_profile_visit: {
         Args: { _visited_user_id: string }
         Returns: boolean
+      }
+      record_session_context: {
+        Args: { _timezone?: string }
+        Returns: undefined
+      }
+      record_signup_step: {
+        Args: { _step: number }
+        Returns: undefined
       }
       refund_ai_quota: {
         Args: { _feature: string; _user_id: string }

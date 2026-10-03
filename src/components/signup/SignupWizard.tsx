@@ -78,6 +78,7 @@ export function SignupWizard({
   onChange,
   onExit,
   onFinish,
+  onStepDone,
 }: {
   mode: "guest" | "member";
   method: SignupMethod;
@@ -88,6 +89,8 @@ export function SignupWizard({
   onChange?: (draft: SignupDraft, photos: File[]) => void;
   onExit?: () => void;
   onFinish: (draft: SignupDraft, photos: File[], account: WizardAccount | null) => void;
+  /** Étape franchie (1 à 4), pour le tableau de bord de l'administration. */
+  onStepDone?: (step: number) => void;
 }) {
   const [step, setStep] = useState(0);
   const [draft, setDraft] = useState<SignupDraft>(initial);
@@ -144,6 +147,7 @@ export function SignupWizard({
       toast.error(error);
       return;
     }
+    onStepDone?.(step + 1);
     if (step < WIZARD_STEPS.length - 1) {
       setStep(step + 1);
       return;

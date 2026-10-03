@@ -8,8 +8,9 @@
 //
 // Le tirage est déterministe (graine fixe) : relancer le script donne le même fichier.
 //   node scripts/generate-virtual-profiles.mjs
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 
+import { DEMO_PHOTOS } from "./data/demo-profile-photos.mjs";
 import { COUNTRIES } from "./data/virtual-profiles-countries.mjs";
 
 // 80 % en Afrique francophone (8 pays, 2 femmes et 2 hommes chacun), 20 % en France
@@ -224,8 +225,15 @@ for (const selected of SELECTION) {
       bio = [pick(INTROS[gender])(a, b ?? a), pick(FAITH[gender]), pick(LOOKING[gender])].join(" ");
     } while (bios.has(bio));
     bios.add(bio);
+    const slug = `demo.${country.code.toLowerCase()}.${String(number).padStart(2, "0")}`;
+    // Image livrée avec le site (public/demo-profils/), s'il y en a une pour ce profil.
+    const photo = DEMO_PHOTOS[slug] ? `/demo-profils/${slug.replace(/\./g, "-")}.webp` : null;
+    if (photo && !existsSync(new URL(`../public${photo}`, import.meta.url))) {
+      throw new Error(`Image absente : public${photo}`);
+    }
     rows.push({
-      email: `demo.${country.code.toLowerCase()}.${String(number).padStart(2, "0")}@profils-virtuels.yona.invalid`,
+      email: `${slug}@profils-virtuels.yona.invalid`,
+      photo,
       firstName,
       gender,
       birthDate: birth,
@@ -255,7 +263,7 @@ if (rows.length !== 40 || women !== 21)
 // $seed$ … $seed$ : aucun échappement nécessaire.
 // Ordre des valeurs : 0 e-mail, 1 prénom, 2 sexe, 3 naissance, 4 pays, 5 région, 6 ville,
 // 7 bio, 8 centres d'intérêt, 9 église, 10 culte, 11 prière, 12 place de la foi,
-// 13 objectif, 14 sexe recherché, 15 âge min, 16 âge max.
+// 13 objectif, 14 sexe recherché, 15 âge min, 16 âge max, 17 photo livrée avec le site.
 function seedBlock(list) {
   const json = `[\n${list
     .map((r) =>
@@ -277,6 +285,7 @@ function seedBlock(list) {
         r.prefGender,
         r.minAge,
         r.maxAge,
+        r.photo,
       ]),
     )
     .join(",\n")}\n]`;
@@ -326,8 +335,9 @@ BEGIN
     END IF;
   END LOOP;
 
-  -- 2. Profils complets, actifs et visibles. Ils restent cachés aux membres tant
-  --    qu'un administrateur ne leur a pas donné de photo (demo_photo_path).
+  -- 2. Profils complets, actifs et visibles, avec leur image générée quand elle est
+  --    livrée avec le site ; un profil sans photo reste caché aux membres (un
+  --    administrateur peut en ajouter une dans /admin → Profils de démo).
   UPDATE public.profiles p
   SET first_name = e ->> 1,
       gender = (e ->> 2)::public.gender,
@@ -342,7 +352,10 @@ BEGIN
       onboarding_step = 4,
       onboarding_completed_at = coalesce(p.onboarding_completed_at, now()),
       status = 'active',
-      visibility = 'visible'
+      visibility = 'visible',
+      demo_photo_path = coalesce(nullif(e ->> 17, ''), p.demo_photo_path),
+      demo_photo_source = CASE WHEN nullif(e ->> 17, '') IS NOT NULL THEN 'generated'
+                               ELSE p.demo_photo_source END
   FROM jsonb_array_elements(_seed) e
   JOIN public.users u ON u.email = e ->> 0
   WHERE p.user_id = u.id;
@@ -375,9 +388,10 @@ const header = `-- ============================================================
 -- ${rows.length} profils (${women} femmes, ${rows.length - women} hommes), ${MIN_AGE} à ${MAX_AGE} ans, un seul prénom visible :
 -- ${SELECTION.map((x) => `${x.women + x.men} ${countries.find((c) => c.code === x.code).name}`).join(", ")}.
 -- Comptes sans mot de passe (connexion impossible), marqués « virtual » dans le compte et
--- is_virtual dans le profil. Un profil de démonstration n'est montré aux membres que
--- lorsqu'un administrateur lui a donné une photo autorisée (/admin → Profils de démo) ;
--- il porte alors l'étiquette « Profil de démonstration ».
+-- is_virtual dans le profil, toujours affichés avec l'étiquette « Profil de démonstration ».
+-- ${rows.filter((r) => r.photo).length} ont une image générée par IA (personne qui n'existe pas), livrée avec le site
+-- (public/demo-profils/) ; un profil sans image reste caché aux membres tant qu'un
+-- administrateur ne lui en donne pas une (/admin → Profils de démo).
 -- Aucune table n'est créée. Rejouable sans risque : un profil déjà présent n'est pas
 -- recréé, et les profils virtuels d'une version précédente sont retirés.
 -- À exécuter APRÈS 20261003100000_profils_demo_40.sql.

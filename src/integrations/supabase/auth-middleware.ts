@@ -2,6 +2,7 @@ import { createMiddleware } from '@tanstack/react-start'
 import { getRequest } from '@tanstack/react-start/server'
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from './types'
+import { clientContextHeaders } from './request-context'
 
 
 
@@ -80,6 +81,8 @@ export const requireSupabaseAuth = createMiddleware({ type: 'function' }).server
           fetch: createSupabaseFetch(SUPABASE_PUBLISHABLE_KEY!),
           headers: {
             Authorization: `Bearer ${token}`,
+            // Appareil, IP et pays du membre pour le journal (voir request-context.ts).
+            ...clientContextHeaders(request),
           },
         },
         auth: {

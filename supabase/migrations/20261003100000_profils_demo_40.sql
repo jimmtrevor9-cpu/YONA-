@@ -3,7 +3,8 @@
 -- suppression à la vérification d'identité.
 --
 -- 1. profiles.demo_photo_path / demo_photo_source : photo d'un profil de démonstration,
---    déposée par un administrateur (espace public « demo-profils ») avec la nature de
+--    livrée avec le site (/demo-profils/…, images générées fournies par le propriétaire)
+--    ou déposée par un administrateur (espace public « demo-profils ») avec la nature de
 --    l'image attestée (visage généré d'une personne qui n'existe pas, image sous licence,
 --    ou accord écrit de la personne). Un profil de démonstration SANS photo n'est jamais
 --    montré aux membres.
@@ -34,7 +35,10 @@ ALTER TABLE public.profiles ADD CONSTRAINT profiles_demo_photo_check CHECK (
   OR (
     is_virtual
     AND char_length(demo_photo_path) BETWEEN 1 AND 300
-    AND split_part(demo_photo_path, '/', 1) = user_id::text
+    AND (
+      split_part(demo_photo_path, '/', 1) = user_id::text
+      OR demo_photo_path ~ '^/demo-profils/[a-z0-9-]+\.(webp|jpg|png)$'
+    )
     AND demo_photo_source IN ('generated', 'licensed', 'consent')
   )
 );
@@ -209,7 +213,9 @@ BEGIN
   IF NOT FOUND THEN
     RETURN NULL;
   END IF;
-  IF _photo IS NOT NULL THEN
+  -- Photo déposée dans le stockage : fichier à supprimer (une image livrée avec le site,
+  -- /demo-profils/…, reste en place).
+  IF _photo IS NOT NULL AND left(_photo, 1) <> '/' THEN
     INSERT INTO public.storage_cleanup_queue (bucket_id, path, reason)
     VALUES ('demo-profils', _photo, 'profil de démonstration retiré');
   END IF;

@@ -1,7 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { adminErrorMessage } from "@/features/admin/admin.functions";
-import { DEMO_BUCKET, demoPhotoUrl } from "@/features/profiles/demo";
+import { DEMO_BUCKET, demoPhotoUrl, isBundledDemoPhoto } from "@/features/profiles/demo";
 import { preparePhoto } from "@/features/profiles/photos";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -70,7 +70,7 @@ export async function setDemoPhoto(userId: string, file: File, source: DemoPhoto
     await supabase.storage.from(DEMO_BUCKET).remove([path]);
     throw demoError(error.message);
   }
-  if (old) await supabase.storage.from(DEMO_BUCKET).remove([old]);
+  if (old && !isBundledDemoPhoto(old)) await supabase.storage.from(DEMO_BUCKET).remove([old]);
 }
 
 /** Retire la photo : le profil de démonstration n'est plus montré aux membres. */
@@ -80,5 +80,5 @@ export async function clearDemoPhoto(userId: string) {
     _path: null,
   });
   if (error) throw demoError(error.message);
-  if (old) await supabase.storage.from(DEMO_BUCKET).remove([old]);
+  if (old && !isBundledDemoPhoto(old)) await supabase.storage.from(DEMO_BUCKET).remove([old]);
 }

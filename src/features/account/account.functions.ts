@@ -80,12 +80,19 @@ export const deleteMyAccount = createServerFn({ method: "POST" })
       const paths = (voices ?? []).map((v) => v.audio_path).filter((p): p is string => !!p);
       if (paths.length) await supabaseAdmin.storage.from("voice-messages").remove(paths);
     } catch (error) {
-      console.error("[Compte] Nettoyage des fichiers incomplet", error);
+      const { logServerError } = await import("@/features/journal/server-errors.server");
+      await logServerError("compte", error, {
+        userId: context.userId,
+        details: { étape: "nettoyage des fichiers" },
+      });
     }
 
     const { error } = await supabaseAdmin.auth.admin.deleteUser(context.userId);
     if (error) {
-      console.error("[Compte] Suppression impossible :", error.message);
+      const { logServerError } = await import("@/features/journal/server-errors.server");
+      await logServerError("compte", `Suppression impossible : ${error.message}`, {
+        userId: context.userId,
+      });
       throw new Error(ACCOUNT_ERRORS.failed);
     }
     return { deleted: true };

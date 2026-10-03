@@ -2,7 +2,7 @@
 -- YONA — CRÉER TOUTE LA BASE DE DONNÉES (projet Supabase neuf et vide)
 --
 -- Ce fichier installe en une seule fois tout ce dont le site a besoin :
---   32 tables, 127 fonctions, 88 règles d'accès, les droits de chaque rôle,
+--   38 tables, 146 fonctions, 94 règles d'accès, les droits de chaque rôle,
 --   la création automatique du profil à l'inscription (e-mail ou Google), 4 espaces de
 --   fichiers privés (photos, messages vocaux, vérifications), les messages en temps réel,
 --   les tâches automatiques, les 247 pays et les 40 profils virtuels.
@@ -20,7 +20,7 @@
 -- Le déclencheur de la section « Comptes » relie chaque nouveau compte à son profil.
 --
 -- Fichier généré par scripts/generate-base-complete.py à partir de supabase/migrations/
--- (91 migrations). Ne pas modifier à la main.
+-- (92 migrations). Ne pas modifier à la main.
 -- ============================================================================
 
 -- ============================================================================
@@ -446,6 +446,19 @@ BEGIN
 END;
 $$;
 
+CREATE FUNCTION public.admin_log_action(_action text, _target_table text, _target_id text, _details jsonb DEFAULT '{}'::jsonb) RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE
+  _ctx jsonb := public.request_context();
+BEGIN
+  PERFORM public.assert_admin();
+  INSERT INTO public.admin_audit_log (admin_id, action, target_table, target_id, changes, ip, user_agent)
+  VALUES (auth.uid(), left(_action, 100), _target_table, _target_id, coalesce(_details, '{}'::jsonb),
+          _ctx ->> 'ip', _ctx ->> 'user_agent');
+END; $$;
+
 CREATE FUNCTION public.admin_moderate_photo(_photo_id uuid, _approve boolean, _reason text DEFAULT NULL::text) RETURNS public.photo_status
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
@@ -686,6 +699,50 @@ BEGIN
     RAISE EXCEPTION 'admin_required' USING ERRCODE = '42501';
   END IF;
 END;
+$$;
+
+CREATE FUNCTION public.audit_admin_change() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE
+  _new jsonb := CASE WHEN TG_OP = 'DELETE' THEN NULL ELSE to_jsonb(NEW) END;
+  _old jsonb := CASE WHEN TG_OP = 'INSERT' THEN NULL ELSE to_jsonb(OLD) END;
+  _row jsonb := coalesce(_new, _old);
+  _changes jsonb;
+  _ctx jsonb;
+BEGIN
+  -- Seulement les modifications faites par un administrateur connecté.
+  IF auth.uid() IS NULL OR NOT public.is_admin() THEN
+    RETURN NULL;
+  END IF;
+  IF TG_OP = 'UPDATE' THEN
+    SELECT coalesce(jsonb_object_agg(k, jsonb_build_object('avant', _old -> k, 'après', v)), '{}'::jsonb)
+    INTO _changes
+    FROM jsonb_each(_new) AS e(k, v)
+    WHERE _old -> k IS DISTINCT FROM v AND k NOT IN ('updated_at');
+    IF _changes = '{}'::jsonb THEN
+      RETURN NULL;
+    END IF;
+  ELSE
+    _changes := _row - 'content';
+  END IF;
+  _ctx := public.request_context();
+  INSERT INTO public.admin_audit_log (admin_id, action, target_table, target_id, changes, ip, user_agent)
+  VALUES (auth.uid(), lower(TG_OP), TG_TABLE_NAME,
+          coalesce(_row ->> 'id', _row ->> 'user_id'), _changes, _ctx ->> 'ip', _ctx ->> 'user_agent');
+  RETURN NULL;
+EXCEPTION WHEN OTHERS THEN
+  RAISE WARNING 'audit_admin_change (%): %', TG_TABLE_NAME, SQLERRM;
+  RETURN NULL;
+END; $$;
+
+CREATE FUNCTION public.auth_method(_provider text) RETURNS text
+    LANGUAGE sql IMMUTABLE
+    SET search_path TO 'public'
+    AS $$
+  SELECT CASE lower(coalesce(_provider, '')) WHEN 'email' THEN 'email' WHEN 'google' THEN 'google'
+              ELSE 'other' END
 $$;
 
 CREATE FUNCTION public.block_user(_user_id uuid) RETURNS boolean
@@ -2304,6 +2361,195 @@ BEGIN
 END;
 $$;
 
+CREATE FUNCTION public.log_account_change() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    UPDATE public.auth_events SET ip = NULL, user_agent = NULL, city = NULL, email = NULL
+    WHERE user_id = OLD.id;
+    UPDATE public.activity_events SET ip = NULL, user_agent = NULL WHERE user_id = OLD.id;
+    UPDATE public.payment_events SET ip = NULL, user_agent = NULL WHERE user_id = OLD.id;
+    IF NOT EXISTS (SELECT 1 FROM auth.users a WHERE a.id = OLD.id AND a.raw_app_meta_data ->> 'provider' = 'virtual')
+       AND OLD.email NOT LIKE '%@profils-virtuels.yona.invalid' THEN
+      INSERT INTO public.activity_events (user_id, event) VALUES (OLD.id, 'account_deleted');
+    END IF;
+    RETURN NULL;
+  END IF;
+  IF NEW.status IS DISTINCT FROM OLD.status THEN
+    PERFORM public.log_activity(NEW.id,
+      CASE NEW.status WHEN 'suspended' THEN 'account_suspended' WHEN 'disabled' THEN 'account_banned'
+                      WHEN 'active' THEN 'account_reactivated' ELSE 'account_deleted' END,
+      NULL, NULL);
+  END IF;
+  RETURN NULL;
+EXCEPTION WHEN OTHERS THEN
+  RAISE WARNING 'log_account_change: %', SQLERRM;
+  RETURN NULL;
+END; $$;
+
+CREATE FUNCTION public.log_activity(_user uuid, _event text, _target uuid, _ref uuid) RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE
+  _ctx jsonb := public.request_context();
+BEGIN
+  INSERT INTO public.activity_events (user_id, event, target_user_id, ref_id, ip, country, user_agent)
+  VALUES (_user, _event, _target, _ref, _ctx ->> 'ip', _ctx ->> 'country', _ctx ->> 'user_agent');
+EXCEPTION WHEN OTHERS THEN
+  RAISE WARNING 'log_activity: %', SQLERRM;
+END; $$;
+
+CREATE FUNCTION public.log_auth_user_change() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE
+  _provider text := NEW.raw_app_meta_data ->> 'provider';
+  _ctx jsonb := public.request_context();
+BEGIN
+  -- Les profils de démonstration ne sont pas des connexions.
+  IF _provider = 'virtual' THEN
+    RETURN NULL;
+  END IF;
+  BEGIN
+    IF TG_OP = 'INSERT' THEN
+      INSERT INTO public.auth_events (user_id, email, event, method, ip, country, user_agent)
+      VALUES (NEW.id, NEW.email, 'signup', public.auth_method(_provider),
+              _ctx ->> 'ip', _ctx ->> 'country', _ctx ->> 'user_agent');
+      INSERT INTO public.signup_events (user_id, step, method)
+      VALUES (NEW.id, 'account_created', public.auth_method(_provider))
+      ON CONFLICT ON CONSTRAINT signup_events_once DO NOTHING;
+    ELSE
+      IF NEW.last_sign_in_at IS DISTINCT FROM OLD.last_sign_in_at AND NEW.last_sign_in_at IS NOT NULL THEN
+        INSERT INTO public.auth_events (user_id, email, event, method, ip, country, user_agent)
+        VALUES (NEW.id, NEW.email, 'login', public.auth_method(_provider),
+                _ctx ->> 'ip', _ctx ->> 'country', _ctx ->> 'user_agent');
+      END IF;
+      IF NEW.encrypted_password IS DISTINCT FROM OLD.encrypted_password AND OLD.encrypted_password IS NOT NULL
+         AND OLD.encrypted_password <> '' THEN
+        INSERT INTO public.auth_events (user_id, email, event, method)
+        VALUES (NEW.id, NEW.email, 'password_changed', 'email');
+      END IF;
+      IF NEW.recovery_sent_at IS DISTINCT FROM OLD.recovery_sent_at AND NEW.recovery_sent_at IS NOT NULL THEN
+        INSERT INTO public.auth_events (user_id, email, event, method)
+        VALUES (NEW.id, NEW.email, 'password_reset_requested', 'email');
+      END IF;
+    END IF;
+  EXCEPTION WHEN OTHERS THEN
+    -- Le journal ne doit jamais empêcher une inscription ou une connexion.
+    RAISE WARNING 'log_auth_user_change: %', SQLERRM;
+  END;
+  RETURN NULL;
+END; $$;
+
+CREATE FUNCTION public.log_member_action() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE
+  _row jsonb := to_jsonb(NEW);
+BEGIN
+  CASE TG_TABLE_NAME
+    WHEN 'likes' THEN
+      IF NEW.status = 'active' AND (TG_OP = 'INSERT' OR OLD.kind IS DISTINCT FROM NEW.kind
+                                    OR OLD.status IS DISTINCT FROM NEW.status) THEN
+        PERFORM public.log_activity(NEW.sender_id, NEW.kind::text, NEW.receiver_id, NEW.id);
+      END IF;
+    WHEN 'matches' THEN
+      PERFORM public.log_activity(NEW.user_1_id, 'match', NEW.user_2_id, NEW.id);
+    WHEN 'messages' THEN
+      PERFORM public.log_activity(NEW.sender_id,
+        CASE WHEN _row ->> 'kind' = 'voice' THEN 'voice_message' ELSE 'message' END,
+        NULL, NEW.conversation_id);
+    WHEN 'blocks' THEN
+      PERFORM public.log_activity(NEW.blocker_id, 'block', NEW.blocked_id, NEW.id);
+    WHEN 'reports' THEN
+      PERFORM public.log_activity((_row ->> 'reporter_id')::uuid, 'report',
+                                  (_row ->> 'reported_user_id')::uuid, NEW.id);
+    WHEN 'contact_requests' THEN
+      PERFORM public.log_activity(NEW.sender_id,
+        CASE WHEN coalesce((_row ->> 'is_flash')::boolean, false) THEN 'flash_message' ELSE 'contact_request' END,
+        NEW.receiver_id, NEW.id);
+    WHEN 'favorites' THEN
+      PERFORM public.log_activity(NEW.user_id, 'favorite', NEW.favorite_user_id, NEW.id);
+    WHEN 'profile_visits' THEN
+      PERFORM public.log_activity((_row ->> 'visitor_id')::uuid, 'visit',
+                                  (_row ->> 'visited_user_id')::uuid, NEW.id);
+    ELSE
+      NULL;
+  END CASE;
+  RETURN NULL;
+EXCEPTION WHEN OTHERS THEN
+  RAISE WARNING 'log_member_action (%): %', TG_TABLE_NAME, SQLERRM;
+  RETURN NULL;
+END; $$;
+
+CREATE FUNCTION public.log_payment_change() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE
+  _ctx jsonb := public.request_context();
+BEGIN
+  IF TG_OP = 'UPDATE' AND NEW.status IS NOT DISTINCT FROM OLD.status THEN
+    RETURN NULL;
+  END IF;
+  INSERT INTO public.payment_events (payment_id, user_id, event, product, amount, currency, provider,
+                                     provider_ref, reason, ip, country, user_agent)
+  VALUES (NEW.id, NEW.user_id,
+          CASE WHEN TG_OP = 'INSERT' THEN 'created' ELSE NEW.status::text END,
+          public.payment_product(NEW.type, NEW.metadata), NEW.amount, NEW.currency, NEW.provider,
+          NEW.provider_transaction_id, left(NEW.metadata ->> 'failure_reason', 300),
+          _ctx ->> 'ip', _ctx ->> 'country', _ctx ->> 'user_agent');
+  RETURN NULL;
+EXCEPTION WHEN OTHERS THEN
+  RAISE WARNING 'log_payment_change: %', SQLERRM;
+  RETURN NULL;
+END; $$;
+
+CREATE FUNCTION public.log_server_error(_source text, _message text, _user_id uuid DEFAULT NULL::uuid, _path text DEFAULT NULL::text, _details jsonb DEFAULT '{}'::jsonb) RETURNS void
+    LANGUAGE sql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  INSERT INTO public.server_errors (source, message, user_id, path, details)
+  VALUES (left(coalesce(_source, 'serveur'), 100), left(coalesce(_message, '?'), 2000), _user_id,
+          left(_path, 300), coalesce(_details, '{}'::jsonb));
+$$;
+
+CREATE FUNCTION public.log_signup_milestone() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE
+  _user uuid;
+  _step text;
+BEGIN
+  IF TG_TABLE_NAME = 'profiles' THEN
+    IF NEW.is_virtual OR NEW.onboarding_completed_at IS NULL OR OLD.onboarding_completed_at IS NOT NULL THEN
+      RETURN NULL;
+    END IF;
+    _user := NEW.user_id;
+    _step := 'profile_completed';
+  ELSIF TG_OP = 'INSERT' THEN
+    _user := NEW.user_id;
+    _step := 'verification_requested';
+  ELSIF NEW.status IS DISTINCT FROM OLD.status AND NEW.status IN ('approved', 'rejected') THEN
+    _user := NEW.user_id;
+    _step := 'verification_' || NEW.status;
+  ELSE
+    RETURN NULL;
+  END IF;
+  INSERT INTO public.signup_events (user_id, step) VALUES (_user, _step)
+  ON CONFLICT ON CONSTRAINT signup_events_once DO NOTHING;
+  RETURN NULL;
+EXCEPTION WHEN OTHERS THEN
+  RAISE WARNING 'log_signup_milestone: %', SQLERRM;
+  RETURN NULL;
+END; $$;
+
 CREATE FUNCTION public.mark_all_notifications_read() RETURNS integer
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
@@ -2478,6 +2724,14 @@ BEGIN
   RETURN NEW;
 END $$;
 
+CREATE FUNCTION public.payment_product(_type public.payment_type, _metadata jsonb) RETURNS text
+    LANGUAGE sql IMMUTABLE
+    SET search_path TO 'public'
+    AS $$
+  SELECT CASE _type WHEN 'conversation_unlock' THEN 'conversation_unlock'
+                    ELSE coalesce(_metadata ->> 'plan', 'premium') END
+$$;
+
 CREATE FUNCTION public.photos_after_delete() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
@@ -2595,6 +2849,31 @@ BEGIN
   RETURN NEW;
 END; $$;
 
+CREATE FUNCTION public.purge_old_logs() RETURNS integer
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE
+  _n integer := 0;
+  _c integer;
+BEGIN
+  UPDATE public.auth_events SET ip = NULL, user_agent = NULL, city = NULL
+  WHERE created_at < now() - interval '12 months' AND (ip IS NOT NULL OR user_agent IS NOT NULL);
+  GET DIAGNOSTICS _c = ROW_COUNT; _n := _n + _c;
+  UPDATE public.activity_events SET ip = NULL, user_agent = NULL
+  WHERE created_at < now() - interval '12 months' AND (ip IS NOT NULL OR user_agent IS NOT NULL);
+  GET DIAGNOSTICS _c = ROW_COUNT; _n := _n + _c;
+  UPDATE public.payment_events SET ip = NULL, user_agent = NULL
+  WHERE created_at < now() - interval '12 months' AND (ip IS NOT NULL OR user_agent IS NOT NULL);
+  GET DIAGNOSTICS _c = ROW_COUNT; _n := _n + _c;
+  UPDATE public.admin_audit_log SET ip = NULL, user_agent = NULL
+  WHERE created_at < now() - interval '12 months' AND (ip IS NOT NULL OR user_agent IS NOT NULL);
+  GET DIAGNOSTICS _c = ROW_COUNT; _n := _n + _c;
+  DELETE FROM public.server_errors WHERE created_at < now() - interval '12 months';
+  GET DIAGNOSTICS _c = ROW_COUNT; _n := _n + _c;
+  RETURN _n;
+END; $$;
+
 CREATE FUNCTION public.recent_signups() RETURNS TABLE(first_name text, country text, created_at timestamp with time zone)
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path TO 'public'
@@ -2610,6 +2889,66 @@ CREATE FUNCTION public.recent_signups() RETURNS TABLE(first_name text, country t
   ORDER BY p.created_at DESC
   LIMIT 8;
 $$;
+
+CREATE FUNCTION public.record_login_failure(_email text, _method text DEFAULT 'email'::text) RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE
+  _ctx jsonb := public.request_context();
+  _clean text := lower(left(btrim(coalesce(_email, '')), 320));
+BEGIN
+  IF (SELECT count(*) FROM public.auth_events e
+      WHERE e.event = 'login_failed' AND e.ip IS NOT DISTINCT FROM (_ctx ->> 'ip')
+        AND e.created_at > now() - interval '10 minutes') >= 20 THEN
+    RETURN;
+  END IF;
+  INSERT INTO public.auth_events (user_id, email, event, method, ip, country, city, user_agent)
+  VALUES ((SELECT u.id FROM public.users u WHERE lower(u.email) = _clean LIMIT 1),
+          nullif(_clean, ''), 'login_failed',
+          CASE WHEN _method IN ('email', 'google') THEN _method ELSE 'other' END,
+          _ctx ->> 'ip', _ctx ->> 'country', _ctx ->> 'city', _ctx ->> 'user_agent');
+END; $$;
+
+CREATE FUNCTION public.record_logout() RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE
+  _me uuid := auth.uid();
+  _ctx jsonb := public.request_context();
+BEGIN
+  IF _me IS NULL THEN
+    RETURN;
+  END IF;
+  INSERT INTO public.auth_events (user_id, email, event, ip, country, city, user_agent)
+  SELECT _me, u.email, 'logout', _ctx ->> 'ip', _ctx ->> 'country', _ctx ->> 'city', _ctx ->> 'user_agent'
+  FROM public.users u WHERE u.id = _me;
+END; $$;
+
+CREATE FUNCTION public.record_payment_webhook(_event_type text, _payment_id uuid DEFAULT NULL::uuid, _reason text DEFAULT NULL::text, _provider_ref text DEFAULT NULL::text) RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE
+  _pay public.payments%ROWTYPE;
+BEGIN
+  SELECT * INTO _pay FROM public.payments p WHERE p.id = _payment_id;
+  INSERT INTO public.payment_events (payment_id, user_id, event, product, amount, currency, provider,
+                                     provider_ref, reason)
+  VALUES (_payment_id, _pay.user_id, 'webhook',
+          CASE WHEN _pay.id IS NULL THEN NULL ELSE public.payment_product(_pay.type, _pay.metadata) END,
+          _pay.amount, _pay.currency, coalesce(_pay.provider, 'stripe'), left(_provider_ref, 200),
+          left(coalesce(_event_type, '') || CASE WHEN _reason IS NULL THEN '' ELSE ' : ' || _reason END, 300));
+  IF _pay.id IS NOT NULL AND _pay.status = 'pending'
+     AND _event_type IN ('checkout.session.expired', 'checkout.session.async_payment_failed',
+                         'payment_intent.payment_failed') THEN
+    UPDATE public.payments
+    SET status = CASE WHEN _event_type = 'checkout.session.expired' THEN 'cancelled' ELSE 'failed' END::public.payment_status,
+        metadata = metadata || jsonb_build_object('failure_reason', left(coalesce(_reason, _event_type), 300))
+    WHERE id = _pay.id;
+  END IF;
+END; $$;
 
 CREATE FUNCTION public.record_profile_visit(_visited_user_id uuid) RETURNS boolean
     LANGUAGE plpgsql SECURITY DEFINER
@@ -2658,6 +2997,42 @@ BEGIN
   RETURN true;
 END;
 $$;
+
+CREATE FUNCTION public.record_session_context(_timezone text DEFAULT NULL::text) RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE
+  _me uuid := auth.uid();
+  _ctx jsonb := public.request_context();
+BEGIN
+  IF _me IS NULL THEN
+    RAISE EXCEPTION 'not_authenticated' USING ERRCODE = '42501';
+  END IF;
+  UPDATE public.auth_events e
+  SET ip = _ctx ->> 'ip', country = _ctx ->> 'country', city = _ctx ->> 'city',
+      user_agent = _ctx ->> 'user_agent', timezone = left(nullif(btrim(_timezone), ''), 64)
+  WHERE e.user_id = _me AND e.event IN ('login', 'signup')
+    AND e.created_at > now() - interval '15 minutes' AND e.user_agent IS NULL;
+END; $$;
+
+CREATE FUNCTION public.record_signup_step(_step integer) RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE
+  _me uuid := auth.uid();
+BEGIN
+  IF _me IS NULL THEN
+    RAISE EXCEPTION 'not_authenticated' USING ERRCODE = '42501';
+  END IF;
+  IF _step IS NULL OR _step NOT BETWEEN 1 AND 4 THEN
+    RAISE EXCEPTION 'invalid_step' USING ERRCODE = '22023';
+  END IF;
+  INSERT INTO public.signup_events (user_id, step, country)
+  VALUES (_me, 'step_' || _step, public.request_context() ->> 'country')
+  ON CONFLICT ON CONSTRAINT signup_events_once DO NOTHING;
+END; $$;
 
 CREATE FUNCTION public.refund_ai_quota(_user_id uuid, _feature text) RETURNS void
     LANGUAGE sql SECURITY DEFINER
@@ -2755,7 +3130,9 @@ BEGIN
   IF NOT FOUND THEN
     RETURN NULL;
   END IF;
-  IF _photo IS NOT NULL THEN
+  -- Photo déposée dans le stockage : fichier à supprimer (une image livrée avec le site,
+  -- /demo-profils/…, reste en place).
+  IF _photo IS NOT NULL AND left(_photo, 1) <> '/' THEN
     INSERT INTO public.storage_cleanup_queue (bucket_id, path, reason)
     VALUES ('demo-profils', _photo, 'profil de démonstration retiré');
   END IF;
@@ -2846,6 +3223,21 @@ BEGIN
   RETURNING id INTO _id;
   RETURN _id;
 END;
+$$;
+
+CREATE FUNCTION public.request_context() RETURNS jsonb
+    LANGUAGE sql STABLE
+    SET search_path TO 'public'
+    AS $$
+  SELECT jsonb_build_object(
+    'ip', nullif(btrim(split_part(coalesce(
+      h ->> 'x-yona-ip', h ->> 'cf-connecting-ip', h ->> 'x-real-ip', h ->> 'x-forwarded-for', ''
+    ), ',', 1)), ''),
+    'country', upper(nullif(btrim(coalesce(h ->> 'x-yona-country', h ->> 'cf-ipcountry', '')), '')),
+    'city', left(nullif(btrim(coalesce(public.url_decode(h ->> 'x-yona-city'), '')), ''), 100),
+    'user_agent', left(nullif(coalesce(h ->> 'x-yona-ua', h ->> 'user-agent', ''), ''), 400)
+  )
+  FROM (SELECT coalesce(nullif(current_setting('request.headers', true), ''), '{}')::jsonb AS h) x
 $$;
 
 CREATE FUNCTION public.respond_contact_request(_request_id uuid, _accept boolean) RETURNS jsonb
@@ -3632,6 +4024,33 @@ BEGIN
 END;
 $$;
 
+CREATE FUNCTION public.url_decode(_s text) RETURNS text
+    LANGUAGE plpgsql IMMUTABLE
+    SET search_path TO 'public'
+    AS $_$
+DECLARE
+  _bytes bytea := ''::bytea;
+  _i integer := 1;
+  _c text;
+BEGIN
+  IF _s IS NULL THEN
+    RETURN NULL;
+  END IF;
+  WHILE _i <= length(_s) LOOP
+    _c := substr(_s, _i, 1);
+    IF _c = '%' AND substr(_s, _i + 1, 2) ~ '^[0-9A-Fa-f]{2}$' THEN
+      _bytes := _bytes || decode(substr(_s, _i + 1, 2), 'hex');
+      _i := _i + 3;
+    ELSE
+      _bytes := _bytes || convert_to(CASE WHEN _c = '+' THEN ' ' ELSE _c END, 'UTF8');
+      _i := _i + 1;
+    END IF;
+  END LOOP;
+  RETURN convert_from(_bytes, 'UTF8');
+EXCEPTION WHEN OTHERS THEN
+  RETURN NULL;
+END; $_$;
+
 CREATE FUNCTION public.utc_day_start() RETURNS timestamp with time zone
     LANGUAGE sql STABLE
     SET search_path TO 'public'
@@ -3657,6 +4076,48 @@ $$;
 -- 7. Tables
 -- ============================================================================
 
+CREATE TABLE public.activity_events (
+    id bigint NOT NULL,
+    user_id uuid,
+    event text NOT NULL,
+    target_user_id uuid,
+    ref_id uuid,
+    ip text,
+    country text,
+    user_agent text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT activity_events_event_check CHECK ((event = ANY (ARRAY['like'::text, 'pass'::text, 'match'::text, 'message'::text, 'voice_message'::text, 'block'::text, 'report'::text, 'contact_request'::text, 'flash_message'::text, 'favorite'::text, 'visit'::text, 'account_suspended'::text, 'account_banned'::text, 'account_reactivated'::text, 'account_deleted'::text])))
+);
+ALTER TABLE public.activity_events ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.activity_events_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+CREATE TABLE public.admin_audit_log (
+    id bigint NOT NULL,
+    admin_id uuid,
+    action text NOT NULL,
+    target_table text,
+    target_id text,
+    changes jsonb DEFAULT '{}'::jsonb NOT NULL,
+    ip text,
+    user_agent text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT admin_audit_log_action_length CHECK ((char_length(action) <= 100))
+);
+ALTER TABLE public.admin_audit_log ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.admin_audit_log_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
 CREATE TABLE public.ai_usage (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     user_id uuid NOT NULL,
@@ -3666,6 +4127,32 @@ CREATE TABLE public.ai_usage (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT ai_usage_count_positive CHECK ((usage_count >= 0))
+);
+
+CREATE TABLE public.auth_events (
+    id bigint NOT NULL,
+    user_id uuid,
+    email text,
+    event text NOT NULL,
+    method text,
+    ip text,
+    country text,
+    city text,
+    user_agent text,
+    timezone text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT auth_events_email_length CHECK (((email IS NULL) OR (char_length(email) <= 320))),
+    CONSTRAINT auth_events_event_check CHECK ((event = ANY (ARRAY['signup'::text, 'login'::text, 'login_failed'::text, 'logout'::text, 'password_reset_requested'::text, 'password_changed'::text]))),
+    CONSTRAINT auth_events_method_check CHECK (((method IS NULL) OR (method = ANY (ARRAY['email'::text, 'google'::text, 'other'::text])))),
+    CONSTRAINT auth_events_timezone_length CHECK (((timezone IS NULL) OR (char_length(timezone) <= 64)))
+);
+ALTER TABLE public.auth_events ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.auth_events_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
 );
 
 CREATE TABLE public.blocks (
@@ -3818,6 +4305,33 @@ CREATE TABLE public.notifications (
     CONSTRAINT notifications_type_check CHECK ((type = ANY (ARRAY['like'::text, 'match'::text, 'message'::text, 'favorite'::text, 'visit'::text, 'contact_request'::text])))
 );
 
+CREATE TABLE public.payment_events (
+    id bigint NOT NULL,
+    payment_id uuid,
+    user_id uuid,
+    event text NOT NULL,
+    product text,
+    amount integer,
+    currency text,
+    provider text,
+    provider_ref text,
+    reason text,
+    ip text,
+    country text,
+    user_agent text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT payment_events_event_check CHECK ((event = ANY (ARRAY['created'::text, 'pending'::text, 'succeeded'::text, 'failed'::text, 'cancelled'::text, 'refunded'::text, 'abandoned'::text, 'webhook'::text]))),
+    CONSTRAINT payment_events_reason_length CHECK (((reason IS NULL) OR (char_length(reason) <= 300)))
+);
+ALTER TABLE public.payment_events ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.payment_events_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
 CREATE TABLE public.payments (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     user_id uuid NOT NULL,
@@ -3937,7 +4451,7 @@ CREATE TABLE public.profiles (
     CONSTRAINT profiles_children_check CHECK (((children_count IS NULL) OR ((has_children IS TRUE) AND ((children_count >= 1) AND (children_count <= 20))))),
     CONSTRAINT profiles_city_length CHECK (((city IS NULL) OR (char_length(city) <= 100))),
     CONSTRAINT profiles_country_length CHECK (((country IS NULL) OR (char_length(country) <= 100))),
-    CONSTRAINT profiles_demo_photo_check CHECK ((((demo_photo_path IS NULL) AND (demo_photo_source IS NULL)) OR (is_virtual AND ((char_length(demo_photo_path) >= 1) AND (char_length(demo_photo_path) <= 300)) AND (split_part(demo_photo_path, '/'::text, 1) = (user_id)::text) AND (demo_photo_source = ANY (ARRAY['generated'::text, 'licensed'::text, 'consent'::text]))))),
+    CONSTRAINT profiles_demo_photo_check CHECK ((((demo_photo_path IS NULL) AND (demo_photo_source IS NULL)) OR (is_virtual AND ((char_length(demo_photo_path) >= 1) AND (char_length(demo_photo_path) <= 300)) AND ((split_part(demo_photo_path, '/'::text, 1) = (user_id)::text) OR (demo_photo_path ~ '^/demo-profils/[a-z0-9-]+\.(webp|jpg|png)$'::text)) AND (demo_photo_source = ANY (ARRAY['generated'::text, 'licensed'::text, 'consent'::text]))))),
     CONSTRAINT profiles_first_name_length CHECK (((first_name IS NULL) OR ((char_length(first_name) >= 1) AND (char_length(first_name) <= 60)))),
     CONSTRAINT profiles_interests_count CHECK ((cardinality(interests) <= 10)),
     CONSTRAINT profiles_interests_item_length CHECK (public.text_items_max_length(interests, 40)),
@@ -3961,6 +4475,45 @@ CREATE TABLE public.reports (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT reports_description_length CHECK (((description IS NULL) OR (char_length(description) <= 2000))),
     CONSTRAINT reports_no_self CHECK ((reporter_id <> reported_user_id))
+);
+
+CREATE TABLE public.server_errors (
+    id bigint NOT NULL,
+    source text NOT NULL,
+    message text NOT NULL,
+    user_id uuid,
+    path text,
+    details jsonb DEFAULT '{}'::jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT server_errors_message_length CHECK ((char_length(message) <= 2000)),
+    CONSTRAINT server_errors_path_length CHECK (((path IS NULL) OR (char_length(path) <= 300))),
+    CONSTRAINT server_errors_source_length CHECK ((char_length(source) <= 100))
+);
+ALTER TABLE public.server_errors ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.server_errors_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+CREATE TABLE public.signup_events (
+    id bigint NOT NULL,
+    user_id uuid NOT NULL,
+    step text NOT NULL,
+    method text,
+    country text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT signup_events_step_check CHECK ((step = ANY (ARRAY['account_created'::text, 'step_1'::text, 'step_2'::text, 'step_3'::text, 'step_4'::text, 'profile_completed'::text, 'verification_requested'::text, 'verification_approved'::text, 'verification_rejected'::text])))
+);
+ALTER TABLE public.signup_events ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.signup_events_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
 );
 
 CREATE TABLE public.storage_cleanup_queue (
@@ -4063,11 +4616,20 @@ CREATE TABLE public.virtual_profile_removals (
 -- 8. Clés primaires et valeurs uniques
 -- ============================================================================
 
+ALTER TABLE ONLY public.activity_events
+    ADD CONSTRAINT activity_events_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.admin_audit_log
+    ADD CONSTRAINT admin_audit_log_pkey PRIMARY KEY (id);
+
 ALTER TABLE ONLY public.ai_usage
     ADD CONSTRAINT ai_usage_pkey PRIMARY KEY (id);
 
 ALTER TABLE ONLY public.ai_usage
     ADD CONSTRAINT ai_usage_user_id_feature_usage_date_key UNIQUE (user_id, feature, usage_date);
+
+ALTER TABLE ONLY public.auth_events
+    ADD CONSTRAINT auth_events_pkey PRIMARY KEY (id);
 
 ALTER TABLE ONLY public.blocks
     ADD CONSTRAINT blocks_blocker_id_blocked_id_key UNIQUE (blocker_id, blocked_id);
@@ -4129,6 +4691,9 @@ ALTER TABLE ONLY public.moderation_actions
 ALTER TABLE ONLY public.notifications
     ADD CONSTRAINT notifications_pkey PRIMARY KEY (id);
 
+ALTER TABLE ONLY public.payment_events
+    ADD CONSTRAINT payment_events_pkey PRIMARY KEY (id);
+
 ALTER TABLE ONLY public.payments
     ADD CONSTRAINT payments_pkey PRIMARY KEY (id);
 
@@ -4158,6 +4723,15 @@ ALTER TABLE ONLY public.profiles
 
 ALTER TABLE ONLY public.reports
     ADD CONSTRAINT reports_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.server_errors
+    ADD CONSTRAINT server_errors_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.signup_events
+    ADD CONSTRAINT signup_events_once UNIQUE (user_id, step);
+
+ALTER TABLE ONLY public.signup_events
+    ADD CONSTRAINT signup_events_pkey PRIMARY KEY (id);
 
 ALTER TABLE ONLY public.storage_cleanup_queue
     ADD CONSTRAINT storage_cleanup_queue_pkey PRIMARY KEY (id);
@@ -4193,9 +4767,23 @@ ALTER TABLE ONLY public.virtual_profile_removals
 -- 9. Index : recherches rapides
 -- ============================================================================
 
+CREATE INDEX activity_events_created_idx ON public.activity_events USING btree (created_at DESC);
+
+CREATE INDEX activity_events_event_idx ON public.activity_events USING btree (event, created_at DESC);
+
+CREATE INDEX activity_events_user_idx ON public.activity_events USING btree (user_id, created_at DESC);
+
+CREATE INDEX admin_audit_log_created_idx ON public.admin_audit_log USING btree (created_at DESC);
+
 CREATE INDEX ai_usage_feature_date_idx ON public.ai_usage USING btree (feature, usage_date);
 
 CREATE INDEX ai_usage_user_idx ON public.ai_usage USING btree (user_id);
+
+CREATE INDEX auth_events_created_idx ON public.auth_events USING btree (created_at DESC);
+
+CREATE INDEX auth_events_ip_failed_idx ON public.auth_events USING btree (ip, created_at) WHERE (event = 'login_failed'::text);
+
+CREATE INDEX auth_events_user_idx ON public.auth_events USING btree (user_id, created_at DESC);
 
 CREATE INDEX blocks_blocked_idx ON public.blocks USING btree (blocked_id);
 
@@ -4235,6 +4823,12 @@ CREATE INDEX notifications_unread_idx ON public.notifications USING btree (user_
 
 CREATE INDEX notifications_user_idx ON public.notifications USING btree (user_id, created_at DESC);
 
+CREATE INDEX payment_events_created_idx ON public.payment_events USING btree (created_at DESC);
+
+CREATE INDEX payment_events_payment_idx ON public.payment_events USING btree (payment_id);
+
+CREATE INDEX payment_events_user_idx ON public.payment_events USING btree (user_id, created_at DESC);
+
 CREATE UNIQUE INDEX payments_provider_tx_idx ON public.payments USING btree (provider, provider_transaction_id) WHERE (provider_transaction_id IS NOT NULL);
 
 CREATE INDEX payments_user_idx ON public.payments USING btree (user_id, created_at DESC);
@@ -4263,6 +4857,10 @@ CREATE INDEX profiles_virtual_country_idx ON public.profiles USING btree (lower(
 
 CREATE INDEX reports_status_idx ON public.reports USING btree (status, created_at DESC);
 
+CREATE INDEX server_errors_created_idx ON public.server_errors USING btree (created_at DESC);
+
+CREATE INDEX signup_events_created_idx ON public.signup_events USING btree (created_at DESC);
+
 CREATE INDEX storage_cleanup_queue_pending_idx ON public.storage_cleanup_queue USING btree (created_at) WHERE (done_at IS NULL);
 
 CREATE UNIQUE INDEX subscriptions_payment_unique ON public.subscriptions USING btree (payment_id) WHERE (payment_id IS NOT NULL);
@@ -4281,7 +4879,11 @@ CREATE INDEX unlocks_conversation_idx ON public.conversation_unlocks USING btree
 
 CREATE TRIGGER ai_usage_updated_at BEFORE UPDATE ON public.ai_usage FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
+CREATE TRIGGER blocks_log_activity AFTER INSERT ON public.blocks FOR EACH ROW EXECUTE FUNCTION public.log_member_action();
+
 CREATE TRIGGER christian_profiles_updated_at BEFORE UPDATE ON public.christian_profiles FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+CREATE TRIGGER contact_requests_log_activity AFTER INSERT ON public.contact_requests FOR EACH ROW EXECUTE FUNCTION public.log_member_action();
 
 CREATE TRIGGER contact_requests_notify AFTER INSERT ON public.contact_requests FOR EACH ROW EXECUTE FUNCTION public.notify_contact_request();
 
@@ -4293,6 +4895,8 @@ CREATE TRIGGER conversations_init_usage AFTER INSERT ON public.conversations FOR
 
 CREATE TRIGGER conversations_updated_at BEFORE UPDATE ON public.conversations FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
+CREATE TRIGGER favorites_log_activity AFTER INSERT ON public.favorites FOR EACH ROW EXECUTE FUNCTION public.log_member_action();
+
 CREATE TRIGGER favorites_notify AFTER INSERT ON public.favorites FOR EACH ROW EXECUTE FUNCTION public.notify_favorite();
 
 CREATE TRIGGER favorites_refuse_blocked BEFORE INSERT ON public.favorites FOR EACH ROW EXECUTE FUNCTION public.refuse_blocked_interaction();
@@ -4300,6 +4904,8 @@ CREATE TRIGGER favorites_refuse_blocked BEFORE INSERT ON public.favorites FOR EA
 CREATE TRIGGER favorites_set_created_at BEFORE INSERT ON public.favorites FOR EACH ROW EXECUTE FUNCTION public.set_favorite_created_at();
 
 CREATE TRIGGER likes_create_match AFTER INSERT OR UPDATE ON public.likes FOR EACH ROW EXECUTE FUNCTION public.create_match_on_mutual_like();
+
+CREATE TRIGGER likes_log_activity AFTER INSERT OR UPDATE OF kind, status ON public.likes FOR EACH ROW EXECUTE FUNCTION public.log_member_action();
 
 CREATE TRIGGER likes_notify AFTER INSERT ON public.likes FOR EACH ROW EXECUTE FUNCTION public.notify_like();
 
@@ -4311,17 +4917,29 @@ CREATE TRIGGER likes_set_created_at BEFORE INSERT OR UPDATE ON public.likes FOR 
 
 CREATE TRIGGER matches_create_conversation AFTER INSERT OR UPDATE OF status ON public.matches FOR EACH ROW EXECUTE FUNCTION public.create_conversation_for_match();
 
+CREATE TRIGGER matches_log_activity AFTER INSERT ON public.matches FOR EACH ROW EXECUTE FUNCTION public.log_member_action();
+
 CREATE TRIGGER matches_notify AFTER INSERT ON public.matches FOR EACH ROW EXECUTE FUNCTION public.notify_match();
 
 CREATE TRIGGER messages_block_phone_numbers BEFORE INSERT OR UPDATE OF content, status, contains_phone_number ON public.messages FOR EACH ROW EXECUTE FUNCTION public.messages_block_phone_numbers();
 
+CREATE TRIGGER messages_log_activity AFTER INSERT ON public.messages FOR EACH ROW EXECUTE FUNCTION public.log_member_action();
+
 CREATE TRIGGER messages_notify AFTER INSERT ON public.messages FOR EACH ROW EXECUTE FUNCTION public.notify_message();
+
+CREATE TRIGGER moderation_actions_audit_admin AFTER INSERT OR DELETE OR UPDATE ON public.moderation_actions FOR EACH ROW EXECUTE FUNCTION public.audit_admin_change();
 
 CREATE TRIGGER payments_activate_conversation_unlock AFTER UPDATE OF status ON public.payments FOR EACH ROW EXECUTE FUNCTION public.activate_conversation_unlock();
 
 CREATE TRIGGER payments_activate_premium AFTER UPDATE OF status ON public.payments FOR EACH ROW EXECUTE FUNCTION public.activate_premium_subscription();
 
+CREATE TRIGGER payments_audit_admin AFTER INSERT OR DELETE OR UPDATE ON public.payments FOR EACH ROW EXECUTE FUNCTION public.audit_admin_change();
+
+CREATE TRIGGER payments_log AFTER INSERT OR UPDATE OF status ON public.payments FOR EACH ROW EXECUTE FUNCTION public.log_payment_change();
+
 CREATE TRIGGER payments_updated_at BEFORE UPDATE ON public.payments FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+CREATE TRIGGER photos_audit_admin AFTER INSERT OR DELETE OR UPDATE ON public.photos FOR EACH ROW EXECUTE FUNCTION public.audit_admin_change();
 
 CREATE TRIGGER photos_enforce_limit BEFORE INSERT ON public.photos FOR EACH ROW EXECUTE FUNCTION public.enforce_photo_limit();
 
@@ -4333,13 +4951,23 @@ CREATE TRIGGER photos_set_primary_on_insert BEFORE INSERT ON public.photos FOR E
 
 CREATE TRIGGER preferences_updated_at BEFORE UPDATE ON public.preferences FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
+CREATE TRIGGER profile_verifications_audit_admin AFTER INSERT OR DELETE OR UPDATE ON public.profile_verifications FOR EACH ROW EXECUTE FUNCTION public.audit_admin_change();
+
+CREATE TRIGGER profile_verifications_log_signup AFTER INSERT OR UPDATE OF status ON public.profile_verifications FOR EACH ROW EXECUTE FUNCTION public.log_signup_milestone();
+
+CREATE TRIGGER profile_visits_log_activity AFTER INSERT ON public.profile_visits FOR EACH ROW EXECUTE FUNCTION public.log_member_action();
+
 CREATE TRIGGER profile_visits_notify AFTER INSERT ON public.profile_visits FOR EACH ROW EXECUTE FUNCTION public.notify_visit();
 
 CREATE TRIGGER profile_visits_refuse_blocked BEFORE INSERT ON public.profile_visits FOR EACH ROW EXECUTE FUNCTION public.refuse_blocked_interaction();
 
+CREATE TRIGGER profiles_audit_admin AFTER INSERT OR DELETE OR UPDATE ON public.profiles FOR EACH ROW EXECUTE FUNCTION public.audit_admin_change();
+
 CREATE TRIGGER profiles_check_personal_info BEFORE INSERT OR UPDATE ON public.profiles FOR EACH ROW EXECUTE FUNCTION public.check_profile_personal_info();
 
 CREATE TRIGGER profiles_check_visibility BEFORE UPDATE ON public.profiles FOR EACH ROW EXECUTE FUNCTION public.check_profile_visibility();
+
+CREATE TRIGGER profiles_log_signup AFTER UPDATE OF onboarding_completed_at ON public.profiles FOR EACH ROW EXECUTE FUNCTION public.log_signup_milestone();
 
 CREATE TRIGGER profiles_no_coordinates BEFORE INSERT OR UPDATE OF latitude, longitude ON public.profiles FOR EACH ROW EXECUTE FUNCTION public.clear_profile_coordinates();
 
@@ -4353,11 +4981,25 @@ CREATE TRIGGER profiles_replace_virtual AFTER UPDATE OF verified_at ON public.pr
 
 CREATE TRIGGER profiles_updated_at BEFORE UPDATE ON public.profiles FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
+CREATE TRIGGER reports_audit_admin AFTER INSERT OR DELETE OR UPDATE ON public.reports FOR EACH ROW EXECUTE FUNCTION public.audit_admin_change();
+
+CREATE TRIGGER reports_log_activity AFTER INSERT ON public.reports FOR EACH ROW EXECUTE FUNCTION public.log_member_action();
+
+CREATE TRIGGER subscriptions_audit_admin AFTER INSERT OR DELETE OR UPDATE ON public.subscriptions FOR EACH ROW EXECUTE FUNCTION public.audit_admin_change();
+
 CREATE TRIGGER subscriptions_updated_at BEFORE UPDATE ON public.subscriptions FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+CREATE TRIGGER support_tickets_audit_admin AFTER INSERT OR DELETE OR UPDATE ON public.support_tickets FOR EACH ROW EXECUTE FUNCTION public.audit_admin_change();
 
 CREATE TRIGGER user_activity_updated_at BEFORE UPDATE ON public.user_activity FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
+CREATE TRIGGER user_roles_audit_admin AFTER INSERT OR DELETE OR UPDATE ON public.user_roles FOR EACH ROW EXECUTE FUNCTION public.audit_admin_change();
+
 CREATE TRIGGER user_settings_updated_at BEFORE UPDATE ON public.user_settings FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+CREATE TRIGGER users_audit_admin AFTER INSERT OR DELETE OR UPDATE ON public.users FOR EACH ROW EXECUTE FUNCTION public.audit_admin_change();
+
+CREATE TRIGGER users_log_account AFTER DELETE OR UPDATE OF status ON public.users FOR EACH ROW EXECUTE FUNCTION public.log_account_change();
 
 CREATE TRIGGER users_protect_columns BEFORE UPDATE ON public.users FOR EACH ROW EXECUTE FUNCTION public.protect_user_columns();
 
@@ -4521,7 +5163,10 @@ ALTER TABLE ONLY public.virtual_profile_removals
 -- 12. Sécurité par ligne (RLS) : activée sur toutes les tables
 -- ============================================================================
 
+ALTER TABLE public.activity_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.admin_audit_log ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ai_usage ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.auth_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.blocks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.christian_profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.contact_requests ENABLE ROW LEVEL SECURITY;
@@ -4536,6 +5181,7 @@ ALTER TABLE public.matches ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.moderation_actions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.payment_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.photos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.preferences ENABLE ROW LEVEL SECURITY;
@@ -4545,6 +5191,8 @@ ALTER TABLE public.profile_verifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.profile_visits ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.reports ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.server_errors ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.signup_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.storage_cleanup_queue ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.subscriptions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.support_tickets ENABLE ROW LEVEL SECURITY;
@@ -4558,10 +5206,19 @@ ALTER TABLE public.virtual_profile_removals ENABLE ROW LEVEL SECURITY;
 -- 13. Règles d'accès : qui peut lire ou modifier quelles lignes
 -- ============================================================================
 
+-- activity_events
+CREATE POLICY activity_events_select_admin ON public.activity_events FOR SELECT TO authenticated USING (public.is_admin());
+
+-- admin_audit_log
+CREATE POLICY admin_audit_log_select_admin ON public.admin_audit_log FOR SELECT TO authenticated USING (public.is_admin());
+
 -- ai_usage
 CREATE POLICY ai_usage_select_admin ON public.ai_usage FOR SELECT TO authenticated USING (public.is_admin());
 
 CREATE POLICY ai_usage_select_own ON public.ai_usage FOR SELECT TO authenticated USING ((user_id = auth.uid()));
+
+-- auth_events
+CREATE POLICY auth_events_select_admin ON public.auth_events FOR SELECT TO authenticated USING (public.is_admin());
 
 -- blocks
 CREATE POLICY blocks_delete_own ON public.blocks FOR DELETE TO authenticated USING ((blocker_id = auth.uid()));
@@ -4640,6 +5297,9 @@ CREATE POLICY moderation_select_admin ON public.moderation_actions FOR SELECT TO
 -- notifications
 CREATE POLICY notifications_select_own ON public.notifications FOR SELECT TO authenticated USING ((user_id = auth.uid()));
 
+-- payment_events
+CREATE POLICY payment_events_select_admin ON public.payment_events FOR SELECT TO authenticated USING (public.is_admin());
+
 -- payments
 CREATE POLICY payments_select_admin ON public.payments FOR SELECT TO authenticated USING (public.is_admin());
 
@@ -4703,6 +5363,12 @@ CREATE POLICY reports_select_own ON public.reports FOR SELECT TO authenticated U
 
 CREATE POLICY reports_update_admin ON public.reports FOR UPDATE TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
 
+-- server_errors
+CREATE POLICY server_errors_select_admin ON public.server_errors FOR SELECT TO authenticated USING (public.is_admin());
+
+-- signup_events
+CREATE POLICY signup_events_select_admin ON public.signup_events FOR SELECT TO authenticated USING (public.is_admin());
+
 -- subscriptions
 CREATE POLICY subscriptions_select_admin ON public.subscriptions FOR SELECT TO authenticated USING (public.is_admin());
 
@@ -4745,8 +5411,11 @@ CREATE POLICY users_update_own ON public.users FOR UPDATE TO authenticated USING
 -- filtrées ligne par ligne par les règles d'accès ci-dessus.
 GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
 
--- 12 tables — membres connectés : lecture · serveur du site : tout
+-- 18 tables — membres connectés : lecture · serveur du site : tout
 REVOKE ALL ON TABLE
+  public.activity_events,
+  public.admin_audit_log,
+  public.auth_events,
   public.contact_requests,
   public.conversation_reads,
   public.conversation_unlocks,
@@ -4754,13 +5423,19 @@ REVOKE ALL ON TABLE
   public.conversations,
   public.matches,
   public.messages,
+  public.payment_events,
   public.payments,
   public.profile_locations,
   public.profile_visits,
   public.reports,
+  public.server_errors,
+  public.signup_events,
   public.user_activity
 FROM PUBLIC, anon, authenticated, service_role;
 GRANT ALL ON TABLE
+  public.activity_events,
+  public.admin_audit_log,
+  public.auth_events,
   public.contact_requests,
   public.conversation_reads,
   public.conversation_unlocks,
@@ -4768,13 +5443,19 @@ GRANT ALL ON TABLE
   public.conversations,
   public.matches,
   public.messages,
+  public.payment_events,
   public.payments,
   public.profile_locations,
   public.profile_visits,
   public.reports,
+  public.server_errors,
+  public.signup_events,
   public.user_activity
 TO service_role;
 GRANT SELECT ON TABLE
+  public.activity_events,
+  public.admin_audit_log,
+  public.auth_events,
   public.contact_requests,
   public.conversation_reads,
   public.conversation_unlocks,
@@ -4782,10 +5463,13 @@ GRANT SELECT ON TABLE
   public.conversations,
   public.matches,
   public.messages,
+  public.payment_events,
   public.payments,
   public.profile_locations,
   public.profile_visits,
   public.reports,
+  public.server_errors,
+  public.signup_events,
   public.user_activity
 TO authenticated;
 
@@ -4830,6 +5514,26 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
   public.users
 TO authenticated;
 
+-- 7 compteurs — serveur du site : tout
+REVOKE ALL ON SEQUENCE
+  public.activity_events_id_seq,
+  public.admin_audit_log_id_seq,
+  public.auth_events_id_seq,
+  public.payment_events_id_seq,
+  public.server_errors_id_seq,
+  public.signup_events_id_seq,
+  public.storage_cleanup_queue_id_seq
+FROM PUBLIC, anon, authenticated, service_role;
+GRANT ALL ON SEQUENCE
+  public.activity_events_id_seq,
+  public.admin_audit_log_id_seq,
+  public.auth_events_id_seq,
+  public.payment_events_id_seq,
+  public.server_errors_id_seq,
+  public.signup_events_id_seq,
+  public.storage_cleanup_queue_id_seq
+TO service_role;
+
 -- 3 tables — visiteurs : lecture, vidage, références, déclencheurs · membres connectés : lecture, vidage, références, déclencheurs · serveur du site : tout
 REVOKE ALL ON TABLE
   public.notifications,
@@ -4857,14 +5561,6 @@ GRANT ALL ON TABLE
   public.geo_countries,
   public.storage_cleanup_queue,
   public.virtual_profile_removals
-TO service_role;
-
--- 1 compteurs — serveur du site : tout
-REVOKE ALL ON SEQUENCE
-  public.storage_cleanup_queue_id_seq
-FROM PUBLIC, anon, authenticated, service_role;
-GRANT ALL ON SEQUENCE
-  public.storage_cleanup_queue_id_seq
 TO service_role;
 
 -- 1 tables — visiteurs : tout · membres connectés : tout · serveur du site : tout
@@ -4897,7 +5593,7 @@ GRANT SELECT, INSERT, DELETE ON TABLE
   public.favorites
 TO authenticated;
 
--- 79 fonctions — membres connectés : exécution · serveur du site : exécution
+-- 83 fonctions — membres connectés : exécution · serveur du site : exécution
 REVOKE ALL ON FUNCTION
   public.activate_profile_boost(),
   public.admin_list_demo_profiles(),
@@ -4909,6 +5605,7 @@ REVOKE ALL ON FUNCTION
   public.admin_list_support_tickets(),
   public.admin_list_unlocks(),
   public.admin_list_users(text,text,integer,integer),
+  public.admin_log_action(text,text,text,jsonb),
   public.admin_moderate_photo(uuid,boolean,text),
   public.admin_reply_support_ticket(uuid,text,boolean),
   public.admin_resolve_report(uuid,text,text),
@@ -4964,7 +5661,10 @@ REVOKE ALL ON FUNCTION
   public.mark_notification_read(uuid),
   public.mark_offline(),
   public.normalize_place(text),
+  public.record_logout(),
   public.record_profile_visit(uuid),
+  public.record_session_context(text),
+  public.record_signup_step(integer),
   public.report_user(uuid,public.report_reason,text,uuid),
   public.respond_contact_request(uuid,boolean),
   public.search_profiles(jsonb,integer),
@@ -4990,6 +5690,7 @@ GRANT EXECUTE ON FUNCTION
   public.admin_list_support_tickets(),
   public.admin_list_unlocks(),
   public.admin_list_users(text,text,integer,integer),
+  public.admin_log_action(text,text,text,jsonb),
   public.admin_moderate_photo(uuid,boolean,text),
   public.admin_reply_support_ticket(uuid,text,boolean),
   public.admin_resolve_report(uuid,text,text),
@@ -5045,7 +5746,10 @@ GRANT EXECUTE ON FUNCTION
   public.mark_notification_read(uuid),
   public.mark_offline(),
   public.normalize_place(text),
+  public.record_logout(),
   public.record_profile_visit(uuid),
+  public.record_session_context(text),
+  public.record_signup_step(integer),
   public.report_user(uuid,public.report_reason,text,uuid),
   public.respond_contact_request(uuid,boolean),
   public.search_profiles(jsonb,integer),
@@ -5061,10 +5765,11 @@ GRANT EXECUTE ON FUNCTION
   public.undo_last_pass()
 TO authenticated, service_role;
 
--- 42 fonctions — serveur du site : exécution
+-- 54 fonctions — serveur du site : exécution
 REVOKE ALL ON FUNCTION
   public.activate_conversation_unlock(),
   public.activate_premium_subscription(),
+  public.audit_admin_change(),
   public.check_profile_personal_info(),
   public.check_profile_visibility(),
   public.compatibility_breakdown(uuid,uuid),
@@ -5080,6 +5785,13 @@ REVOKE ALL ON FUNCTION
   public.handle_new_user(),
   public.init_conversation_usage(),
   public.lock_conversation_for_sending(uuid,uuid),
+  public.log_account_change(),
+  public.log_activity(uuid,text,uuid,uuid),
+  public.log_auth_user_change(),
+  public.log_member_action(),
+  public.log_payment_change(),
+  public.log_server_error(text,text,uuid,text,jsonb),
+  public.log_signup_milestone(),
   public.member_country(uuid),
   public.messages_block_phone_numbers(),
   public.notify_contact_request(),
@@ -5096,12 +5808,16 @@ REVOKE ALL ON FUNCTION
   public.protect_server_profile_fields(),
   public.protect_terms_accepted_at(),
   public.protect_user_columns(),
+  public.purge_old_logs(),
   public.recent_signups(),
+  public.record_login_failure(text,text),
+  public.record_payment_webhook(text,uuid,text,text),
   public.refund_ai_quota(uuid,text),
   public.refuse_blocked_interaction(),
   public.refuse_contact_to_demo_profile(),
   public.remove_one_virtual_profile(text,public.gender),
   public.replace_virtual_profile_on_signup(),
+  public.request_context(),
   public.set_like_created_at(),
   public.set_updated_at(),
   public.wants_notification(uuid,text)
@@ -5109,6 +5825,7 @@ FROM PUBLIC, anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION
   public.activate_conversation_unlock(),
   public.activate_premium_subscription(),
+  public.audit_admin_change(),
   public.check_profile_personal_info(),
   public.check_profile_visibility(),
   public.compatibility_breakdown(uuid,uuid),
@@ -5124,6 +5841,13 @@ GRANT EXECUTE ON FUNCTION
   public.handle_new_user(),
   public.init_conversation_usage(),
   public.lock_conversation_for_sending(uuid,uuid),
+  public.log_account_change(),
+  public.log_activity(uuid,text,uuid,uuid),
+  public.log_auth_user_change(),
+  public.log_member_action(),
+  public.log_payment_change(),
+  public.log_server_error(text,text,uuid,text,jsonb),
+  public.log_signup_milestone(),
   public.member_country(uuid),
   public.messages_block_phone_numbers(),
   public.notify_contact_request(),
@@ -5140,32 +5864,42 @@ GRANT EXECUTE ON FUNCTION
   public.protect_server_profile_fields(),
   public.protect_terms_accepted_at(),
   public.protect_user_columns(),
+  public.purge_old_logs(),
   public.recent_signups(),
+  public.record_login_failure(text,text),
+  public.record_payment_webhook(text,uuid,text,text),
   public.refund_ai_quota(uuid,text),
   public.refuse_blocked_interaction(),
   public.refuse_contact_to_demo_profile(),
   public.remove_one_virtual_profile(text,public.gender),
   public.replace_virtual_profile_on_signup(),
+  public.request_context(),
   public.set_like_created_at(),
   public.set_updated_at(),
   public.wants_notification(uuid,text)
 TO service_role;
 
--- 6 fonctions — tout le monde : exécution · visiteurs : exécution · membres connectés : exécution · serveur du site : exécution
+-- 9 fonctions — tout le monde : exécution · visiteurs : exécution · membres connectés : exécution · serveur du site : exécution
 REVOKE ALL ON FUNCTION
   public.ai_usage_day(),
+  public.auth_method(text),
   public.clear_profile_coordinates(),
+  public.payment_product(public.payment_type,jsonb),
   public.premium_plan_amount(public.subscription_plan),
   public.set_favorite_created_at(),
   public.text_items_max_length(text[],integer),
+  public.url_decode(text),
   public.utc_day_start()
 FROM PUBLIC, anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION
   public.ai_usage_day(),
+  public.auth_method(text),
   public.clear_profile_coordinates(),
+  public.payment_product(public.payment_type,jsonb),
   public.premium_plan_amount(public.subscription_plan),
   public.set_favorite_created_at(),
   public.text_items_max_length(text[],integer),
+  public.url_decode(text),
   public.utc_day_start()
 TO PUBLIC, anon, authenticated, service_role;
 
@@ -5178,6 +5912,7 @@ RESET check_function_bodies;
 -- ============================================================================
 
 CREATE TRIGGER on_auth_user_created AFTER INSERT ON auth.users FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+CREATE TRIGGER on_auth_user_logged AFTER INSERT OR UPDATE ON auth.users FOR EACH ROW EXECUTE FUNCTION public.log_auth_user_change();
 
 -- ============================================================================
 -- 16. Fichiers : espaces privés (photos, messages vocaux, vérifications) et leurs règles
@@ -5560,46 +6295,46 @@ ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name, lat = EXCLUDED.lat, lng =
 DO $do$
 DECLARE
   _seed jsonb := $seed$[
-["demo.ga.01@profils-virtuels.yona.invalid","Vanessa","female","2003-08-09","Gabon","Ngounié","Mouila","Calme et joyeuse, je partage mon temps entre mon travail et la louange. J'aime méditer la Parole chaque matin. J'aimerais rencontrer un homme qui place Dieu au centre de sa vie.",["Louange","Cinéma"],"Pentecôtiste","Plusieurs fois par semaine","Plusieurs fois par semaine","Essentielle","Relation sérieuse","male",18,33],
-["demo.ga.02@profils-virtuels.yona.invalid","Murielle","female","2004-08-27","Gabon","Estuaire","Ntoum","Je suis une femme simple, passionnée par la musique et la lecture. J'enseigne à l'école du dimanche. Je crois au mariage, à la fidélité et au respect.",["Lecture","Musique"],"Protestante (Église évangélique du Gabon)","Chaque semaine","Tous les jours","Très importante","Mariage","male",18,32],
-["demo.ga.03@profils-virtuels.yona.invalid","Hervé","male","2002-07-05","Gabon","Haut-Ogooué","Franceville","Souriant et attentionné, j'aime la mode et la danse. Le Psaume 23 m'accompagne depuis toujours. Je cherche une relation sérieuse, en vue du mariage.",["Nature","Danse","Mode","Bénévolat"],"Adventiste","Plusieurs fois par semaine","Plusieurs fois par semaine","Essentielle","Mariage","female",18,34],
-["demo.ga.04@profils-virtuels.yona.invalid","Christian","male","2003-03-06","Gabon","Nyanga","Tchibanga","Je suis un homme simple, passionné par le bénévolat et la mode. Je suis engagé dans le groupe de jeunes de ma paroisse. Je crois au mariage, à la fidélité et au respect.",["Danse","Mode","Bénévolat","Cuisine"],"Catholique","Plusieurs fois par semaine","Matin et soir","Essentielle","Mariage","female",18,33],
-["demo.cm.01@profils-virtuels.yona.invalid","Pélagie","female","1992-08-25","Cameroun","North","Garoua","Douce mais déterminée, j'aime le sport, les voyages et les longues discussions. Ma foi guide chacune de mes décisions. J'aimerais rencontrer un homme qui place Dieu au centre de sa vie.",["Voyages","Sport"],"Évangélique","Deux à trois fois par mois","Tous les jours","Essentielle","Mariage","male",28,44],
-["demo.cm.02@profils-virtuels.yona.invalid","Aïcha","female","1993-08-20","Cameroun","West","Dschang","Souriante et attentionnée, j'aime les balades dans la nature et la mode. Le Psaume 23 m'accompagne depuis toujours. Je souhaite rencontrer un homme sincère pour construire un foyer béni.",["Mode","Lecture","Nature"],"Catholique","Plusieurs fois par semaine","Tous les jours","Essentielle","Faire connaissance d'abord","male",27,43],
-["demo.cm.03@profils-virtuels.yona.invalid","Arnaud","male","2003-03-30","Cameroun","South","Ébolowa","Fils de Dieu avant tout, je trouve ma joie dans la louange et les voyages. Le Psaume 23 m'accompagne depuis toujours. Je souhaite rencontrer une femme sincère pour construire un foyer béni.",["Photographie","Voyages","Sport","Louange"],"Baptiste","Deux à trois fois par mois","Tous les jours","Très importante","Relation sérieuse","female",18,33],
-["demo.cm.04@profils-virtuels.yona.invalid","Franck","male","1998-05-24","Cameroun","Littoral","Douala","Souriant et attentionné, j'aime la lecture et la louange. Je sers à l'accueil de mon église le dimanche. Prêt à bâtir une famille fondée sur l'amour et la foi.",["Louange","Lecture"],"Pentecôtiste","Chaque semaine","Plusieurs fois par semaine","Au centre de ma vie","Mariage","female",22,38],
-["demo.ci.01@profils-virtuels.yona.invalid","Amenan","female","2001-11-03","Côte d'Ivoire","Vallée du Bandama District","Bouaké","Calme et joyeuse, je partage mon temps entre mon travail et la mode. Le Psaume 23 m'accompagne depuis toujours. Je souhaite rencontrer un homme sincère pour construire un foyer béni.",["Mode","Cinéma","Nature"],"Méthodiste","Chaque semaine","Plusieurs fois par semaine","Très importante","Relation sérieuse","male",18,34],
-["demo.ci.02@profils-virtuels.yona.invalid","Chantal","female","2004-03-13","Côte d'Ivoire","Abidjan Autonomous District","Abidjan","Fille de Dieu avant tout, je trouve ma joie dans la photographie et la musique. Je sers à l'accueil de mon église le dimanche. Je crois au mariage, à la fidélité et au respect.",["Musique","Photographie","Cinéma","Cuisine"],"Harriste","Deux à trois fois par mois","Matin et soir","Au centre de ma vie","Relation sérieuse","male",18,32],
-["demo.ci.03@profils-virtuels.yona.invalid","Kouassi","male","1991-06-29","Côte d'Ivoire","Abidjan Autonomous District","Bingerville","Chaque journée est un cadeau de Dieu : je la remplis de cinéma et de voyages. J'aide à l'organisation des sorties de l'église. Prêt à bâtir une famille fondée sur l'amour et la foi.",["Voyages","Cinéma","Bénévolat","Louange"],"Baptiste","Chaque semaine","Tous les jours","Au centre de ma vie","Faire connaissance d'abord","female",29,45],
-["demo.ci.04@profils-virtuels.yona.invalid","Hermann","male","2004-07-21","Côte d'Ivoire","Bas-Sassandra District","San-Pédro","Je suis un homme simple, passionné par la musique et la cuisine. Ma foi guide chacune de mes décisions. Je cherche une relation sérieuse, en vue du mariage.",["Cuisine","Musique"],"Catholique","Chaque semaine","Matin et soir","Au centre de ma vie","Faire connaissance d'abord","female",18,32],
-["demo.cg.01@profils-virtuels.yona.invalid","Tendresse","female","1995-03-29","Congo-Brazzaville","Sangha","Ouesso","Souriante et attentionnée, j'aime les voyages et la photographie. La prière rythme mes journées. Je cherche une relation sérieuse, en vue du mariage.",["Voyages","Photographie","Mode"],"Salutiste (Armée du Salut)","Chaque semaine","Matin et soir","Très importante","Mariage","male",25,41],
-["demo.cg.02@profils-virtuels.yona.invalid","Orphée","female","1999-09-08","Congo-Brazzaville","Bouenza","Madingou","Souriante et attentionnée, j'aime la lecture et la cuisine. J'enseigne à l'école du dimanche. Je cherche une relation sérieuse, en vue du mariage.",["Bénévolat","Cuisine","Lecture","Louange"],"Salutiste (Armée du Salut)","Chaque semaine","Plusieurs fois par semaine","Essentielle","Mariage","male",21,37],
-["demo.cg.03@profils-virtuels.yona.invalid","Christ","male","2004-07-06","Congo-Brazzaville","Niari","Dolisie","Souriant et attentionné, j'aime les voyages et le cinéma. Je suis engagé dans le groupe de jeunes de ma paroisse. Je souhaite rencontrer une femme sincère pour construire un foyer béni.",["Voyages","Cinéma","Louange"],"Pentecôtiste","Chaque semaine","Matin et soir","Très importante","Relation sérieuse","female",18,32],
-["demo.cg.04@profils-virtuels.yona.invalid","Ulrich","male","2000-10-24","Congo-Brazzaville","Plateaux","Gamboma","Dynamique et fidèle en amitié, je consacre mon temps libre à la louange. Je joue dans le groupe de louange de mon église. Je cherche une relation sérieuse, en vue du mariage.",["Danse","Louange","Nature"],"Pentecôtiste","Chaque semaine","Tous les jours","Au centre de ma vie","Faire connaissance d'abord","female",19,35],
-["demo.tg.01@profils-virtuels.yona.invalid","Ablavi","female","2001-12-30","Togo","Plateaux","Kpalimé","Fille de Dieu avant tout, je trouve ma joie dans les voyages et le sport. La prière rythme mes journées. J'aimerais rencontrer un homme qui place Dieu au centre de sa vie.",["Sport","Mode","Cinéma","Voyages"],"Méthodiste","Deux à trois fois par mois","Plusieurs fois par semaine","Au centre de ma vie","Mariage","male",18,34],
-["demo.tg.02@profils-virtuels.yona.invalid","Dédé","female","1998-10-25","Togo","Maritime","Aného","Douce mais déterminée, j'aime les balades dans la nature, la danse et les longues discussions. Je participe à un groupe de prière chaque semaine. Je crois au mariage, à la fidélité et au respect.",["Danse","Nature","Louange"],"Évangélique presbytérienne","Chaque semaine","Plusieurs fois par semaine","Au centre de ma vie","Relation sérieuse","male",21,37],
-["demo.tg.03@profils-virtuels.yona.invalid","Yawo","male","1993-03-23","Togo","Maritime","Tsévié","Dynamique et fidèle en amitié, je consacre mon temps libre à la musique. Le Psaume 23 m'accompagne depuis toujours. J'aimerais rencontrer une femme qui place Dieu au centre de sa vie.",["Photographie","Musique"],"Assemblées de Dieu","Plusieurs fois par semaine","Tous les jours","Très importante","Relation sérieuse","female",27,43],
-["demo.tg.04@profils-virtuels.yona.invalid","Dodji","male","2000-10-02","Togo","Centrale","Sokodé","Calme et joyeux, je partage mon temps entre mon travail et la musique. Ma foi guide chacune de mes décisions. Je crois au mariage, à la fidélité et au respect.",["Mode","Musique","Photographie","Cinéma"],"Assemblées de Dieu","Plusieurs fois par semaine","Tous les jours","Très importante","Relation sérieuse","female",20,36],
-["demo.bj.01@profils-virtuels.yona.invalid","Nadège","female","2003-08-18","Bénin","Atlantique","Abomey-Calavi","Douce mais déterminée, j'aime la lecture, la danse et les longues discussions. Le Psaume 23 m'accompagne depuis toujours. Je cherche une relation sérieuse, en vue du mariage.",["Cinéma","Danse","Lecture"],"Église du christianisme céleste","Chaque semaine","Plusieurs fois par semaine","Au centre de ma vie","Mariage","male",18,33],
-["demo.bj.02@profils-virtuels.yona.invalid","Fernande","female","1995-02-12","Bénin","Collines","Savalou","Calme et joyeuse, je partage mon temps entre mon travail et la danse. Je suis engagée dans le groupe de jeunes de ma paroisse. J'aimerais rencontrer un homme qui place Dieu au centre de sa vie.",["Voyages","Bénévolat","Photographie","Danse"],"Assemblées de Dieu","Plusieurs fois par semaine","Tous les jours","Au centre de ma vie","Mariage","male",25,41],
-["demo.bj.03@profils-virtuels.yona.invalid","Narcisse","male","1993-10-22","Bénin","Atakora","Natitingou","Fils de Dieu avant tout, je trouve ma joie dans la lecture et les voyages. Je suis engagé dans le groupe de jeunes de ma paroisse. J'aimerais rencontrer une femme qui place Dieu au centre de sa vie.",["Musique","Lecture","Voyages"],"Méthodiste","Chaque semaine","Tous les jours","Essentielle","Faire connaissance d'abord","female",26,42],
-["demo.bj.04@profils-virtuels.yona.invalid","Romaric","male","1999-06-22","Bénin","Atlantique","Ouidah","Chaque journée est un cadeau de Dieu : je la remplis de sport et de lecture. Je participe à un groupe de prière chaque semaine. Je souhaite rencontrer une femme sincère pour construire un foyer béni.",["Musique","Lecture","Mode","Sport"],"Assemblées de Dieu","Chaque semaine","Tous les jours","Très importante","Mariage","female",21,37],
-["demo.sn.01@profils-virtuels.yona.invalid","Joséphine","female","2002-01-22","Sénégal","Kolda","Kolda","Calme et joyeuse, je partage mon temps entre mon travail et la louange. La prière rythme mes journées. J'attends un homme de foi, doux et responsable.",["Louange","Photographie"],"Adventiste","Deux à trois fois par mois","Tous les jours","Très importante","Mariage","male",18,34],
-["demo.sn.02@profils-virtuels.yona.invalid","Albertine","female","1994-04-30","Sénégal","Thies","Mbour","Calme et joyeuse, je partage mon temps entre mon travail et la musique. Le Psaume 23 m'accompagne depuis toujours. J'attends un homme de foi, doux et responsable.",["Musique","Lecture","Bénévolat"],"Adventiste","Chaque semaine","Tous les jours","Très importante","Mariage","male",26,42],
-["demo.sn.03@profils-virtuels.yona.invalid","Marcel","male","1994-10-08","Sénégal","Kaolack","Kaolack","Je suis un homme simple, passionné par la photographie et la danse. J'aide à l'organisation des sorties de l'église. Je cherche une relation sérieuse, en vue du mariage.",["Danse","Photographie"],"Adventiste","Chaque semaine","Matin et soir","Au centre de ma vie","Relation sérieuse","female",25,41],
-["demo.sn.04@profils-virtuels.yona.invalid","Raphaël","male","1994-12-07","Sénégal","Ziguinchor","Bignona","Je suis un homme simple, passionné par la lecture et la cuisine. J'aime méditer la Parole chaque matin. Prêt à bâtir une famille fondée sur l'amour et la foi.",["Bénévolat","Cinéma","Cuisine","Lecture"],"Catholique","Chaque semaine","Matin et soir","Très importante","Faire connaissance d'abord","female",25,41],
-["demo.ml.01@profils-virtuels.yona.invalid","Marthe","female","2004-04-14","Mali","Sikasso","Koutiala","Douce mais déterminée, j'aime la mode, la danse et les longues discussions. Je sers à l'accueil de mon église le dimanche. Je cherche une relation sérieuse, en vue du mariage.",["Danse","Mode"],"Catholique","Chaque semaine","Tous les jours","Essentielle","Relation sérieuse","male",18,32],
-["demo.ml.02@profils-virtuels.yona.invalid","Béatrice","female","1993-05-29","Mali","Ségou","Ségou","Je suis une femme simple, passionnée par la mode et le sport. Je participe à un groupe de prière chaque semaine. Je cherche une relation sérieuse, en vue du mariage.",["Mode","Sport","Danse"],"Protestante (Église chrétienne évangélique)","Deux à trois fois par mois","Tous les jours","Très importante","Faire connaissance d'abord","male",27,43],
-["demo.ml.03@profils-virtuels.yona.invalid","Emmanuel","male","2004-02-18","Mali","Kayes","Kayes","Chaque journée est un cadeau de Dieu : je la remplis de photographie et de cinéma. Ma foi guide chacune de mes décisions. Je cherche une relation sérieuse, en vue du mariage.",["Sport","Bénévolat","Cinéma","Photographie"],"Baptiste","Plusieurs fois par semaine","Tous les jours","Essentielle","Relation sérieuse","female",18,32],
-["demo.ml.04@profils-virtuels.yona.invalid","André","male","1993-02-16","Mali","Ségou","San","Souriant et attentionné, j'aime le sport et la musique. La prière rythme mes journées. J'attends une femme de foi, douce et pleine de joie.",["Sport","Cinéma","Musique","Cuisine"],"Évangélique","Plusieurs fois par semaine","Tous les jours","Très importante","Mariage","female",27,43],
-["demo.fr.01@profils-virtuels.yona.invalid","Émilie","female","1996-06-22","France","Occitanie","Montpellier","Souriante et attentionnée, j'aime la louange et le sport. La prière rythme mes journées. J'attends un homme de foi, doux et responsable.",["Louange","Photographie","Sport","Cuisine"],"Protestante réformée","Plusieurs fois par semaine","Tous les jours","Très importante","Mariage","male",24,40],
-["demo.fr.02@profils-virtuels.yona.invalid","Juliette","female","2000-10-14","France","Centre-Val de Loire","Tours","Chaque journée est un cadeau de Dieu : je la remplis de balades dans la nature et de louange. Je chante dans la chorale de mon église. Je souhaite rencontrer un homme sincère pour construire un foyer béni.",["Louange","Nature","Voyages"],"Baptiste","Deux à trois fois par mois","Matin et soir","Très importante","Mariage","male",19,35],
-["demo.fr.03@profils-virtuels.yona.invalid","Sophie","female","2001-03-09","France","Grand Est","Strasbourg","Douce mais déterminée, j'aime la louange, la photographie et les longues discussions. Ma foi guide chacune de mes décisions. J'attends un homme de foi, doux et responsable.",["Louange","Photographie"],"Protestante réformée","Plusieurs fois par semaine","Matin et soir","Au centre de ma vie","Faire connaissance d'abord","male",19,35],
-["demo.fr.04@profils-virtuels.yona.invalid","Lucie","female","1991-10-11","France","Pays de la Loire","Angers","Douce mais déterminée, j'aime la cuisine, la louange et les longues discussions. Le Psaume 23 m'accompagne depuis toujours. Je cherche une relation sérieuse, en vue du mariage.",["Nature","Louange","Cuisine"],"Catholique","Plusieurs fois par semaine","Tous les jours","Très importante","Mariage","male",28,44],
-["demo.fr.05@profils-virtuels.yona.invalid","Mathilde","female","2000-06-21","France","Auvergne-Rhône-Alpes","Lyon","Souriante et attentionnée, j'aime la louange et le sport. Je participe à un groupe de prière chaque semaine. J'attends un homme de foi, doux et responsable.",["Louange","Sport"],"Évangélique","Plusieurs fois par semaine","Matin et soir","Au centre de ma vie","Faire connaissance d'abord","male",20,36],
-["demo.fr.06@profils-virtuels.yona.invalid","Hugo","male","1990-12-25","France","Occitanie","Toulouse","Dynamique et fidèle en amitié, je consacre mon temps libre à la photographie. Je participe à un groupe de prière chaque semaine. Je crois au mariage, à la fidélité et au respect.",["Photographie","Cuisine","Cinéma"],"Adventiste","Deux à trois fois par mois","Matin et soir","Essentielle","Faire connaissance d'abord","female",29,45],
-["demo.fr.07@profils-virtuels.yona.invalid","Guillaume","male","2003-12-02","France","Auvergne-Rhône-Alpes","Grenoble","Souriant et attentionné, j'aime la louange et la lecture. Je participe à un groupe de prière chaque semaine. J'aimerais rencontrer une femme qui place Dieu au centre de sa vie.",["Lecture","Louange","Voyages"],"Baptiste","Deux à trois fois par mois","Matin et soir","Au centre de ma vie","Faire connaissance d'abord","female",18,32],
-["demo.fr.08@profils-virtuels.yona.invalid","Louis","male","1996-06-29","France","New Aquitaine","Bordeaux","Souriant et attentionné, j'aime la mode et le cinéma. Je participe à un groupe de prière chaque semaine. Je crois au mariage, à la fidélité et au respect.",["Mode","Photographie","Cinéma","Louange"],"Adventiste","Plusieurs fois par semaine","Plusieurs fois par semaine","Essentielle","Relation sérieuse","female",24,40]
+["demo.ga.01@profils-virtuels.yona.invalid","Vanessa","female","2003-08-09","Gabon","Ngounié","Mouila","Calme et joyeuse, je partage mon temps entre mon travail et la louange. J'aime méditer la Parole chaque matin. J'aimerais rencontrer un homme qui place Dieu au centre de sa vie.",["Louange","Cinéma"],"Pentecôtiste","Plusieurs fois par semaine","Plusieurs fois par semaine","Essentielle","Relation sérieuse","male",18,33,"/demo-profils/demo-ga-01.webp"],
+["demo.ga.02@profils-virtuels.yona.invalid","Murielle","female","2004-08-27","Gabon","Estuaire","Ntoum","Je suis une femme simple, passionnée par la musique et la lecture. J'enseigne à l'école du dimanche. Je crois au mariage, à la fidélité et au respect.",["Lecture","Musique"],"Protestante (Église évangélique du Gabon)","Chaque semaine","Tous les jours","Très importante","Mariage","male",18,32,"/demo-profils/demo-ga-02.webp"],
+["demo.ga.03@profils-virtuels.yona.invalid","Hervé","male","2002-07-05","Gabon","Haut-Ogooué","Franceville","Souriant et attentionné, j'aime la mode et la danse. Le Psaume 23 m'accompagne depuis toujours. Je cherche une relation sérieuse, en vue du mariage.",["Nature","Danse","Mode","Bénévolat"],"Adventiste","Plusieurs fois par semaine","Plusieurs fois par semaine","Essentielle","Mariage","female",18,34,"/demo-profils/demo-ga-03.webp"],
+["demo.ga.04@profils-virtuels.yona.invalid","Christian","male","2003-03-06","Gabon","Nyanga","Tchibanga","Je suis un homme simple, passionné par le bénévolat et la mode. Je suis engagé dans le groupe de jeunes de ma paroisse. Je crois au mariage, à la fidélité et au respect.",["Danse","Mode","Bénévolat","Cuisine"],"Catholique","Plusieurs fois par semaine","Matin et soir","Essentielle","Mariage","female",18,33,"/demo-profils/demo-ga-04.webp"],
+["demo.cm.01@profils-virtuels.yona.invalid","Pélagie","female","1992-08-25","Cameroun","North","Garoua","Douce mais déterminée, j'aime le sport, les voyages et les longues discussions. Ma foi guide chacune de mes décisions. J'aimerais rencontrer un homme qui place Dieu au centre de sa vie.",["Voyages","Sport"],"Évangélique","Deux à trois fois par mois","Tous les jours","Essentielle","Mariage","male",28,44,"/demo-profils/demo-cm-01.webp"],
+["demo.cm.02@profils-virtuels.yona.invalid","Aïcha","female","1993-08-20","Cameroun","West","Dschang","Souriante et attentionnée, j'aime les balades dans la nature et la mode. Le Psaume 23 m'accompagne depuis toujours. Je souhaite rencontrer un homme sincère pour construire un foyer béni.",["Mode","Lecture","Nature"],"Catholique","Plusieurs fois par semaine","Tous les jours","Essentielle","Faire connaissance d'abord","male",27,43,"/demo-profils/demo-cm-02.webp"],
+["demo.cm.03@profils-virtuels.yona.invalid","Arnaud","male","2003-03-30","Cameroun","South","Ébolowa","Fils de Dieu avant tout, je trouve ma joie dans la louange et les voyages. Le Psaume 23 m'accompagne depuis toujours. Je souhaite rencontrer une femme sincère pour construire un foyer béni.",["Photographie","Voyages","Sport","Louange"],"Baptiste","Deux à trois fois par mois","Tous les jours","Très importante","Relation sérieuse","female",18,33,"/demo-profils/demo-cm-03.webp"],
+["demo.cm.04@profils-virtuels.yona.invalid","Franck","male","1998-05-24","Cameroun","Littoral","Douala","Souriant et attentionné, j'aime la lecture et la louange. Je sers à l'accueil de mon église le dimanche. Prêt à bâtir une famille fondée sur l'amour et la foi.",["Louange","Lecture"],"Pentecôtiste","Chaque semaine","Plusieurs fois par semaine","Au centre de ma vie","Mariage","female",22,38,"/demo-profils/demo-cm-04.webp"],
+["demo.ci.01@profils-virtuels.yona.invalid","Amenan","female","2001-11-03","Côte d'Ivoire","Vallée du Bandama District","Bouaké","Calme et joyeuse, je partage mon temps entre mon travail et la mode. Le Psaume 23 m'accompagne depuis toujours. Je souhaite rencontrer un homme sincère pour construire un foyer béni.",["Mode","Cinéma","Nature"],"Méthodiste","Chaque semaine","Plusieurs fois par semaine","Très importante","Relation sérieuse","male",18,34,"/demo-profils/demo-ci-01.webp"],
+["demo.ci.02@profils-virtuels.yona.invalid","Chantal","female","2004-03-13","Côte d'Ivoire","Abidjan Autonomous District","Abidjan","Fille de Dieu avant tout, je trouve ma joie dans la photographie et la musique. Je sers à l'accueil de mon église le dimanche. Je crois au mariage, à la fidélité et au respect.",["Musique","Photographie","Cinéma","Cuisine"],"Harriste","Deux à trois fois par mois","Matin et soir","Au centre de ma vie","Relation sérieuse","male",18,32,"/demo-profils/demo-ci-02.webp"],
+["demo.ci.03@profils-virtuels.yona.invalid","Kouassi","male","1991-06-29","Côte d'Ivoire","Abidjan Autonomous District","Bingerville","Chaque journée est un cadeau de Dieu : je la remplis de cinéma et de voyages. J'aide à l'organisation des sorties de l'église. Prêt à bâtir une famille fondée sur l'amour et la foi.",["Voyages","Cinéma","Bénévolat","Louange"],"Baptiste","Chaque semaine","Tous les jours","Au centre de ma vie","Faire connaissance d'abord","female",29,45,"/demo-profils/demo-ci-03.webp"],
+["demo.ci.04@profils-virtuels.yona.invalid","Hermann","male","2004-07-21","Côte d'Ivoire","Bas-Sassandra District","San-Pédro","Je suis un homme simple, passionné par la musique et la cuisine. Ma foi guide chacune de mes décisions. Je cherche une relation sérieuse, en vue du mariage.",["Cuisine","Musique"],"Catholique","Chaque semaine","Matin et soir","Au centre de ma vie","Faire connaissance d'abord","female",18,32,"/demo-profils/demo-ci-04.webp"],
+["demo.cg.01@profils-virtuels.yona.invalid","Tendresse","female","1995-03-29","Congo-Brazzaville","Sangha","Ouesso","Souriante et attentionnée, j'aime les voyages et la photographie. La prière rythme mes journées. Je cherche une relation sérieuse, en vue du mariage.",["Voyages","Photographie","Mode"],"Salutiste (Armée du Salut)","Chaque semaine","Matin et soir","Très importante","Mariage","male",25,41,"/demo-profils/demo-cg-01.webp"],
+["demo.cg.02@profils-virtuels.yona.invalid","Orphée","female","1999-09-08","Congo-Brazzaville","Bouenza","Madingou","Souriante et attentionnée, j'aime la lecture et la cuisine. J'enseigne à l'école du dimanche. Je cherche une relation sérieuse, en vue du mariage.",["Bénévolat","Cuisine","Lecture","Louange"],"Salutiste (Armée du Salut)","Chaque semaine","Plusieurs fois par semaine","Essentielle","Mariage","male",21,37,"/demo-profils/demo-cg-02.webp"],
+["demo.cg.03@profils-virtuels.yona.invalid","Christ","male","2004-07-06","Congo-Brazzaville","Niari","Dolisie","Souriant et attentionné, j'aime les voyages et le cinéma. Je suis engagé dans le groupe de jeunes de ma paroisse. Je souhaite rencontrer une femme sincère pour construire un foyer béni.",["Voyages","Cinéma","Louange"],"Pentecôtiste","Chaque semaine","Matin et soir","Très importante","Relation sérieuse","female",18,32,"/demo-profils/demo-cg-03.webp"],
+["demo.cg.04@profils-virtuels.yona.invalid","Ulrich","male","2000-10-24","Congo-Brazzaville","Plateaux","Gamboma","Dynamique et fidèle en amitié, je consacre mon temps libre à la louange. Je joue dans le groupe de louange de mon église. Je cherche une relation sérieuse, en vue du mariage.",["Danse","Louange","Nature"],"Pentecôtiste","Chaque semaine","Tous les jours","Au centre de ma vie","Faire connaissance d'abord","female",19,35,"/demo-profils/demo-cg-04.webp"],
+["demo.tg.01@profils-virtuels.yona.invalid","Ablavi","female","2001-12-30","Togo","Plateaux","Kpalimé","Fille de Dieu avant tout, je trouve ma joie dans les voyages et le sport. La prière rythme mes journées. J'aimerais rencontrer un homme qui place Dieu au centre de sa vie.",["Sport","Mode","Cinéma","Voyages"],"Méthodiste","Deux à trois fois par mois","Plusieurs fois par semaine","Au centre de ma vie","Mariage","male",18,34,"/demo-profils/demo-tg-01.webp"],
+["demo.tg.02@profils-virtuels.yona.invalid","Dédé","female","1998-10-25","Togo","Maritime","Aného","Douce mais déterminée, j'aime les balades dans la nature, la danse et les longues discussions. Je participe à un groupe de prière chaque semaine. Je crois au mariage, à la fidélité et au respect.",["Danse","Nature","Louange"],"Évangélique presbytérienne","Chaque semaine","Plusieurs fois par semaine","Au centre de ma vie","Relation sérieuse","male",21,37,"/demo-profils/demo-tg-02.webp"],
+["demo.tg.03@profils-virtuels.yona.invalid","Yawo","male","1993-03-23","Togo","Maritime","Tsévié","Dynamique et fidèle en amitié, je consacre mon temps libre à la musique. Le Psaume 23 m'accompagne depuis toujours. J'aimerais rencontrer une femme qui place Dieu au centre de sa vie.",["Photographie","Musique"],"Assemblées de Dieu","Plusieurs fois par semaine","Tous les jours","Très importante","Relation sérieuse","female",27,43,"/demo-profils/demo-tg-03.webp"],
+["demo.tg.04@profils-virtuels.yona.invalid","Dodji","male","2000-10-02","Togo","Centrale","Sokodé","Calme et joyeux, je partage mon temps entre mon travail et la musique. Ma foi guide chacune de mes décisions. Je crois au mariage, à la fidélité et au respect.",["Mode","Musique","Photographie","Cinéma"],"Assemblées de Dieu","Plusieurs fois par semaine","Tous les jours","Très importante","Relation sérieuse","female",20,36,"/demo-profils/demo-tg-04.webp"],
+["demo.bj.01@profils-virtuels.yona.invalid","Nadège","female","2003-08-18","Bénin","Atlantique","Abomey-Calavi","Douce mais déterminée, j'aime la lecture, la danse et les longues discussions. Le Psaume 23 m'accompagne depuis toujours. Je cherche une relation sérieuse, en vue du mariage.",["Cinéma","Danse","Lecture"],"Église du christianisme céleste","Chaque semaine","Plusieurs fois par semaine","Au centre de ma vie","Mariage","male",18,33,null],
+["demo.bj.02@profils-virtuels.yona.invalid","Fernande","female","1995-02-12","Bénin","Collines","Savalou","Calme et joyeuse, je partage mon temps entre mon travail et la danse. Je suis engagée dans le groupe de jeunes de ma paroisse. J'aimerais rencontrer un homme qui place Dieu au centre de sa vie.",["Voyages","Bénévolat","Photographie","Danse"],"Assemblées de Dieu","Plusieurs fois par semaine","Tous les jours","Au centre de ma vie","Mariage","male",25,41,"/demo-profils/demo-bj-02.webp"],
+["demo.bj.03@profils-virtuels.yona.invalid","Narcisse","male","1993-10-22","Bénin","Atakora","Natitingou","Fils de Dieu avant tout, je trouve ma joie dans la lecture et les voyages. Je suis engagé dans le groupe de jeunes de ma paroisse. J'aimerais rencontrer une femme qui place Dieu au centre de sa vie.",["Musique","Lecture","Voyages"],"Méthodiste","Chaque semaine","Tous les jours","Essentielle","Faire connaissance d'abord","female",26,42,"/demo-profils/demo-bj-03.webp"],
+["demo.bj.04@profils-virtuels.yona.invalid","Romaric","male","1999-06-22","Bénin","Atlantique","Ouidah","Chaque journée est un cadeau de Dieu : je la remplis de sport et de lecture. Je participe à un groupe de prière chaque semaine. Je souhaite rencontrer une femme sincère pour construire un foyer béni.",["Musique","Lecture","Mode","Sport"],"Assemblées de Dieu","Chaque semaine","Tous les jours","Très importante","Mariage","female",21,37,"/demo-profils/demo-bj-04.webp"],
+["demo.sn.01@profils-virtuels.yona.invalid","Joséphine","female","2002-01-22","Sénégal","Kolda","Kolda","Calme et joyeuse, je partage mon temps entre mon travail et la louange. La prière rythme mes journées. J'attends un homme de foi, doux et responsable.",["Louange","Photographie"],"Adventiste","Deux à trois fois par mois","Tous les jours","Très importante","Mariage","male",18,34,"/demo-profils/demo-sn-01.webp"],
+["demo.sn.02@profils-virtuels.yona.invalid","Albertine","female","1994-04-30","Sénégal","Thies","Mbour","Calme et joyeuse, je partage mon temps entre mon travail et la musique. Le Psaume 23 m'accompagne depuis toujours. J'attends un homme de foi, doux et responsable.",["Musique","Lecture","Bénévolat"],"Adventiste","Chaque semaine","Tous les jours","Très importante","Mariage","male",26,42,"/demo-profils/demo-sn-02.webp"],
+["demo.sn.03@profils-virtuels.yona.invalid","Marcel","male","1994-10-08","Sénégal","Kaolack","Kaolack","Je suis un homme simple, passionné par la photographie et la danse. J'aide à l'organisation des sorties de l'église. Je cherche une relation sérieuse, en vue du mariage.",["Danse","Photographie"],"Adventiste","Chaque semaine","Matin et soir","Au centre de ma vie","Relation sérieuse","female",25,41,"/demo-profils/demo-sn-03.webp"],
+["demo.sn.04@profils-virtuels.yona.invalid","Raphaël","male","1994-12-07","Sénégal","Ziguinchor","Bignona","Je suis un homme simple, passionné par la lecture et la cuisine. J'aime méditer la Parole chaque matin. Prêt à bâtir une famille fondée sur l'amour et la foi.",["Bénévolat","Cinéma","Cuisine","Lecture"],"Catholique","Chaque semaine","Matin et soir","Très importante","Faire connaissance d'abord","female",25,41,"/demo-profils/demo-sn-04.webp"],
+["demo.ml.01@profils-virtuels.yona.invalid","Marthe","female","2004-04-14","Mali","Sikasso","Koutiala","Douce mais déterminée, j'aime la mode, la danse et les longues discussions. Je sers à l'accueil de mon église le dimanche. Je cherche une relation sérieuse, en vue du mariage.",["Danse","Mode"],"Catholique","Chaque semaine","Tous les jours","Essentielle","Relation sérieuse","male",18,32,"/demo-profils/demo-ml-01.webp"],
+["demo.ml.02@profils-virtuels.yona.invalid","Béatrice","female","1993-05-29","Mali","Ségou","Ségou","Je suis une femme simple, passionnée par la mode et le sport. Je participe à un groupe de prière chaque semaine. Je cherche une relation sérieuse, en vue du mariage.",["Mode","Sport","Danse"],"Protestante (Église chrétienne évangélique)","Deux à trois fois par mois","Tous les jours","Très importante","Faire connaissance d'abord","male",27,43,"/demo-profils/demo-ml-02.webp"],
+["demo.ml.03@profils-virtuels.yona.invalid","Emmanuel","male","2004-02-18","Mali","Kayes","Kayes","Chaque journée est un cadeau de Dieu : je la remplis de photographie et de cinéma. Ma foi guide chacune de mes décisions. Je cherche une relation sérieuse, en vue du mariage.",["Sport","Bénévolat","Cinéma","Photographie"],"Baptiste","Plusieurs fois par semaine","Tous les jours","Essentielle","Relation sérieuse","female",18,32,"/demo-profils/demo-ml-03.webp"],
+["demo.ml.04@profils-virtuels.yona.invalid","André","male","1993-02-16","Mali","Ségou","San","Souriant et attentionné, j'aime le sport et la musique. La prière rythme mes journées. J'attends une femme de foi, douce et pleine de joie.",["Sport","Cinéma","Musique","Cuisine"],"Évangélique","Plusieurs fois par semaine","Tous les jours","Très importante","Mariage","female",27,43,"/demo-profils/demo-ml-04.webp"],
+["demo.fr.01@profils-virtuels.yona.invalid","Émilie","female","1996-06-22","France","Occitanie","Montpellier","Souriante et attentionnée, j'aime la louange et le sport. La prière rythme mes journées. J'attends un homme de foi, doux et responsable.",["Louange","Photographie","Sport","Cuisine"],"Protestante réformée","Plusieurs fois par semaine","Tous les jours","Très importante","Mariage","male",24,40,"/demo-profils/demo-fr-01.webp"],
+["demo.fr.02@profils-virtuels.yona.invalid","Juliette","female","2000-10-14","France","Centre-Val de Loire","Tours","Chaque journée est un cadeau de Dieu : je la remplis de balades dans la nature et de louange. Je chante dans la chorale de mon église. Je souhaite rencontrer un homme sincère pour construire un foyer béni.",["Louange","Nature","Voyages"],"Baptiste","Deux à trois fois par mois","Matin et soir","Très importante","Mariage","male",19,35,"/demo-profils/demo-fr-02.webp"],
+["demo.fr.03@profils-virtuels.yona.invalid","Sophie","female","2001-03-09","France","Grand Est","Strasbourg","Douce mais déterminée, j'aime la louange, la photographie et les longues discussions. Ma foi guide chacune de mes décisions. J'attends un homme de foi, doux et responsable.",["Louange","Photographie"],"Protestante réformée","Plusieurs fois par semaine","Matin et soir","Au centre de ma vie","Faire connaissance d'abord","male",19,35,"/demo-profils/demo-fr-03.webp"],
+["demo.fr.04@profils-virtuels.yona.invalid","Lucie","female","1991-10-11","France","Pays de la Loire","Angers","Douce mais déterminée, j'aime la cuisine, la louange et les longues discussions. Le Psaume 23 m'accompagne depuis toujours. Je cherche une relation sérieuse, en vue du mariage.",["Nature","Louange","Cuisine"],"Catholique","Plusieurs fois par semaine","Tous les jours","Très importante","Mariage","male",28,44,"/demo-profils/demo-fr-04.webp"],
+["demo.fr.05@profils-virtuels.yona.invalid","Mathilde","female","2000-06-21","France","Auvergne-Rhône-Alpes","Lyon","Souriante et attentionnée, j'aime la louange et le sport. Je participe à un groupe de prière chaque semaine. J'attends un homme de foi, doux et responsable.",["Louange","Sport"],"Évangélique","Plusieurs fois par semaine","Matin et soir","Au centre de ma vie","Faire connaissance d'abord","male",20,36,"/demo-profils/demo-fr-05.webp"],
+["demo.fr.06@profils-virtuels.yona.invalid","Hugo","male","1990-12-25","France","Occitanie","Toulouse","Dynamique et fidèle en amitié, je consacre mon temps libre à la photographie. Je participe à un groupe de prière chaque semaine. Je crois au mariage, à la fidélité et au respect.",["Photographie","Cuisine","Cinéma"],"Adventiste","Deux à trois fois par mois","Matin et soir","Essentielle","Faire connaissance d'abord","female",29,45,"/demo-profils/demo-fr-06.webp"],
+["demo.fr.07@profils-virtuels.yona.invalid","Guillaume","male","2003-12-02","France","Auvergne-Rhône-Alpes","Grenoble","Souriant et attentionné, j'aime la louange et la lecture. Je participe à un groupe de prière chaque semaine. J'aimerais rencontrer une femme qui place Dieu au centre de sa vie.",["Lecture","Louange","Voyages"],"Baptiste","Deux à trois fois par mois","Matin et soir","Au centre de ma vie","Faire connaissance d'abord","female",18,32,"/demo-profils/demo-fr-07.webp"],
+["demo.fr.08@profils-virtuels.yona.invalid","Louis","male","1996-06-29","France","New Aquitaine","Bordeaux","Souriant et attentionné, j'aime la mode et le cinéma. Je participe à un groupe de prière chaque semaine. Je crois au mariage, à la fidélité et au respect.",["Mode","Photographie","Cinéma","Louange"],"Adventiste","Plusieurs fois par semaine","Plusieurs fois par semaine","Essentielle","Relation sérieuse","female",24,40,"/demo-profils/demo-fr-08.webp"]
 ]$seed$;
   _col text;
 BEGIN
@@ -5636,8 +6371,9 @@ BEGIN
     END IF;
   END LOOP;
 
-  -- 2. Profils complets, actifs et visibles. Ils restent cachés aux membres tant
-  --    qu'un administrateur ne leur a pas donné de photo (demo_photo_path).
+  -- 2. Profils complets, actifs et visibles, avec leur image générée quand elle est
+  --    livrée avec le site ; un profil sans photo reste caché aux membres (un
+  --    administrateur peut en ajouter une dans /admin → Profils de démo).
   UPDATE public.profiles p
   SET first_name = e ->> 1,
       gender = (e ->> 2)::public.gender,
@@ -5652,7 +6388,10 @@ BEGIN
       onboarding_step = 4,
       onboarding_completed_at = coalesce(p.onboarding_completed_at, now()),
       status = 'active',
-      visibility = 'visible'
+      visibility = 'visible',
+      demo_photo_path = coalesce(nullif(e ->> 17, ''), p.demo_photo_path),
+      demo_photo_source = CASE WHEN nullif(e ->> 17, '') IS NOT NULL THEN 'generated'
+                               ELSE p.demo_photo_source END
   FROM jsonb_array_elements(_seed) e
   JOIN public.users u ON u.email = e ->> 0
   WHERE p.user_id = u.id;
@@ -5697,10 +6436,10 @@ SELECT b.element AS "Élément", b.trouve AS "Dans la base", b.attendu AS "Atten
             WHEN b.facultatif THEN '⚠️ facultatif'
             ELSE '❌' END AS "État"
 FROM (VALUES
-  (1, 'Tables', (SELECT count(*) FROM pg_catalog.pg_tables WHERE schemaname = 'public')::text, '32', false),
-  (2, 'Fonctions', (SELECT count(*) FROM pg_catalog.pg_proc WHERE pronamespace = 'public'::regnamespace)::text, '127', false),
-  (3, 'Règles d''accès des tables', (SELECT count(*) FROM pg_catalog.pg_policies WHERE schemaname = 'public')::text, '75', false),
-  (4, 'Tables protégées (RLS)', (SELECT count(*) FROM pg_catalog.pg_class WHERE relnamespace = 'public'::regnamespace AND relkind = 'r' AND relrowsecurity)::text, '32', false),
+  (1, 'Tables', (SELECT count(*) FROM pg_catalog.pg_tables WHERE schemaname = 'public')::text, '38', false),
+  (2, 'Fonctions', (SELECT count(*) FROM pg_catalog.pg_proc WHERE pronamespace = 'public'::regnamespace)::text, '146', false),
+  (3, 'Règles d''accès des tables', (SELECT count(*) FROM pg_catalog.pg_policies WHERE schemaname = 'public')::text, '81', false),
+  (4, 'Tables protégées (RLS)', (SELECT count(*) FROM pg_catalog.pg_class WHERE relnamespace = 'public'::regnamespace AND relkind = 'r' AND relrowsecurity)::text, '38', false),
   (5, 'Profil créé à l''inscription', (SELECT CASE WHEN count(*) > 0 THEN 'oui' ELSE 'non' END FROM pg_catalog.pg_trigger WHERE tgrelid = 'auth.users'::regclass AND tgname = 'on_auth_user_created'), 'oui', false),
   (6, 'Espaces de fichiers', (SELECT count(*) FROM storage.buckets WHERE id IN ('demo-profils', 'photos', 'verifications', 'voice-messages'))::text, '4', false),
   (7, 'Règles d''accès des fichiers', (SELECT count(*) FROM pg_catalog.pg_policies WHERE schemaname = 'storage' AND policyname IN ('demo_storage_delete_admin',
