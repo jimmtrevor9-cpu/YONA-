@@ -23,6 +23,8 @@ export const CONTACT_REQUEST_ERRORS = {
   request_not_pending: "Cette demande a déjà reçu une réponse.",
   flash_premium_required: "Le Message Flash est réservé aux membres Premium.",
   flash_message_required: "Écrivez un message pour envoyer un Flash.",
+  identity_not_verified:
+    "Vérifiez votre identité (selfie ou pièce d'identité) pour envoyer une demande de contact.",
 } as const;
 
 export type SendContactRequestResult = { id: string; status: "sent" | "already_pending" };

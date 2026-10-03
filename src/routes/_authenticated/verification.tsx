@@ -1,29 +1,47 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { BadgeCheck, Camera, Clock, IdCard, ImagePlus, Lock } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
+import {
+  BadgeCheck,
+  Camera,
+  Clock,
+  IdCard,
+  ImagePlus,
+  Lock,
+  ScanFace,
+  XCircle,
+} from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
-import { RedirectingScreen } from "@/components/RedirectingScreen";
-import { SelfieCapture } from "@/components/verification/SelfieCapture";
+import { LiveSelfieCapture } from "@/components/verification/LiveSelfieCapture";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { myPhotosQuery, photoErrorMessage, validatePhotoFile } from "@/features/profiles/photos";
 import { getPostLoginPath } from "@/features/profiles/queries";
+import { prepareVerificationImage, replacePrimaryPhoto } from "@/features/profiles/verification";
 import {
-  myVerificationsQuery,
-  replacePrimaryPhoto,
-  submitVerification,
-  verificationErrorMessage,
-  type VerificationMethod,
-} from "@/features/profiles/verification";
+  DOCUMENT_TYPE_LABELS,
+  REASON_MESSAGES,
+  START_ERRORS,
+  VERIFICATION_TEXT,
+  myVerificationStatusQuery,
+  uploadVerificationImage,
+  verificationErrorText,
+} from "@/features/verification/client";
+import {
+  completeIdentityVerification,
+  startIdentityVerification,
+  type DocumentType,
+  type VerificationStart,
+} from "@/features/verification/verification.functions";
 import { APP_NAME } from "@/lib/config";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/verification")({
   head: () => ({
     meta: [
-      { title: `Vérifie ton profil — ${APP_NAME}` },
+      { title: `Vérifie ton identité — ${APP_NAME}` },
       {
         name: "description",
         content: "Vérification du profil : protection contre les faux profils et les arnaques.",
@@ -34,21 +52,32 @@ export const Route = createFileRoute("/_authenticated/verification")({
 });
 
 /**
- * « Vérifie ton profil pour continuer » : affichée juste après la création du profil.
- * Selfie express (recommandé) ou pièce d'identité ; les photos vont dans un espace privé
- * et ne sont jamais publiées.
+ * Tâche F — « Vérifie ton identité » : dernière étape après la création du profil,
+ * obligatoire pour découvrir les profils et envoyer des messages. Décision automatique :
+ * le serveur compare le visage du selfie en direct (avec consigne) aux photos du profil et,
+ * si elle est fournie, à la photo de la pièce. Consentement explicite avant l'envoi ; les
+ * images sont privées et supprimées après la décision.
  */
+type Choice = "selfie" | "selfie_document" | "document";
+
 function VerificationPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const userId = user?.id ?? "";
   const photos = useQuery({ ...myPhotosQuery(userId), enabled: !!userId });
-  const verifications = useQuery({ ...myVerificationsQuery(userId), enabled: !!userId });
-  const [selfieOpen, setSelfieOpen] = useState(false);
-  const [sending, setSending] = useState(false);
+  const status = useQuery({ ...myVerificationStatusQuery(userId), enabled: !!userId });
+  const start = useServerFn(startIdentityVerification);
+  const complete = useServerFn(completeIdentityVerification);
+  const [choice, setChoice] = useState<Choice>("selfie");
+  const [documentType, setDocumentType] = useState<DocumentType>("id_card");
+  const [documentFile, setDocumentFile] = useState<File | null>(null);
+  const [consent, setConsent] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [replacing, setReplacing] = useState(false);
-  const [sent, setSent] = useState(false);
+  const [attempt, setAttempt] = useState<VerificationStart | null>(null);
+  const [selfieOpen, setSelfieOpen] = useState(false);
+  const [result, setResult] = useState<{ status: string; reason: string } | null>(null);
   const idInput = useRef<HTMLInputElement>(null);
   const photoInput = useRef<HTMLInputElement>(null);
 
@@ -64,32 +93,82 @@ function VerificationPage() {
     };
   }, [userId, navigate]);
 
-  // Après l'envoi : petit écran de confirmation, puis la découverte des profils.
-  useEffect(() => {
-    if (!sent) return;
-    const id = window.setTimeout(() => navigate({ to: "/discover", replace: true }), 1800);
-    return () => window.clearTimeout(id);
-  }, [sent, navigate]);
-
   const primary = photos.data?.photos.find((p) => p.isPrimary) ?? photos.data?.photos[0] ?? null;
-  const latest = verifications.data?.[0];
-  const approved = verifications.data?.some((v) => v.status === "approved") ?? false;
-  const waiting = !approved && latest?.status === "pending";
+  const verified = status.data?.verified ?? false;
+  const latest = status.data?.latest ?? null;
+  const waiting = !verified && (latest?.status === "pending" || latest?.status === "processing");
+  const withDocument = choice !== "selfie";
+  const withSelfie = choice !== "document";
 
-  async function send(method: VerificationMethod, image: Blob) {
-    if (!userId) return;
-    setSending(true);
+  const finish = useCallback(
+    async (id: string) => {
+      try {
+        const outcome = await complete({ data: { id } });
+        setResult({ status: outcome.status, reason: outcome.reason });
+        if (outcome.status === "approved") {
+          toast.success("Identité vérifiée. Bienvenue !");
+          window.setTimeout(() => navigate({ to: "/discover", replace: true }), 1800);
+        }
+      } catch (error) {
+        toast.error(verificationErrorText(error));
+      } finally {
+        setBusy(false);
+        setSelfieOpen(false);
+        setAttempt(null);
+        setDocumentFile(null);
+        await queryClient.invalidateQueries({ queryKey: ["verification"] });
+        await queryClient.invalidateQueries({ queryKey: ["profiles"] });
+      }
+    },
+    [complete, navigate, queryClient],
+  );
+
+  async function begin() {
+    if (!consent) {
+      toast.error(START_ERRORS["consent_required"]);
+      return;
+    }
+    if (withDocument && !documentFile) {
+      toast.error("Ajoute la photo de ta pièce d'identité.");
+      return;
+    }
+    setBusy(true);
+    setResult(null);
     try {
-      await submitVerification(userId, method, image);
-      await queryClient.invalidateQueries({ queryKey: ["verifications"] });
-      setSelfieOpen(false);
-      setSent(true);
+      const started = await start({
+        data: { withSelfie, consent, ...(withDocument ? { documentType } : {}) },
+      });
+      if (withDocument && documentFile && started.documentPath) {
+        await uploadVerificationImage(
+          started.documentPath,
+          await prepareVerificationImage(documentFile),
+        );
+      }
+      if (withSelfie && started.challenge) {
+        setAttempt(started);
+        setSelfieOpen(true);
+        return;
+      }
+      await finish(started.id);
     } catch (error) {
-      toast.error(verificationErrorMessage(error));
-    } finally {
-      setSending(false);
+      toast.error(verificationErrorText(error));
+      setBusy(false);
     }
   }
+
+  const onCaptured = useCallback(
+    async ({ front, turned }: { front: Blob; turned: Blob }) => {
+      if (!attempt?.selfiePath || !attempt.challengePath) return;
+      try {
+        await uploadVerificationImage(attempt.selfiePath, front);
+        await uploadVerificationImage(attempt.challengePath, turned);
+      } catch (error) {
+        toast.error(verificationErrorText(error));
+      }
+      await finish(attempt.id);
+    },
+    [attempt, finish],
+  );
 
   async function replacePhoto(file: File) {
     const invalid = validatePhotoFile(file);
@@ -101,7 +180,7 @@ function VerificationPage() {
     try {
       await replacePrimaryPhoto(userId, file, primary, photos.data?.hd ?? false);
       await queryClient.invalidateQueries({ queryKey: ["photos"] });
-      toast.success("Nouvelle photo envoyée : elle sera visible après validation par l'équipe.");
+      toast.success("Nouvelle photo envoyée.");
     } catch (error) {
       toast.error(photoErrorMessage(error, photos.data?.max ?? 3));
     } finally {
@@ -109,14 +188,10 @@ function VerificationPage() {
     }
   }
 
-  if (sent) {
-    return (
-      <RedirectingScreen
-        message="Merci, c'est envoyé !"
-        detail="Notre équipe vérifie ton profil. Place aux rencontres…"
-      />
-    );
-  }
+  // Pendant une nouvelle tentative, l'ancien résultat n'est plus affiché.
+  const shown = busy
+    ? null
+    : (result ?? (latest && latest.status !== "processing" ? latest : null));
 
   return (
     <main className="gold-halo min-h-screen bg-background px-4 py-8 sm:py-14">
@@ -132,130 +207,246 @@ function VerificationPage() {
           id="verification-title"
           className="mt-5 text-balance font-display text-2xl font-semibold text-foreground sm:text-3xl"
         >
-          Vérifie ton profil pour continuer
+          Vérifie ton identité
         </h1>
-        <p className="mx-auto mt-3 max-w-prose text-sm leading-relaxed text-muted-foreground">
-          Pour protéger la communauté {APP_NAME} des faux profils et des arnaques, chaque membre
-          vérifie son profil. Cela prend moins d'une minute, et tes photos de vérification restent
-          privées.
+        <p
+          className="mx-auto mt-3 max-w-prose text-sm leading-relaxed text-muted-foreground"
+          data-testid="verification-explanation"
+        >
+          {VERIFICATION_TEXT}
         </p>
 
-        {approved ? (
+        {busy && !verified ? (
+          <StatusNote
+            icon={ScanFace}
+            title="Analyse en cours…"
+            text="Ton visage est comparé à tes photos de profil. Cela prend quelques secondes."
+            testId="verification-checking"
+          />
+        ) : verified ? (
           <StatusNote
             icon={BadgeCheck}
-            title="Profil vérifié"
-            text="Merci, ton profil est vérifié."
+            title="Identité vérifiée"
+            text="Merci, ton profil porte le badge « Profil vérifié »."
+            testId="verification-approved"
           />
-        ) : waiting ? (
+        ) : waiting && !busy ? (
           <StatusNote
             icon={Clock}
-            title="Vérification en cours"
-            text="Nous avons bien reçu ton envoi. Notre équipe l'examine : tu peux déjà continuer."
+            title="Contrôle complémentaire en cours"
+            text={REASON_MESSAGES[latest?.reason ?? "gray_zone"] ?? REASON_MESSAGES["gray_zone"]!}
+            testId="verification-pending"
+          />
+        ) : shown && shown.status === "rejected" ? (
+          <StatusNote
+            icon={XCircle}
+            title="Vérification refusée"
+            text={`${REASON_MESSAGES[shown.reason ?? ""] ?? "La vérification n'a pas abouti."} Essais restants aujourd'hui : ${status.data?.attemptsLeft ?? 0}.`}
+            testId="verification-rejected"
           />
         ) : null}
 
-        <div className="mt-7 space-y-3 text-left">
-          {/* Ma photo de profil */}
-          <div className="rounded-2xl border border-border bg-surface p-4">
-            <div className="flex items-center gap-4">
-              <div className="size-16 shrink-0 overflow-hidden rounded-xl bg-accent">
-                {primary?.url ? (
-                  <img
-                    src={primary.url}
-                    alt="Ma photo de profil"
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <span className="flex h-full w-full items-center justify-center font-display text-xl text-accent-foreground">
-                    {(user?.user_metadata?.["first_name"] as string | undefined)?.charAt(0) ?? "?"}
-                  </span>
-                )}
+        {verified ? (
+          <Button asChild className="mt-6 h-12 w-full rounded-full">
+            <Link to="/discover" replace>
+              Découvrir les profils
+            </Link>
+          </Button>
+        ) : waiting ? null : (
+          <div className="mt-7 space-y-4 text-left">
+            {/* Ma photo de profil : c'est à elle que le selfie est comparé. */}
+            <div className="rounded-2xl border border-border bg-surface p-4">
+              <div className="flex items-center gap-4">
+                <div className="size-16 shrink-0 overflow-hidden rounded-xl bg-accent">
+                  {primary?.url ? (
+                    <img
+                      src={primary.url}
+                      alt="Ma photo de profil"
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <span className="flex h-full w-full items-center justify-center font-display text-xl text-accent-foreground">
+                      {(user?.user_metadata?.["first_name"] as string | undefined)?.charAt(0) ??
+                        "?"}
+                    </span>
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <p className="font-display text-base font-semibold text-foreground">
+                    Ma photo de profil
+                  </p>
+                  <p className="mt-0.5 text-sm text-muted-foreground">
+                    Ton selfie est comparé à tes photos de profil : elles doivent bien te montrer,
+                    de face.
+                  </p>
+                </div>
               </div>
-              <div className="min-w-0">
-                <p className="font-display text-base font-semibold text-foreground">
-                  Ma photo de profil
-                </p>
-                <p className="mt-0.5 text-sm text-muted-foreground">
-                  Si notre équipe te demande de la changer, remplace-la ici.
-                </p>
-              </div>
+              <Button
+                type="button"
+                variant="outline"
+                className="mt-4 h-11 w-full gap-2 rounded-xl border-gold/40 bg-accent/50 text-foreground hover:bg-accent"
+                disabled={replacing || photos.isLoading || busy}
+                onClick={() => photoInput.current?.click()}
+              >
+                <ImagePlus className="size-4 text-primary" aria-hidden />
+                {replacing ? "Envoi…" : "Remplacer ma photo de profil"}
+              </Button>
+              <input
+                ref={photoInput}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="sr-only"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) void replacePhoto(file);
+                  e.target.value = "";
+                }}
+              />
             </div>
+
+            <fieldset className="space-y-2" disabled={busy}>
+              <legend className="mb-2 font-display text-base font-semibold text-foreground">
+                Comment veux-tu te vérifier ?
+              </legend>
+              <OptionButton
+                highlight={choice === "selfie"}
+                icon={Camera}
+                title="Selfie en direct"
+                text="Recommandé : 30 secondes, avec la caméra de ton appareil."
+                onClick={() => setChoice("selfie")}
+                testId="verify-selfie"
+              />
+              <OptionButton
+                highlight={choice === "selfie_document"}
+                icon={ScanFace}
+                title="Selfie + pièce d'identité"
+                text="Vérification renforcée : ton visage est aussi comparé à ta pièce."
+                onClick={() => setChoice("selfie_document")}
+                testId="verify-selfie-id"
+              />
+              <OptionButton
+                highlight={choice === "document"}
+                icon={IdCard}
+                title="Pièce d'identité seule"
+                text="Si ta caméra ne fonctionne pas : carte d'identité, passeport, carte d'étudiant ou carte scolaire."
+                onClick={() => setChoice("document")}
+                testId="verify-id"
+              />
+            </fieldset>
+
+            {withDocument ? (
+              <div className="space-y-2 rounded-2xl border border-border bg-surface p-4">
+                <label className="block space-y-1 text-sm text-foreground">
+                  Type de pièce
+                  <select
+                    className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm"
+                    value={documentType}
+                    onChange={(e) => setDocumentType(e.target.value as DocumentType)}
+                    data-testid="verify-document-type"
+                  >
+                    {(Object.keys(DOCUMENT_TYPE_LABELS) as DocumentType[]).map((t) => (
+                      <option key={t} value={t}>
+                        {DOCUMENT_TYPE_LABELS[t]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-11 w-full gap-2 rounded-xl"
+                  disabled={busy}
+                  onClick={() => idInput.current?.click()}
+                >
+                  <IdCard className="size-4 text-primary" aria-hidden />
+                  {documentFile ? `Pièce ajoutée : ${documentFile.name}` : "Photographier ma pièce"}
+                </Button>
+                <p className="text-xs text-muted-foreground">
+                  Pièce entière, à plat, sans reflet, photo bien visible. Elle est supprimée dès la
+                  décision.
+                </p>
+                <input
+                  ref={idInput}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  className="sr-only"
+                  data-testid="verify-document-input"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) setDocumentFile(file);
+                    e.target.value = "";
+                  }}
+                />
+              </div>
+            ) : null}
+
+            <label className="flex items-start gap-3 rounded-2xl border border-border bg-surface p-4 text-sm text-foreground">
+              <input
+                type="checkbox"
+                className="mt-1 size-4 shrink-0 accent-[var(--primary)]"
+                checked={consent}
+                onChange={(e) => setConsent(e.target.checked)}
+                data-testid="verify-consent"
+              />
+              <span>
+                J'accepte que {APP_NAME} analyse automatiquement mon visage (donnée biométrique) sur
+                mon selfie, mes photos de profil et ma pièce d'identité, uniquement pour vérifier
+                mon identité. Les images sont privées et supprimées dès la décision ; seuls le
+                résultat, la date, les scores et le type de pièce sont conservés.{" "}
+                <Link to="/confidentialite" className="underline underline-offset-2">
+                  En savoir plus
+                </Link>
+              </span>
+            </label>
+
             <Button
               type="button"
-              variant="outline"
-              className="mt-4 h-11 w-full gap-2 rounded-xl border-gold/40 bg-accent/50 text-foreground hover:bg-accent"
-              disabled={replacing || photos.isLoading}
-              onClick={() => photoInput.current?.click()}
+              className="h-12 w-full rounded-full"
+              disabled={busy || !consent || (withDocument && !documentFile)}
+              onClick={() => void begin()}
+              data-testid="verify-start"
             >
-              <ImagePlus className="size-4 text-primary" aria-hidden />
-              {replacing ? "Envoi…" : "Remplacer ma photo de profil"}
+              {busy ? "Vérification en cours…" : "Commencer la vérification"}
             </Button>
-            <input
-              ref={photoInput}
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              className="sr-only"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) void replacePhoto(file);
-                e.target.value = "";
-              }}
-            />
+            {status.data ? (
+              <p
+                className="text-center text-xs text-muted-foreground"
+                data-testid="verify-attempts"
+              >
+                Essais restants aujourd'hui : {status.data.attemptsLeft} sur{" "}
+                {status.data.maxAttempts}.
+              </p>
+            ) : null}
           </div>
-
-          {/* Selfie express */}
-          <OptionButton
-            highlight
-            icon={Camera}
-            title="Selfie express"
-            text="Recommandé : 30 secondes, aucun document à fournir."
-            disabled={sending}
-            onClick={() => setSelfieOpen(true)}
-            testId="verify-selfie"
-          />
-
-          {/* Pièce d'identité */}
-          <OptionButton
-            icon={IdCard}
-            title="Avec ma pièce d'identité"
-            text="Carte d'identité ou passeport : vérification renforcée."
-            disabled={sending}
-            onClick={() => idInput.current?.click()}
-            testId="verify-id"
-          />
-          <input
-            ref={idInput}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            className="sr-only"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) void send("id_document", file);
-              e.target.value = "";
-            }}
-          />
-        </div>
+        )}
 
         <p className="mx-auto mt-6 max-w-prose text-xs leading-relaxed text-muted-foreground">
-          Tes photos de vérification restent strictement privées&nbsp;: elles ne sont jamais
-          publiées et servent uniquement à confirmer ton identité.
+          Tant que ton identité n'est pas vérifiée, tu ne peux ni découvrir les profils ni envoyer
+          de messages. Les pages publiques et légales restent accessibles.
         </p>
-        <Link
-          to="/discover"
-          replace
-          className="mt-5 inline-block text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-        >
-          {approved || waiting ? "Continuer" : "Je le ferai plus tard"}
-        </Link>
+        {!verified ? (
+          <Link
+            to="/profile"
+            className="mt-4 inline-block text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+          >
+            Je le ferai plus tard
+          </Link>
+        ) : null}
       </section>
 
-      <SelfieCapture
-        open={selfieOpen}
-        onOpenChange={setSelfieOpen}
-        pending={sending}
-        onSend={(image) => void send("selfie", image)}
-      />
+      {attempt?.challenge ? (
+        <LiveSelfieCapture
+          open={selfieOpen}
+          challenge={attempt.challenge}
+          pending={busy}
+          onOpenChange={(open) => {
+            setSelfieOpen(open);
+            if (!open) setBusy(false);
+          }}
+          onCaptured={(images) => void onCaptured(images)}
+        />
+      ) : null}
     </main>
   );
 }
@@ -311,13 +502,18 @@ function StatusNote({
   icon: Icon,
   title,
   text,
+  testId,
 }: {
   icon: typeof Camera;
   title: string;
   text: string;
+  testId?: string;
 }) {
   return (
-    <div className="mt-5 flex items-start gap-3 rounded-2xl border border-gold/30 bg-accent/50 p-4 text-left">
+    <div
+      className="mt-5 flex items-start gap-3 rounded-2xl border border-gold/30 bg-accent/50 p-4 text-left"
+      data-testid={testId}
+    >
       <Icon className="mt-0.5 size-5 shrink-0 text-primary" aria-hidden />
       <div>
         <p className="text-sm font-medium text-foreground">{title}</p>

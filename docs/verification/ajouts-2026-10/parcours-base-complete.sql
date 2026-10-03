@@ -1,4 +1,4 @@
--- Parcours réels sur une base créée par creer-toute-la-base.sql (inscription, profil, like, Match, messages, photo, selfie, admin, visiteur, serveur, suppression de compte).
+-- Parcours réels sur une base créée par creer-toute-la-base.sql (inscription, profil, vérification d'identité, like, Match, messages, photo, admin, visiteur, serveur, suppression de compte).
 \set ON_ERROR_STOP 1
 \set QUIET 1
 \pset tuples_only on
@@ -41,7 +41,7 @@ SELECT essai.ok('Profil d''Awa enregistré par elle-même', (SELECT city FROM pu
 SELECT essai.ok('Awa ne peut pas modifier le profil de Jean', (SELECT count(*) FROM public.profiles WHERE user_id = :B AND first_name = 'Pirate') = 0
   AND essai.refus($$UPDATE public.profiles SET first_name = 'Pirate' WHERE user_id = '22222222-2222-2222-2222-222222222222'$$) IS NULL
   AND (SELECT first_name FROM public.profiles WHERE user_id = :B) IS DISTINCT FROM 'Pirate');
-SELECT essai.ok('Découverte : des profils proposés à Awa', (SELECT count(*) FROM public.discover_profiles(30)) > 0, (SELECT count(*) FROM public.discover_profiles(30))::text || ' profils');
+SELECT essai.ok('Identité non vérifiée : pas de découverte', (SELECT count(*) FROM public.discover_profiles(30)) = 0);
 
 -- 3. Jean remplit son profil.
 SELECT set_config('request.jwt.claim.sub', :B, false) \gset
@@ -52,7 +52,48 @@ RESET ROLE;
 SELECT essai.ok('Fin du profil : aucun profil de démo retiré (ce sera à la vérification)', (SELECT count(*) FROM public.profiles WHERE is_virtual AND country = 'Gabon') = :v0,
   :v0 || ' → ' || (SELECT count(*) FROM public.profiles WHERE is_virtual AND country = 'Gabon'));
 
+-- 3b. Vérification d'identité automatique (le serveur du site, clé service) : Awa est
+-- vérifiée tout de suite ; Jean tombe en « zone grise » (examinée plus bas par l'admin).
+-- (Clé service : aucune session de membre, comme sur le serveur.)
+SELECT set_config('request.jwt.claim.sub', '', false) \gset
+SET ROLE service_role;
+SELECT essai.ok('Vérification : consentement obligatoire',
+  essai.refus(format('SELECT public.start_identity_verification(%L, true, NULL, false)', :A)) LIKE '%consent_required%');
+SELECT public.start_identity_verification(:A, true, NULL, true) ->> 'id' AS va \gset
+SELECT essai.ok('Vérification : consigne aléatoire et emplacements privés',
+  (SELECT challenge IN ('turn_left', 'turn_right') AND status = 'processing' AND storage_path LIKE '11111111-%/selfie.jpg'
+   FROM public.profile_verifications WHERE id = :'va'));
+SELECT public.record_verification_result(:'va', 'approved', 'match', 'local', 0.81, NULL, 0.86, 0.12) AS ra \gset
+SELECT public.start_identity_verification(:B, true, 'passport', true) ->> 'id' AS vb \gset
+SELECT public.record_verification_result(:'vb', 'pending', 'gray_zone', 'local', 0.47, 0.52, 0.8, 0.11) AS rb \gset
+RESET ROLE;
+SELECT essai.ok('Vérifiée automatiquement : profil vérifié, images en file de suppression',
+  (SELECT verified_at IS NOT NULL FROM public.profiles WHERE user_id = :A)
+  AND (SELECT count(*) FROM public.storage_cleanup_queue WHERE bucket_id = 'verifications' AND path LIKE '11111111-%') = 2);
+SELECT essai.ok('Identité vérifiée : un homme de démo du Gabon retiré (Awa cherche un homme)',
+  (SELECT count(*) FROM public.profiles WHERE is_virtual AND country = 'Gabon') = :v0 - 1
+  AND (SELECT count(*) FROM public.profiles WHERE is_virtual AND country = 'Gabon' AND gender = 'male') = 1,
+  :v0 || ' → ' || (SELECT count(*) FROM public.profiles WHERE is_virtual AND country = 'Gabon'));
+SET ROLE authenticated; SELECT set_config('request.jwt.claim.sub', :A, false) \gset
+SELECT essai.ok('Découverte : des profils proposés à Awa (vérifiée)', (SELECT count(*) FROM public.discover_profiles(30)) > 0, (SELECT count(*) FROM public.discover_profiles(30))::text || ' profils');
+RESET ROLE;
+
 -- 4. Like réciproque → Match → conversation → messages.
+SET ROLE authenticated; SELECT set_config('request.jwt.claim.sub', :B, false) \gset
+SELECT essai.ok('Jean (non vérifié) ne peut pas encore aimer un profil',
+  essai.refus(format('INSERT INTO public.likes (sender_id, receiver_id, kind, status) VALUES (auth.uid(), %L, ''like'', ''active'')', :A)) LIKE '%row-level security%');
+RESET ROLE;
+-- L'administratrice tranche la zone grise de Jean (Awa devient administratrice, comme dans le guide).
+INSERT INTO public.user_roles (user_id, role) VALUES (:A, 'admin');
+SET ROLE authenticated; SELECT set_config('request.jwt.claim.sub', :A, false) \gset
+SELECT essai.ok('Admin : cas incertain de Jean visible avec ses scores',
+  (SELECT count(*) FROM public.admin_verification_queue() WHERE reason = 'gray_zone' AND profile_similarity = 0.47) = 1
+  AND (SELECT count(*) FROM public.admin_list_pending_verifications()) = 1);
+SELECT public.admin_review_verification(:'vb', true) \gset
+RESET ROLE;
+SELECT essai.ok('Admin : Jean vérifié, ses images en file de suppression',
+  (SELECT verified_at IS NOT NULL FROM public.profiles WHERE user_id = :B)
+  AND (SELECT count(*) FROM public.storage_cleanup_queue WHERE bucket_id = 'verifications' AND path LIKE '22222222-%') = 3);
 SET ROLE authenticated; SELECT set_config('request.jwt.claim.sub', :A, false) \gset
 INSERT INTO public.likes (sender_id, receiver_id, kind, status) VALUES (auth.uid(), :B, 'like', 'active') ON CONFLICT (sender_id, receiver_id) DO UPDATE SET kind = EXCLUDED.kind, status = EXCLUDED.status;
 SELECT set_config('request.jwt.claim.sub', :B, false) \gset
@@ -75,25 +116,21 @@ SELECT essai.ok('Photo envoyée (en attente de validation)', (SELECT status FROM
 SELECT essai.ok('Dépôt dans le dossier d''un autre membre refusé',
   essai.refus($$INSERT INTO storage.objects (bucket_id, name) VALUES ('photos', '22222222-2222-2222-2222-222222222222/x.jpg')$$) LIKE '%row-level security%');
 INSERT INTO storage.objects (bucket_id, name, owner) VALUES ('verifications', '11111111-1111-1111-1111-111111111111/selfie-1.jpg', auth.uid());
-INSERT INTO public.profile_verifications (user_id, method, storage_path) VALUES (auth.uid(), 'selfie', '11111111-1111-1111-1111-111111111111/selfie-1.jpg');
+SELECT essai.ok('Vérification : un membre ne peut pas créer lui-même une demande (tout passe par le serveur)',
+  essai.refus($$INSERT INTO public.profile_verifications (user_id, method, storage_path) VALUES (auth.uid(), 'selfie', '11111111-1111-1111-1111-111111111111/selfie-1.jpg')$$) LIKE '%permission denied%');
 SELECT set_config('request.jwt.claim.sub', :B, false) \gset
-SELECT essai.ok('Jean ne voit ni le selfie ni sa demande', (SELECT count(*) FROM public.profile_verifications) = 0
+SELECT essai.ok('Jean ne voit ni le selfie ni la demande d''Awa', (SELECT count(*) FROM public.profile_verifications WHERE user_id = :A) = 0
   AND (SELECT count(*) FROM storage.objects WHERE bucket_id = 'verifications') = 0);
 SELECT essai.ok('Jean ne voit pas la photo non validée d''Awa', (SELECT count(*) FROM storage.objects WHERE bucket_id = 'photos') = 0);
 SELECT essai.ok('Signalement', public.report_user(:A, 'scam', 'test', NULL) IS NOT NULL);
 SELECT essai.ok('Accès admin refusé à un membre', essai.refus('SELECT public.admin_stats()') IS NOT NULL);
 RESET ROLE;
 
--- 6. Administration (Awa devient administratrice, comme dans le guide).
-INSERT INTO public.user_roles (user_id, role) VALUES (:A, 'admin');
+-- 6. Administration (Awa est administratrice).
 SET ROLE authenticated; SELECT set_config('request.jwt.claim.sub', :A, false) \gset
-SELECT essai.ok('Admin : selfie en attente visible', (SELECT count(*) FROM public.admin_list_pending_verifications()) = 1);
-SELECT id AS verif FROM public.profile_verifications LIMIT 1 \gset
-SELECT public.admin_review_verification(:'verif', true) \gset
-SELECT essai.ok('Admin : profil vérifié', (SELECT verified_at IS NOT NULL FROM public.profiles WHERE user_id = :A));
-SELECT essai.ok('Identité vérifiée : un homme de démo du Gabon retiré (Awa cherche un homme)',
-  (SELECT count(*) FROM public.profiles WHERE is_virtual AND country = 'Gabon') = :v0 - 1
-  AND (SELECT count(*) FROM public.profiles WHERE is_virtual AND country = 'Gabon' AND gender = 'male') = 1,
+SELECT essai.ok('Identité de Jean vérifiée : une femme de démo du Gabon retirée (Jean cherche une femme)',
+  (SELECT count(*) FROM public.profiles WHERE is_virtual AND country = 'Gabon') = :v0 - 2
+  AND (SELECT count(*) FROM public.profiles WHERE is_virtual AND country = 'Gabon' AND gender = 'female') = 1,
   :v0 || ' → ' || (SELECT count(*) FROM public.profiles WHERE is_virtual AND country = 'Gabon'));
 SELECT id AS photo FROM public.photos LIMIT 1 \gset
 SELECT public.admin_moderate_photo(:'photo', true, NULL) \gset

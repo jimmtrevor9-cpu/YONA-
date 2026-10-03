@@ -71,14 +71,16 @@ SELECT public.record_signup_step(2);
 UPDATE public.profiles SET gender = 'female', birth_date = '1995-05-05', country = 'Gabon', city = 'Libreville',
   terms_accepted_at = now(), onboarding_step = 4, onboarding_completed_at = now(), status = 'active' WHERE user_id = auth.uid();
 UPDATE public.preferences SET preferred_gender = 'male' WHERE user_id = auth.uid();
-INSERT INTO public.profile_verifications (user_id, method, storage_path)
-VALUES (auth.uid(), 'selfie', 'd0000000-0000-0000-0000-00000000000a/selfie.jpg');
+RESET ROLE;
+-- Vérification d'identité : demandée par le serveur du site (clé service), cas incertain.
+SET LOCAL ROLE service_role;
+SELECT public.start_identity_verification(:A, true, NULL, true) ->> 'id' AS verif \gset
+SELECT public.record_verification_result(:'verif', 'pending', 'gray_zone', 'local', 0.5, NULL, 0.8, 0.1) AS r \gset
 RESET ROLE;
 SELECT essai_d.ok('Parcours : étapes 1 à 4 (une seule fois chacune), profil terminé, vérification demandée',
   (SELECT string_agg(step, ',' ORDER BY id) FROM public.signup_events WHERE user_id = :A)
   = 'account_created,step_1,step_2,step_3,step_4,profile_completed,verification_requested',
   (SELECT string_agg(step, ',' ORDER BY id) FROM public.signup_events WHERE user_id = :A));
-SELECT id AS verif FROM public.profile_verifications WHERE user_id = :A \gset
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub', :ADM, true);
 SELECT public.admin_review_verification(:'verif', true);
@@ -112,6 +114,7 @@ SELECT essai_d.ok('Webhook reçu tracé ; paiement expiré passé à « annulé 
   AND (SELECT status FROM public.payments WHERE id = :'pay2') = 'cancelled');
 
 -- 5. Actions : like, Match, message (sans contenu), blocage
+SELECT set_config('request.jwt.claim.sub', '', true);
 UPDATE public.profiles SET gender = 'male', birth_date = '1990-01-01', country = 'Gabon', city = 'Libreville',
   terms_accepted_at = now(), onboarding_step = 4, onboarding_completed_at = now(), status = 'active',
   verified_at = now() WHERE user_id = :B;

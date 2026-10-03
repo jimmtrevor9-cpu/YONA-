@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { Crown, SearchX } from "lucide-react";
+import { Crown, SearchX, ShieldCheck } from "lucide-react";
 import { useRef, useState, type PointerEvent } from "react";
 import { toast } from "sonner";
 
@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { recordAdEvent, useSponsoredAds } from "@/features/ads/ads";
 import { useAuth } from "@/features/auth/AuthProvider";
+import { isAdminQuery } from "@/features/auth/roles";
 import { useCompatibilityScores } from "@/features/compatibility/queries";
 import { contactRequestQuotaQuery } from "@/features/contacts/requests";
 import { myFavoriteIdsQuery } from "@/features/favorites/queries";
@@ -79,7 +80,17 @@ function DiscoverPage() {
     enabled: !!userId,
   });
   const myState = me ? profileVisibilityState(me) : null;
-  const canBrowse = myState !== null && myState !== "incomplete" && myState !== "suspended";
+  const { data: isAdmin } = useQuery({ ...isAdminQuery(userId), enabled: !!userId });
+  // Identité non vérifiée (tâche F) : la découverte est réservée aux membres vérifiés
+  // (règle appliquée par le serveur ; ici, uniquement pour afficher le bon message).
+  const needsIdentity =
+    !!me &&
+    myState !== "incomplete" &&
+    myState !== "suspended" &&
+    !me.verified_at &&
+    isAdmin !== true;
+  const canBrowse =
+    myState !== null && myState !== "incomplete" && myState !== "suspended" && !needsIdentity;
   const { data, isLoading, isError } = useQuery({
     ...discoverFeedQuery(userId),
     enabled: !!userId && canBrowse,
@@ -285,6 +296,15 @@ function DiscoverPage() {
           ) : myState === "suspended" ? (
             <Notice testId="discover-ineligible">
               Votre profil est suspendu par la modération : la découverte n'est pas disponible.
+            </Notice>
+          ) : needsIdentity ? (
+            <Notice testId="discover-needs-verification">
+              <ShieldCheck className="mx-auto mb-3 size-10 text-gold" aria-hidden />
+              Vérifie ton identité pour découvrir les profils. Cette étape protège la communauté
+              contre les faux profils : un selfie en direct suffit, en moins d'une minute.
+              <Button asChild size="sm" className="mt-4">
+                <Link to="/verification">Vérifier mon identité</Link>
+              </Button>
             </Notice>
           ) : !canBrowse ? (
             <Notice testId="discover-ineligible">

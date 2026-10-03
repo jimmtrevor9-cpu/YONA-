@@ -2,7 +2,7 @@
 -- YONA — CRÉER TOUTE LA BASE DE DONNÉES (projet Supabase neuf et vide)
 --
 -- Ce fichier installe en une seule fois tout ce dont le site a besoin :
---   43 tables, 160 fonctions, 106 règles d'accès, les droits de chaque rôle,
+--   44 tables, 169 fonctions, 107 règles d'accès, les droits de chaque rôle,
 --   la création automatique du profil à l'inscription (e-mail ou Google), 5 espaces de
 --   fichiers (privés : photos, messages vocaux, vérifications ; publics : images des profils
 --   de démonstration, publicités), les messages en temps réel,
@@ -21,7 +21,7 @@
 -- Le déclencheur de la section « Comptes » relie chaque nouveau compte à son profil.
 --
 -- Fichier généré par scripts/generate-base-complete.py à partir de supabase/migrations/
--- (95 migrations). Ne pas modifier à la main.
+-- (96 migrations). Ne pas modifier à la main.
 -- ============================================================================
 
 -- ============================================================================
@@ -905,7 +905,9 @@ BEGIN
   UPDATE public.profile_verifications
   SET status = CASE WHEN _approve THEN 'approved' ELSE 'rejected' END,
       reviewed_at = now(),
-      reviewed_by = auth.uid()
+      reviewed_by = auth.uid(),
+      decided_at = now(),
+      reason = CASE WHEN automatic THEN 'manual' ELSE reason END
   WHERE id = _verification_id AND status = 'pending'
   RETURNING user_id, storage_path INTO _owner, _path;
   IF _owner IS NULL THEN
@@ -914,6 +916,7 @@ BEGIN
   IF _approve THEN
     UPDATE public.profiles SET verified_at = now() WHERE user_id = _owner AND verified_at IS NULL;
   END IF;
+  PERFORM public.queue_verification_files(_verification_id, 'décision de l''administration');
   RETURN _path;
 END;
 $$;
@@ -1110,6 +1113,24 @@ BEGIN
 END;
 $$;
 
+CREATE FUNCTION public.admin_verification_queue() RETURNS TABLE(id uuid, user_id uuid, first_name text, method text, document_type text, reason text, engine text, profile_similarity numeric, document_similarity numeric, liveness_similarity numeric, liveness_shift numeric, challenge text, storage_path text, challenge_path text, document_path text, details jsonb, created_at timestamp with time zone)
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+#variable_conflict use_column
+BEGIN
+  PERFORM public.assert_admin();
+  RETURN QUERY
+  SELECT v.id, v.user_id, p.first_name, v.method, v.document_type, v.reason, v.engine,
+         v.profile_similarity, v.document_similarity, v.liveness_similarity, v.liveness_shift,
+         v.challenge, v.storage_path, v.challenge_path, v.document_path, v.details, v.created_at
+  FROM public.profile_verifications v LEFT JOIN public.profiles p ON p.user_id = v.user_id
+  WHERE v.status = 'pending'
+  ORDER BY v.created_at
+  LIMIT 200;
+END;
+$$;
+
 CREATE FUNCTION public.ai_usage_day() RETURNS date
     LANGUAGE sql STABLE
     SET search_path TO 'public'
@@ -1216,6 +1237,7 @@ CREATE FUNCTION public.can_browse_profiles() RETURNS boolean
   SELECT public.is_admin() OR EXISTS (
     SELECT 1 FROM public.profiles p JOIN public.users u ON u.id = p.user_id
     WHERE p.user_id = auth.uid() AND u.status = 'active' AND p.status IN ('active', 'hidden')
+      AND p.verified_at IS NOT NULL
   )
 $$;
 
@@ -1987,6 +2009,27 @@ BEGIN
 END;
 $$;
 
+CREATE FUNCTION public.expire_verification_attempts(_user_id uuid DEFAULT NULL::uuid) RETURNS integer
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE
+  _id uuid;
+  _n integer := 0;
+BEGIN
+  FOR _id IN
+    UPDATE public.profile_verifications
+    SET status = 'rejected', reason = 'abandoned', decided_at = now()
+    WHERE status = 'processing' AND created_at < now() - interval '30 minutes'
+      AND (_user_id IS NULL OR user_id = _user_id)
+    RETURNING id
+  LOOP
+    PERFORM public.queue_verification_files(_id, 'vérification abandonnée');
+    _n := _n + 1;
+  END LOOP;
+  RETURN _n;
+END; $$;
+
 CREATE FUNCTION public.get_ads_for_me(_placement text DEFAULT 'discover'::text, _limit integer DEFAULT 3) RETURNS TABLE(id uuid, title text, body text, advertiser text, media_type text, media_path text, poster_path text, cta_label text, cta_url text, cta_icon text, every_n integer)
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
@@ -2560,6 +2603,15 @@ CREATE FUNCTION public.is_discoverable_profile(_user_id uuid) RETURNS boolean
     WHERE p.user_id = _user_id AND p.status = 'active' AND p.visibility = 'visible' AND u.status = 'active'
       AND (NOT p.is_virtual OR p.demo_photo_path IS NOT NULL)
   )
+$$;
+
+CREATE FUNCTION public.is_identity_verified(_user_id uuid) RETURNS boolean
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  SELECT EXISTS (SELECT 1 FROM public.profiles p
+                 WHERE p.user_id = _user_id AND (p.verified_at IS NOT NULL OR p.is_virtual))
+         OR public.has_role(_user_id, 'admin')
 $$;
 
 CREATE FUNCTION public.is_premium(_user_id uuid) RETURNS boolean
@@ -3148,6 +3200,35 @@ BEGIN
 END;
 $$;
 
+CREATE FUNCTION public.my_verification_status() RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE
+  _me uuid := auth.uid();
+  _max integer;
+  _used integer;
+BEGIN
+  IF _me IS NULL THEN
+    RAISE EXCEPTION 'not_authenticated' USING ERRCODE = '42501';
+  END IF;
+  SELECT max_attempts_per_day INTO _max FROM public.verification_settings WHERE id;
+  SELECT count(*) INTO _used FROM public.profile_verifications v
+  WHERE v.user_id = _me AND v.automatic AND v.created_at > now() - interval '24 hours'
+    AND v.reason IS DISTINCT FROM 'engine_unavailable';
+  RETURN jsonb_build_object(
+    'verified', EXISTS (SELECT 1 FROM public.profiles p WHERE p.user_id = _me AND p.verified_at IS NOT NULL),
+    'verified_at', (SELECT p.verified_at FROM public.profiles p WHERE p.user_id = _me),
+    'attempts_left', greatest(coalesce(_max, 5) - _used, 0),
+    'max_attempts', coalesce(_max, 5),
+    'latest', (SELECT jsonb_build_object('id', v.id, 'status', v.status, 'reason', v.reason,
+                                         'document_type', v.document_type, 'created_at', v.created_at)
+               FROM public.profile_verifications v WHERE v.user_id = _me
+               ORDER BY v.created_at DESC LIMIT 1)
+  );
+END;
+$$;
+
 CREATE FUNCTION public.normalize_place(_value text) RETURNS text
     LANGUAGE sql STABLE
     SET search_path TO 'public', 'extensions'
@@ -3384,6 +3465,28 @@ BEGIN
   RETURN _n;
 END; $$;
 
+CREATE FUNCTION public.purge_verification_files() RETURNS integer
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE
+  _n integer;
+  _id uuid;
+  _retention integer;
+BEGIN
+  _n := public.expire_verification_attempts(NULL);
+  SELECT file_retention_hours INTO _retention FROM public.verification_settings WHERE id;
+  FOR _id IN
+    SELECT v.id FROM public.profile_verifications v
+    WHERE v.status IN ('approved', 'rejected') AND v.files_deleted_at IS NULL
+      AND coalesce(v.decided_at, v.reviewed_at, v.created_at) < now() - make_interval(hours => coalesce(_retention, 0))
+  LOOP
+    PERFORM public.queue_verification_files(_id, 'fin du délai de conservation');
+    _n := _n + 1;
+  END LOOP;
+  RETURN _n;
+END; $$;
+
 CREATE FUNCTION public.queue_ad_media_cleanup() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
@@ -3402,6 +3505,23 @@ BEGIN
          CASE WHEN OLD.poster_path IS DISTINCT FROM NEW.poster_path THEN OLD.poster_path END]) AS p
   WHERE p IS NOT NULL;
   RETURN NEW;
+END; $$;
+
+CREATE FUNCTION public.queue_verification_files(_id uuid, _reason text) RETURNS integer
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE
+  _n integer;
+BEGIN
+  INSERT INTO public.storage_cleanup_queue (bucket_id, path, reason)
+  SELECT 'verifications', p, _reason
+  FROM public.profile_verifications v,
+       unnest(ARRAY[v.storage_path, v.challenge_path, v.document_path]) AS p
+  WHERE v.id = _id AND v.files_deleted_at IS NULL AND p IS NOT NULL;
+  GET DIAGNOSTICS _n = ROW_COUNT;
+  UPDATE public.profile_verifications SET files_deleted_at = now() WHERE id = _id AND files_deleted_at IS NULL;
+  RETURN _n;
 END; $$;
 
 CREATE FUNCTION public.recent_signups() RETURNS TABLE(first_name text, country text, created_at timestamp with time zone)
@@ -3599,6 +3719,40 @@ BEGIN
   VALUES (_me, 'step_' || _step, public.request_context() ->> 'country')
   ON CONFLICT ON CONSTRAINT signup_events_once DO NOTHING;
 END; $$;
+
+CREATE FUNCTION public.record_verification_result(_id uuid, _status text, _reason text, _engine text, _profile_similarity numeric DEFAULT NULL::numeric, _document_similarity numeric DEFAULT NULL::numeric, _liveness_similarity numeric DEFAULT NULL::numeric, _liveness_shift numeric DEFAULT NULL::numeric, _details jsonb DEFAULT '{}'::jsonb) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE
+  _v public.profile_verifications%ROWTYPE;
+  _retention integer;
+BEGIN
+  IF _status NOT IN ('approved', 'rejected', 'pending') THEN
+    RAISE EXCEPTION 'invalid_status' USING ERRCODE = '22023';
+  END IF;
+  UPDATE public.profile_verifications v SET
+    status = _status, reason = left(_reason, 40), engine = left(_engine, 20),
+    profile_similarity = _profile_similarity, document_similarity = _document_similarity,
+    liveness_similarity = _liveness_similarity, liveness_shift = _liveness_shift,
+    details = coalesce(_details, '{}'::jsonb),
+    decided_at = CASE WHEN _status = 'pending' THEN NULL ELSE now() END
+  WHERE v.id = _id AND v.status = 'processing'
+  RETURNING * INTO _v;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'verification_not_found' USING ERRCODE = 'P0002';
+  END IF;
+  IF _status = 'approved' THEN
+    UPDATE public.profiles SET verified_at = now() WHERE user_id = _v.user_id AND verified_at IS NULL;
+  END IF;
+  SELECT file_retention_hours INTO _retention FROM public.verification_settings WHERE id;
+  IF _status <> 'pending' AND coalesce(_retention, 0) = 0 THEN
+    PERFORM public.queue_verification_files(_id, 'décision automatique');
+  END IF;
+  RETURN jsonb_build_object('status', _v.status, 'reason', _v.reason,
+                            'verified', _status = 'approved');
+END;
+$$;
 
 CREATE FUNCTION public.refund_ai_quota(_user_id uuid, _feature text) RETURNS void
     LANGUAGE sql SECURITY DEFINER
@@ -3805,6 +3959,18 @@ CREATE FUNCTION public.request_context() RETURNS jsonb
   )
   FROM (SELECT coalesce(nullif(current_setting('request.headers', true), ''), '{}')::jsonb AS h) x
 $$;
+
+CREATE FUNCTION public.require_verified_sender() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+BEGIN
+  IF NEW.sender_id IS NOT NULL AND NOT public.is_identity_verified(NEW.sender_id) THEN
+    RAISE EXCEPTION 'identity_not_verified' USING ERRCODE = '42501',
+      HINT = 'Vérifiez votre identité pour envoyer des messages.';
+  END IF;
+  RETURN NEW;
+END; $$;
 
 CREATE FUNCTION public.respond_contact_request(_request_id uuid, _accept boolean) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
@@ -4570,6 +4736,72 @@ BEGIN
 END;
 $$;
 
+CREATE FUNCTION public.start_identity_verification(_user_id uuid, _with_selfie boolean, _document_type text DEFAULT NULL::text, _consent boolean DEFAULT false) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE
+  _s public.verification_settings%ROWTYPE;
+  _used integer;
+  _id uuid := gen_random_uuid();
+  _challenge text;
+  _main text;
+  _challenge_path text;
+  _document_path text;
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM public.profiles p WHERE p.user_id = _user_id AND NOT p.is_virtual) THEN
+    RAISE EXCEPTION 'user_not_found' USING ERRCODE = 'P0002';
+  END IF;
+  IF NOT public.is_active_account(_user_id) THEN
+    RAISE EXCEPTION 'account_inactive' USING ERRCODE = '42501';
+  END IF;
+  IF EXISTS (SELECT 1 FROM public.profiles p WHERE p.user_id = _user_id AND p.verified_at IS NOT NULL) THEN
+    RAISE EXCEPTION 'already_verified' USING ERRCODE = '22023';
+  END IF;
+  IF _consent IS NOT TRUE THEN
+    RAISE EXCEPTION 'consent_required' USING ERRCODE = '22023';
+  END IF;
+  IF NOT coalesce(_with_selfie, false) AND _document_type IS NULL THEN
+    RAISE EXCEPTION 'nothing_to_check' USING ERRCODE = '22023';
+  END IF;
+  IF _document_type IS NOT NULL AND _document_type NOT IN ('id_card', 'passport', 'student_card', 'school_card') THEN
+    RAISE EXCEPTION 'invalid_document_type' USING ERRCODE = '22023';
+  END IF;
+  PERFORM public.expire_verification_attempts(_user_id);
+  IF EXISTS (SELECT 1 FROM public.profile_verifications v
+             WHERE v.user_id = _user_id AND v.status IN ('processing', 'pending')) THEN
+    RAISE EXCEPTION 'verification_in_progress' USING ERRCODE = '22023';
+  END IF;
+  SELECT * INTO _s FROM public.verification_settings WHERE id;
+  SELECT count(*) INTO _used FROM public.profile_verifications v
+  WHERE v.user_id = _user_id AND v.automatic AND v.created_at > now() - interval '24 hours'
+    AND v.reason IS DISTINCT FROM 'engine_unavailable';
+  IF _used >= coalesce(_s.max_attempts_per_day, 5) THEN
+    RAISE EXCEPTION 'too_many_attempts' USING ERRCODE = '22023';
+  END IF;
+
+  IF _with_selfie THEN
+    _challenge := CASE WHEN random() < 0.5 THEN 'turn_left' ELSE 'turn_right' END;
+    _main := _user_id || '/' || _id || '/selfie.jpg';
+    _challenge_path := _user_id || '/' || _id || '/consigne.jpg';
+  END IF;
+  IF _document_type IS NOT NULL THEN
+    _document_path := _user_id || '/' || _id || '/piece.jpg';
+  END IF;
+  -- clock_timestamp : deux tentatives gardent leur ordre, même dans une seule transaction.
+  INSERT INTO public.profile_verifications (id, user_id, method, storage_path, status, document_type,
+                                            challenge, challenge_path, document_path, consent_at, automatic,
+                                            created_at)
+  VALUES (_id, _user_id, CASE WHEN _with_selfie THEN 'selfie' ELSE 'id_document' END,
+          coalesce(_main, _document_path), 'processing', _document_type, _challenge, _challenge_path,
+          CASE WHEN _with_selfie THEN _document_path END, now(), true, clock_timestamp());
+  RETURN jsonb_build_object(
+    'id', _id, 'challenge', _challenge,
+    'selfie_path', _main, 'challenge_path', _challenge_path, 'document_path', _document_path,
+    'attempts_left', greatest(coalesce(_s.max_attempts_per_day, 5) - _used - 1, 0));
+END;
+$$;
+
 CREATE FUNCTION public.start_premium_payment(_plan public.subscription_plan, _provider text) RETURNS uuid
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
@@ -5198,10 +5430,29 @@ CREATE TABLE public.profile_verifications (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     reviewed_at timestamp with time zone,
     reviewed_by uuid,
+    document_type text,
+    challenge text,
+    challenge_path text,
+    document_path text,
+    consent_at timestamp with time zone,
+    automatic boolean DEFAULT false NOT NULL,
+    engine text,
+    reason text,
+    profile_similarity numeric(5,4),
+    document_similarity numeric(5,4),
+    liveness_similarity numeric(5,4),
+    liveness_shift numeric(5,4),
+    details jsonb DEFAULT '{}'::jsonb NOT NULL,
+    decided_at timestamp with time zone,
+    files_deleted_at timestamp with time zone,
+    CONSTRAINT profile_verifications_challenge_check CHECK (((challenge IS NULL) OR (challenge = ANY (ARRAY['turn_left'::text, 'turn_right'::text])))),
+    CONSTRAINT profile_verifications_document_type_check CHECK (((document_type IS NULL) OR (document_type = ANY (ARRAY['id_card'::text, 'passport'::text, 'student_card'::text, 'school_card'::text])))),
+    CONSTRAINT profile_verifications_files_owner CHECK ((((challenge_path IS NULL) OR (split_part(challenge_path, '/'::text, 1) = (user_id)::text)) AND ((document_path IS NULL) OR (split_part(document_path, '/'::text, 1) = (user_id)::text)))),
     CONSTRAINT profile_verifications_method_check CHECK ((method = ANY (ARRAY['selfie'::text, 'id_document'::text]))),
     CONSTRAINT profile_verifications_path_owner CHECK ((split_part(storage_path, '/'::text, 1) = (user_id)::text)),
-    CONSTRAINT profile_verifications_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text])))
+    CONSTRAINT profile_verifications_status_check CHECK ((status = ANY (ARRAY['processing'::text, 'pending'::text, 'approved'::text, 'rejected'::text])))
 );
+COMMENT ON COLUMN public.profile_verifications.reason IS 'Motif de la décision : match, no_face, multiple_faces, blurry, not_frontal, liveness_failed, wrong_direction, no_profile_face, document_no_face, mismatch, gray_zone, engine_unavailable, files_missing, abandoned, manual.';
 
 CREATE TABLE public.profile_visits (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
@@ -5399,6 +5650,31 @@ CREATE TABLE public.users (
     updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
+CREATE TABLE public.verification_settings (
+    id boolean DEFAULT true NOT NULL,
+    accept_similarity numeric(4,3) DEFAULT 0.550 NOT NULL,
+    reject_similarity numeric(4,3) DEFAULT 0.400 NOT NULL,
+    aws_accept_similarity numeric(4,3) DEFAULT 0.950 NOT NULL,
+    aws_reject_similarity numeric(4,3) DEFAULT 0.800 NOT NULL,
+    liveness_min_shift numeric(4,3) DEFAULT 0.080 NOT NULL,
+    min_sharpness numeric(8,2) DEFAULT 15 NOT NULL,
+    max_attempts_per_day integer DEFAULT 5 NOT NULL,
+    file_retention_hours integer DEFAULT 0 NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT verification_settings_accept_similarity_check CHECK (((accept_similarity >= (0)::numeric) AND (accept_similarity <= (1)::numeric))),
+    CONSTRAINT verification_settings_aws_accept_similarity_check CHECK (((aws_accept_similarity >= (0)::numeric) AND (aws_accept_similarity <= (1)::numeric))),
+    CONSTRAINT verification_settings_aws_order CHECK ((aws_reject_similarity <= aws_accept_similarity)),
+    CONSTRAINT verification_settings_aws_reject_similarity_check CHECK (((aws_reject_similarity >= (0)::numeric) AND (aws_reject_similarity <= (1)::numeric))),
+    CONSTRAINT verification_settings_file_retention_hours_check CHECK (((file_retention_hours >= 0) AND (file_retention_hours <= 720))),
+    CONSTRAINT verification_settings_id_check CHECK (id),
+    CONSTRAINT verification_settings_liveness_min_shift_check CHECK (((liveness_min_shift >= (0)::numeric) AND (liveness_min_shift <= 0.5))),
+    CONSTRAINT verification_settings_local_order CHECK ((reject_similarity <= accept_similarity)),
+    CONSTRAINT verification_settings_max_attempts_per_day_check CHECK (((max_attempts_per_day >= 1) AND (max_attempts_per_day <= 50))),
+    CONSTRAINT verification_settings_min_sharpness_check CHECK ((min_sharpness >= (0)::numeric)),
+    CONSTRAINT verification_settings_reject_similarity_check CHECK (((reject_similarity >= (0)::numeric) AND (reject_similarity <= (1)::numeric)))
+);
+COMMENT ON TABLE public.verification_settings IS 'Vérification d''identité automatique : seuils de ressemblance, vivacité, netteté, essais par jour, conservation des images.';
+
 CREATE TABLE public.virtual_profile_removals (
     user_id uuid NOT NULL,
     removed_user_id uuid,
@@ -5569,6 +5845,9 @@ ALTER TABLE ONLY public.users
 ALTER TABLE ONLY public.users
     ADD CONSTRAINT users_pkey PRIMARY KEY (id);
 
+ALTER TABLE ONLY public.verification_settings
+    ADD CONSTRAINT verification_settings_pkey PRIMARY KEY (id);
+
 ALTER TABLE ONLY public.virtual_profile_removals
     ADD CONSTRAINT virtual_profile_removals_pkey PRIMARY KEY (user_id);
 
@@ -5664,6 +5943,10 @@ CREATE INDEX profile_locations_inconsistent_idx ON public.profile_locations USIN
 
 CREATE INDEX profile_verifications_pending_idx ON public.profile_verifications USING btree (created_at) WHERE (status = 'pending'::text);
 
+CREATE INDEX profile_verifications_status_idx ON public.profile_verifications USING btree (status, created_at) WHERE (status = ANY (ARRAY['processing'::text, 'pending'::text]));
+
+CREATE INDEX profile_verifications_user_created_idx ON public.profile_verifications USING btree (user_id, created_at DESC);
+
 CREATE INDEX profile_verifications_user_idx ON public.profile_verifications USING btree (user_id, created_at DESC);
 
 CREATE INDEX profile_visits_pair_recent_idx ON public.profile_visits USING btree (visitor_id, visited_user_id, visited_at DESC);
@@ -5724,6 +6007,8 @@ CREATE TRIGGER contact_requests_notify AFTER INSERT ON public.contact_requests F
 
 CREATE TRIGGER contact_requests_refuse_demo BEFORE INSERT ON public.contact_requests FOR EACH ROW EXECUTE FUNCTION public.refuse_contact_to_demo_profile();
 
+CREATE TRIGGER contact_requests_require_verified BEFORE INSERT ON public.contact_requests FOR EACH ROW EXECUTE FUNCTION public.require_verified_sender();
+
 CREATE TRIGGER conversation_user_usage_updated_at BEFORE UPDATE ON public.conversation_user_usage FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
 CREATE TRIGGER conversations_init_usage AFTER INSERT ON public.conversations FOR EACH ROW EXECUTE FUNCTION public.init_conversation_usage();
@@ -5761,6 +6046,8 @@ CREATE TRIGGER messages_block_phone_numbers BEFORE INSERT OR UPDATE OF content, 
 CREATE TRIGGER messages_log_activity AFTER INSERT ON public.messages FOR EACH ROW EXECUTE FUNCTION public.log_member_action();
 
 CREATE TRIGGER messages_notify AFTER INSERT ON public.messages FOR EACH ROW EXECUTE FUNCTION public.notify_message();
+
+CREATE TRIGGER messages_require_verified BEFORE INSERT ON public.messages FOR EACH ROW EXECUTE FUNCTION public.require_verified_sender();
 
 CREATE TRIGGER moderation_actions_audit_admin AFTER INSERT OR DELETE OR UPDATE ON public.moderation_actions FOR EACH ROW EXECUTE FUNCTION public.audit_admin_change();
 
@@ -5839,6 +6126,10 @@ CREATE TRIGGER users_log_account AFTER DELETE OR UPDATE OF status ON public.user
 CREATE TRIGGER users_protect_columns BEFORE UPDATE ON public.users FOR EACH ROW EXECUTE FUNCTION public.protect_user_columns();
 
 CREATE TRIGGER users_updated_at BEFORE UPDATE ON public.users FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+CREATE TRIGGER verification_settings_audit_admin AFTER UPDATE ON public.verification_settings FOR EACH ROW EXECUTE FUNCTION public.audit_admin_change();
+
+CREATE TRIGGER verification_settings_set_updated_at BEFORE UPDATE ON public.verification_settings FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
 -- ============================================================================
 -- 11. Liens entre les tables (clés étrangères)
@@ -6052,6 +6343,7 @@ ALTER TABLE public.user_activity ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_roles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.verification_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.virtual_profile_removals ENABLE ROW LEVEL SECURITY;
 
 -- ============================================================================
@@ -6208,8 +6500,6 @@ CREATE POLICY profile_boosts_select_own ON public.profile_boosts FOR SELECT TO a
 CREATE POLICY profile_locations_select_own ON public.profile_locations FOR SELECT TO authenticated USING ((user_id = auth.uid()));
 
 -- profile_verifications
-CREATE POLICY verifications_insert_own ON public.profile_verifications FOR INSERT TO authenticated WITH CHECK (((user_id = auth.uid()) AND (status = 'pending'::text) AND (reviewed_at IS NULL) AND (reviewed_by IS NULL) AND (split_part(storage_path, '/'::text, 1) = (auth.uid())::text)));
-
 CREATE POLICY verifications_select_own ON public.profile_verifications FOR SELECT TO authenticated USING ((user_id = auth.uid()));
 
 -- profile_visits
@@ -6274,6 +6564,11 @@ CREATE POLICY users_select_own ON public.users FOR SELECT TO authenticated USING
 CREATE POLICY users_update_admin ON public.users FOR UPDATE TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
 
 CREATE POLICY users_update_own ON public.users FOR UPDATE TO authenticated USING ((id = auth.uid())) WITH CHECK ((id = auth.uid()));
+
+-- verification_settings
+CREATE POLICY verification_settings_admin_select ON public.verification_settings FOR SELECT TO authenticated USING (public.is_admin());
+
+CREATE POLICY verification_settings_admin_update ON public.verification_settings FOR UPDATE TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
 
 -- ============================================================================
 -- 14. Droits d'accès : écrits un par un (aucun droit automatique)
@@ -6410,18 +6705,20 @@ GRANT ALL ON SEQUENCE
   public.storage_cleanup_queue_id_seq
 TO service_role;
 
--- 4 tables — membres connectés : tout · serveur du site : tout
+-- 5 tables — membres connectés : tout · serveur du site : tout
 REVOKE ALL ON TABLE
   public.ad_events,
   public.ad_settings,
   public.ads,
-  public.location_history
+  public.location_history,
+  public.verification_settings
 FROM PUBLIC, anon, authenticated, service_role;
 GRANT ALL ON TABLE
   public.ad_events,
   public.ad_settings,
   public.ads,
-  public.location_history
+  public.location_history,
+  public.verification_settings
 TO authenticated, service_role;
 
 -- 4 tables — serveur du site : tout
@@ -6455,13 +6752,16 @@ GRANT SELECT, TRUNCATE, REFERENCES, TRIGGER ON TABLE
   public.support_tickets
 TO anon, authenticated;
 
--- 1 tables — visiteurs : tout · membres connectés : tout · serveur du site : tout
+-- 1 tables — visiteurs : tout · membres connectés : lecture, modification, suppression, vidage, références, déclencheurs · serveur du site : tout
 REVOKE ALL ON TABLE
   public.profile_verifications
 FROM PUBLIC, anon, authenticated, service_role;
 GRANT ALL ON TABLE
   public.profile_verifications
-TO anon, authenticated, service_role;
+TO anon, service_role;
+GRANT SELECT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON TABLE
+  public.profile_verifications
+TO authenticated;
 
 -- 1 tables — visiteurs : lecture, ajout, modification, vidage, références, déclencheurs · membres connectés : lecture, ajout, modification, vidage, références, déclencheurs · serveur du site : tout
 REVOKE ALL ON TABLE
@@ -6485,7 +6785,7 @@ GRANT SELECT, INSERT, DELETE ON TABLE
   public.favorites
 TO authenticated;
 
--- 91 fonctions — membres connectés : exécution · serveur du site : exécution
+-- 94 fonctions — membres connectés : exécution · serveur du site : exécution
 REVOKE ALL ON FUNCTION
   public.activate_profile_boost(),
   public.admin_ad_stats(uuid,timestamp with time zone,timestamp with time zone,text,text),
@@ -6512,6 +6812,7 @@ REVOKE ALL ON FUNCTION
   public.admin_user_detail(uuid),
   public.admin_user_history(uuid),
   public.admin_user_location(uuid),
+  public.admin_verification_queue(),
   public.assert_admin(),
   public.block_user(uuid),
   public.can_browse_profiles(),
@@ -6548,6 +6849,7 @@ REVOKE ALL ON FUNCTION
   public.is_conversation_folder_participant(text),
   public.is_conversation_participant(uuid,uuid),
   public.is_discoverable_profile(uuid),
+  public.is_identity_verified(uuid),
   public.is_premium(uuid),
   public.list_blocked_users(),
   public.list_contact_requests(text),
@@ -6559,6 +6861,7 @@ REVOKE ALL ON FUNCTION
   public.mark_conversation_read(uuid),
   public.mark_notification_read(uuid),
   public.mark_offline(),
+  public.my_verification_status(),
   public.normalize_place(text),
   public.record_ad_event(uuid,text,text),
   public.record_logout(),
@@ -6605,6 +6908,7 @@ GRANT EXECUTE ON FUNCTION
   public.admin_user_detail(uuid),
   public.admin_user_history(uuid),
   public.admin_user_location(uuid),
+  public.admin_verification_queue(),
   public.assert_admin(),
   public.block_user(uuid),
   public.can_browse_profiles(),
@@ -6641,6 +6945,7 @@ GRANT EXECUTE ON FUNCTION
   public.is_conversation_folder_participant(text),
   public.is_conversation_participant(uuid,uuid),
   public.is_discoverable_profile(uuid),
+  public.is_identity_verified(uuid),
   public.is_premium(uuid),
   public.list_blocked_users(),
   public.list_contact_requests(text),
@@ -6652,6 +6957,7 @@ GRANT EXECUTE ON FUNCTION
   public.mark_conversation_read(uuid),
   public.mark_notification_read(uuid),
   public.mark_offline(),
+  public.my_verification_status(),
   public.normalize_place(text),
   public.record_ad_event(uuid,text,text),
   public.record_logout(),
@@ -6673,7 +6979,7 @@ GRANT EXECUTE ON FUNCTION
   public.undo_last_pass()
 TO authenticated, service_role;
 
--- 59 fonctions — serveur du site : exécution
+-- 65 fonctions — serveur du site : exécution
 REVOKE ALL ON FUNCTION
   public.activate_conversation_unlock(),
   public.activate_premium_subscription(),
@@ -6692,6 +6998,7 @@ REVOKE ALL ON FUNCTION
   public.enforce_photo_limit(),
   public.expire_conversation_unlocks(),
   public.expire_subscriptions(),
+  public.expire_verification_attempts(uuid),
   public.handle_new_user(),
   public.init_conversation_usage(),
   public.is_real_member(uuid),
@@ -6720,19 +7027,24 @@ REVOKE ALL ON FUNCTION
   public.protect_terms_accepted_at(),
   public.protect_user_columns(),
   public.purge_old_logs(),
+  public.purge_verification_files(),
   public.queue_ad_media_cleanup(),
+  public.queue_verification_files(uuid,text),
   public.recent_signups(),
   public.record_login_failure(text,text),
   public.record_payment_webhook(text,uuid,text,text),
+  public.record_verification_result(uuid,text,text,text,numeric,numeric,numeric,numeric,jsonb),
   public.refund_ai_quota(uuid,text),
   public.refuse_blocked_interaction(),
   public.refuse_contact_to_demo_profile(),
   public.remove_one_virtual_profile(text,public.gender),
   public.replace_virtual_profile_on_signup(),
   public.request_context(),
+  public.require_verified_sender(),
   public.set_like_created_at(),
   public.set_member_location(uuid,text,double precision,double precision,text,text,text,integer,text,text,text,text),
   public.set_updated_at(),
+  public.start_identity_verification(uuid,boolean,text,boolean),
   public.wants_notification(uuid,text)
 FROM PUBLIC, anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION
@@ -6753,6 +7065,7 @@ GRANT EXECUTE ON FUNCTION
   public.enforce_photo_limit(),
   public.expire_conversation_unlocks(),
   public.expire_subscriptions(),
+  public.expire_verification_attempts(uuid),
   public.handle_new_user(),
   public.init_conversation_usage(),
   public.is_real_member(uuid),
@@ -6781,19 +7094,24 @@ GRANT EXECUTE ON FUNCTION
   public.protect_terms_accepted_at(),
   public.protect_user_columns(),
   public.purge_old_logs(),
+  public.purge_verification_files(),
   public.queue_ad_media_cleanup(),
+  public.queue_verification_files(uuid,text),
   public.recent_signups(),
   public.record_login_failure(text,text),
   public.record_payment_webhook(text,uuid,text,text),
+  public.record_verification_result(uuid,text,text,text,numeric,numeric,numeric,numeric,jsonb),
   public.refund_ai_quota(uuid,text),
   public.refuse_blocked_interaction(),
   public.refuse_contact_to_demo_profile(),
   public.remove_one_virtual_profile(text,public.gender),
   public.replace_virtual_profile_on_signup(),
   public.request_context(),
+  public.require_verified_sender(),
   public.set_like_created_at(),
   public.set_member_location(uuid,text,double precision,double precision,text,text,text,integer,text,text,text,text),
   public.set_updated_at(),
+  public.start_identity_verification(uuid,boolean,text,boolean),
   public.wants_notification(uuid,text)
 TO service_role;
 
@@ -6972,11 +7290,42 @@ EXCEPTION WHEN OTHERS THEN
 END;
 $cron$;
 
+-- Chaque nuit : IP et appareils effacés du journal après 12 mois (RGPD).
+DO $cron$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_available_extensions WHERE name = 'pg_cron') THEN
+    CREATE EXTENSION IF NOT EXISTS pg_cron;
+    PERFORM cron.unschedule(jobid) FROM cron.job WHERE jobname = 'yona-purge-journaux';
+    PERFORM cron.schedule('yona-purge-journaux', '17 3 * * *', 'select public.purge_old_logs()');
+  ELSE
+    RAISE NOTICE 'pg_cron indisponible : purge des journaux à lancer par le serveur.';
+  END IF;
+EXCEPTION WHEN OTHERS THEN
+  RAISE NOTICE 'Planification pg_cron impossible (%) : purge à lancer par le serveur.', SQLERRM;
+END;
+$cron$;
+
+-- Toutes les 15 minutes : images de vérification supprimées (tentatives abandonnées, délai écoulé).
+DO $cron$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_available_extensions WHERE name = 'pg_cron') THEN
+    CREATE EXTENSION IF NOT EXISTS pg_cron;
+    PERFORM cron.unschedule(jobid) FROM cron.job WHERE jobname = 'yona-verifications-fichiers';
+    PERFORM cron.schedule('yona-verifications-fichiers', '*/15 * * * *', 'select public.purge_verification_files()');
+  ELSE
+    RAISE NOTICE 'pg_cron indisponible : nettoyage des vérifications à lancer par le serveur.';
+  END IF;
+EXCEPTION WHEN OTHERS THEN
+  RAISE NOTICE 'Planification pg_cron impossible (%) : nettoyage à lancer par le serveur.', SQLERRM;
+END;
+$cron$;
+
 -- ============================================================================
--- 19. Données de départ : réglages (fréquence des publicités) et fuseaux horaires
+-- 19. Données de départ : réglages (publicités, vérification d'identité) et fuseaux horaires
 -- ============================================================================
 
 INSERT INTO public.ad_settings (id) VALUES (true) ON CONFLICT (id) DO NOTHING;
+INSERT INTO public.verification_settings (id) VALUES (true) ON CONFLICT (id) DO NOTHING;
 INSERT INTO public.geo_timezones (tz, country_codes) VALUES
   ('Africa/Abidjan', ARRAY['BF', 'CI', 'GH', 'GM', 'GN', 'IS', 'ML', 'MR', 'SH', 'SL', 'SN', 'TG']),
   ('Africa/Accra', ARRAY['GH']),
@@ -7924,10 +8273,10 @@ SELECT b.element AS "Élément", b.trouve AS "Dans la base", b.attendu AS "Atten
             WHEN b.facultatif THEN '⚠️ facultatif'
             ELSE '❌' END AS "État"
 FROM (VALUES
-  (1, 'Tables', (SELECT count(*) FROM pg_catalog.pg_tables WHERE schemaname = 'public')::text, '43', false),
-  (2, 'Fonctions', (SELECT count(*) FROM pg_catalog.pg_proc WHERE pronamespace = 'public'::regnamespace)::text, '160', false),
-  (3, 'Règles d''accès des tables', (SELECT count(*) FROM pg_catalog.pg_policies WHERE schemaname = 'public')::text, '89', false),
-  (4, 'Tables protégées (RLS)', (SELECT count(*) FROM pg_catalog.pg_class WHERE relnamespace = 'public'::regnamespace AND relkind = 'r' AND relrowsecurity)::text, '43', false),
+  (1, 'Tables', (SELECT count(*) FROM pg_catalog.pg_tables WHERE schemaname = 'public')::text, '44', false),
+  (2, 'Fonctions', (SELECT count(*) FROM pg_catalog.pg_proc WHERE pronamespace = 'public'::regnamespace)::text, '169', false),
+  (3, 'Règles d''accès des tables', (SELECT count(*) FROM pg_catalog.pg_policies WHERE schemaname = 'public')::text, '90', false),
+  (4, 'Tables protégées (RLS)', (SELECT count(*) FROM pg_catalog.pg_class WHERE relnamespace = 'public'::regnamespace AND relkind = 'r' AND relrowsecurity)::text, '44', false),
   (5, 'Profil créé à l''inscription', (SELECT CASE WHEN count(*) > 0 THEN 'oui' ELSE 'non' END FROM pg_catalog.pg_trigger WHERE tgrelid = 'auth.users'::regclass AND tgname = 'on_auth_user_created'), 'oui', false),
   (6, 'Espaces de fichiers', (SELECT count(*) FROM storage.buckets WHERE id IN ('ads', 'demo-profils', 'photos', 'verifications', 'voice-messages'))::text, '5', false),
   (7, 'Règles d''accès des fichiers', (SELECT count(*) FROM pg_catalog.pg_policies WHERE schemaname = 'storage' AND policyname IN ('ads_storage_delete_admin',
@@ -7948,7 +8297,7 @@ FROM (VALUES
       'voice_storage_insert_premium',
       'voice_storage_select_participant'))::text, '17', false),
   (8, 'Messages en temps réel', (SELECT CASE WHEN count(*) > 0 THEN 'oui' ELSE 'non' END FROM pg_catalog.pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'messages'), 'oui', false),
-  (9, 'Tâches automatiques', current_setting('yona.taches', true), '2', true),
+  (9, 'Tâches automatiques', current_setting('yona.taches', true), '4', true),
   (10, 'Pays', (SELECT count(*) FROM public.geo_countries)::text, '247', false),
   (11, 'Profils virtuels', (SELECT count(*) FROM public.profiles WHERE is_virtual)::text, '40', false)
 ) AS b(n, element, trouve, attendu, facultatif)

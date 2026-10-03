@@ -13,6 +13,8 @@ export const SEND_MESSAGE_ERRORS = {
   phone_number_detected:
     "Votre message n'a pas été envoyé : il semble contenir un numéro de téléphone. Pour la sécurité de tous, l'échange de numéros n'est pas autorisé sur YONA. Retirez le numéro puis renvoyez votre message (il n'a pas été décompté de vos messages gratuits).",
   sender_not_allowed: "Votre profil doit être finalisé et actif pour envoyer des messages.",
+  identity_not_verified:
+    "Vérifiez votre identité (selfie ou pièce d'identité) pour envoyer des messages. Rendez-vous sur la page « Vérifie ton identité ».",
 } as const;
 
 export type SendMessageErrorCode = keyof typeof SEND_MESSAGE_ERRORS;

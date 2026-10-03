@@ -12,6 +12,7 @@ import { MembersTable } from "@/components/admin/MembersTable";
 import { StatsTab } from "@/components/admin/StatsTab";
 import { DeleteMemberSection, UserHistory } from "@/components/admin/UserHistory";
 import { UserLocation } from "@/components/admin/UserLocation";
+import { VerificationsTab } from "@/components/admin/VerificationsTab";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -26,12 +27,10 @@ import {
   adminTicketsQuery,
   adminUnlocksQuery,
   adminUserDetailQuery,
-  adminVerificationsQuery,
   formatMoney,
   moderatePhoto,
   replyTicket,
   resolveReport,
-  reviewVerification,
 } from "@/features/admin/queries";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { isAdminQuery } from "@/features/auth/roles";
@@ -126,7 +125,7 @@ function AdminPage() {
             <Photos />
           </TabsContent>
           <TabsContent value="verifications">
-            <Verifications />
+            <VerificationsTab />
           </TabsContent>
           <TabsContent value="payments">
             <Payments />
@@ -418,63 +417,6 @@ function Photos() {
               variant="destructive"
               disabled={moderate.isPending}
               onClick={() => moderate.mutate({ id: p.id, approve: false })}
-            >
-              Refuser
-            </Button>
-          </div>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-/** Vérification des profils : selfie ou pièce d'identité (photos privées). */
-function Verifications() {
-  const queryClient = useQueryClient();
-  const { data, isLoading, error } = useQuery(adminVerificationsQuery());
-  const review = useMutation({
-    mutationFn: (v: { id: string; approve: boolean }) => reviewVerification(v.id, v.approve),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["admin"] }),
-    onError: (e) => toast.error(e.message),
-  });
-  if (isLoading) return <Loading />;
-  if (error) return <Failed error={error} />;
-  if (!data?.length)
-    return <p className="text-sm text-muted-foreground">Aucune vérification en attente.</p>;
-  return (
-    <ul className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-      {data.map((v) => (
-        <li key={v.id} className="panel space-y-2 p-2" data-testid="admin-verification">
-          {v.url ? (
-            <a href={v.url} target="_blank" rel="noreferrer">
-              <img
-                src={v.url}
-                alt={`Vérification de ${v.first_name ?? "membre"}`}
-                className="aspect-[3/4] w-full rounded-lg object-cover"
-              />
-            </a>
-          ) : (
-            <div className="aspect-[3/4] w-full rounded-lg bg-muted" />
-          )}
-          <p className="truncate text-xs text-muted-foreground">
-            {v.first_name ?? "?"} · {v.method === "selfie" ? "Selfie" : "Pièce d'identité"}
-          </p>
-          <div className="grid grid-cols-2 gap-1">
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              disabled={review.isPending}
-              onClick={() => review.mutate({ id: v.id, approve: true })}
-            >
-              Valider
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="destructive"
-              disabled={review.isPending}
-              onClick={() => review.mutate({ id: v.id, approve: false })}
             >
               Refuser
             </Button>

@@ -1230,9 +1230,24 @@ export type Database = {
       }
       profile_verifications: {
         Row: {
+          automatic: boolean
+          challenge: string | null
+          challenge_path: string | null
+          consent_at: string | null
           created_at: string
+          decided_at: string | null
+          details: Json
+          document_path: string | null
+          document_similarity: number | null
+          document_type: string | null
+          engine: string | null
+          files_deleted_at: string | null
           id: string
+          liveness_shift: number | null
+          liveness_similarity: number | null
           method: string
+          profile_similarity: number | null
+          reason: string | null
           reviewed_at: string | null
           reviewed_by: string | null
           status: string
@@ -1240,9 +1255,24 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          automatic?: boolean
+          challenge?: string | null
+          challenge_path?: string | null
+          consent_at?: string | null
           created_at?: string
+          decided_at?: string | null
+          details?: Json
+          document_path?: string | null
+          document_similarity?: number | null
+          document_type?: string | null
+          engine?: string | null
+          files_deleted_at?: string | null
           id?: string
+          liveness_shift?: number | null
+          liveness_similarity?: number | null
           method: string
+          profile_similarity?: number | null
+          reason?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
           status?: string
@@ -1250,9 +1280,24 @@ export type Database = {
           user_id: string
         }
         Update: {
+          automatic?: boolean
+          challenge?: string | null
+          challenge_path?: string | null
+          consent_at?: string | null
           created_at?: string
+          decided_at?: string | null
+          details?: Json
+          document_path?: string | null
+          document_similarity?: number | null
+          document_type?: string | null
+          engine?: string | null
+          files_deleted_at?: string | null
           id?: string
+          liveness_shift?: number | null
+          liveness_similarity?: number | null
           method?: string
+          profile_similarity?: number | null
+          reason?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
           status?: string
@@ -1784,6 +1829,45 @@ export type Database = {
         }
         Relationships: []
       }
+      verification_settings: {
+        Row: {
+          accept_similarity: number
+          aws_accept_similarity: number
+          aws_reject_similarity: number
+          file_retention_hours: number
+          id: boolean
+          liveness_min_shift: number
+          max_attempts_per_day: number
+          min_sharpness: number
+          reject_similarity: number
+          updated_at: string
+        }
+        Insert: {
+          accept_similarity?: number
+          aws_accept_similarity?: number
+          aws_reject_similarity?: number
+          file_retention_hours?: number
+          id?: boolean
+          liveness_min_shift?: number
+          max_attempts_per_day?: number
+          min_sharpness?: number
+          reject_similarity?: number
+          updated_at?: string
+        }
+        Update: {
+          accept_similarity?: number
+          aws_accept_similarity?: number
+          aws_reject_similarity?: number
+          file_retention_hours?: number
+          id?: boolean
+          liveness_min_shift?: number
+          max_attempts_per_day?: number
+          min_sharpness?: number
+          reject_similarity?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -2011,6 +2095,28 @@ export type Database = {
         Args: { _user_id: string }
         Returns: Json
       }
+      admin_verification_queue: {
+        Args: never
+        Returns: {
+          challenge: string | null
+          challenge_path: string | null
+          created_at: string
+          details: Json
+          document_path: string | null
+          document_similarity: number | null
+          document_type: string | null
+          engine: string | null
+          first_name: string | null
+          id: string
+          liveness_shift: number | null
+          liveness_similarity: number | null
+          method: string
+          profile_similarity: number | null
+          reason: string | null
+          storage_path: string
+          user_id: string
+        }[]
+      }
       ai_usage_day: { Args: never; Returns: string }
       assert_admin: { Args: never; Returns: undefined }
       block_user: { Args: { _user_id: string }; Returns: boolean }
@@ -2063,6 +2169,10 @@ export type Database = {
         Returns: number
       }
       expire_subscriptions: { Args: never; Returns: number }
+      expire_verification_attempts: {
+        Args: { _user_id?: string }
+        Returns: number
+      }
       get_ads_for_me: {
         Args: { _limit?: number; _placement?: string }
         Returns: {
@@ -2164,6 +2274,10 @@ export type Database = {
       }
       has_mutual_like: { Args: { _other: string }; Returns: boolean }
       is_discoverable_profile: { Args: { _user_id: string }; Returns: boolean }
+      is_identity_verified: {
+        Args: { _user_id: string }
+        Returns: boolean
+      }
       is_premium: { Args: { _user_id: string }; Returns: boolean }
       is_real_member: {
         Args: { _user_id: string }
@@ -2241,6 +2355,10 @@ export type Database = {
         Args: { _conversation_id: string }
         Returns: string
       }
+      my_verification_status: {
+        Args: never
+        Returns: Json
+      }
       normalize_place: { Args: { _value: string }; Returns: string }
       premium_plan_amount: {
         Args: { _plan: Database["public"]["Enums"]["subscription_plan"] }
@@ -2248,6 +2366,14 @@ export type Database = {
       }
       purge_old_logs: {
         Args: never
+        Returns: number
+      }
+      purge_verification_files: {
+        Args: never
+        Returns: number
+      }
+      queue_verification_files: {
+        Args: { _id: string; _reason: string }
         Returns: number
       }
       recent_signups: {
@@ -2285,6 +2411,20 @@ export type Database = {
       record_signup_step: {
         Args: { _step: number }
         Returns: undefined
+      }
+      record_verification_result: {
+        Args: {
+          _details?: Json
+          _document_similarity?: number
+          _engine: string
+          _id: string
+          _liveness_shift?: number
+          _liveness_similarity?: number
+          _profile_similarity?: number
+          _reason: string
+          _status: string
+        }
+        Returns: Json
       }
       refund_ai_quota: {
         Args: { _feature: string; _user_id: string }
@@ -2364,6 +2504,10 @@ export type Database = {
       set_my_location: {
         Args: { _latitude: number; _longitude: number }
         Returns: undefined
+      }
+      start_identity_verification: {
+        Args: { _consent?: boolean; _document_type?: string; _user_id: string; _with_selfie: boolean }
+        Returns: Json
       }
       start_premium_payment: {
         Args: {

@@ -34,12 +34,17 @@ SEED_MIG = "20261003100100_profils_demo_donnees.sql"
 SETTINGS_ROWS = [
     ("20261003150000_publicites.sql",
      r"^INSERT INTO public\.ad_settings \(id\) VALUES \(true\) ON CONFLICT \(id\) DO NOTHING;"),
+    ("20261003170000_verification_automatique.sql",
+     r"^INSERT INTO public\.verification_settings \(id\) VALUES \(true\) ON CONFLICT \(id\) DO NOTHING;"),
     ("20261003160000_localisation.sql",
      r"^INSERT INTO public\.geo_timezones \(tz, country_codes\) VALUES\n.*?^ON CONFLICT \(tz\) DO UPDATE SET country_codes = EXCLUDED\.country_codes;"),
 ]
 CRON_MIGS = [
-    ("20260928090000_phase7_expirer_deblocage.sql", "fin des déblocages de conversation"),
-    ("20260930120000_phase14_premium.sql", "fin des abonnements Premium"),
+    ("20260928090000_phase7_expirer_deblocage.sql", "Toutes les 5 minutes : fin des déblocages de conversation"),
+    ("20260930120000_phase14_premium.sql", "Toutes les 5 minutes : fin des abonnements Premium"),
+    ("20261003130000_journal_activite.sql", "Chaque nuit : IP et appareils effacés du journal après 12 mois (RGPD)"),
+    ("20261003170000_verification_automatique.sql",
+     "Toutes les 15 minutes : images de vérification supprimées (tentatives abandonnées, délai écoulé)"),
 ]
 API_ROLES = ["PUBLIC", "anon", "authenticated", "service_role"]
 
@@ -335,7 +340,7 @@ def cron_sql():
         found = re.findall(r"^DO \$cron\$\n.*?^\$cron\$;", read_mig(name), flags=re.S | re.M)
         if len(found) != 1:
             raise SystemExit(f"Bloc pg_cron introuvable dans {name}")
-        blocks.append(f"-- Toutes les 5 minutes : {label}.\n" + found[0])
+        blocks.append(f"-- {label}.\n" + found[0])
     return "\n\n".join(blocks)
 
 
@@ -469,7 +474,7 @@ SET search_path = pg_catalog;""")
     out.section("Tâches automatiques (pg_cron, si Supabase le permet ; sinon les dates suffisent)")
     out.write(cron_sql())
 
-    out.section("Données de départ : réglages (fréquence des publicités) et fuseaux horaires")
+    out.section("Données de départ : réglages (publicités, vérification d'identité) et fuseaux horaires")
     out.write(settings_sql())
 
     out.section(f"Données de départ : {expected['countries']} pays (position, pour le pays le plus proche)")

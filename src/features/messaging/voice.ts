@@ -19,6 +19,7 @@ export const VOICE_ERRORS = {
   microphone_denied:
     "Micro inaccessible : autorisez l'accès au micro dans votre navigateur pour enregistrer.",
   too_large: "Message vocal trop lourd (2 Mo au plus). Faites-le plus court.",
+  identity_not_verified: "Vérifiez votre identité pour envoyer des messages vocaux.",
 } as const;
 
 export function voiceErrorMessage(error: unknown): string {
