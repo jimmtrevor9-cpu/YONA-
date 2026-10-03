@@ -8,3 +8,4 @@ bun.lock
 routeTree.gen.ts
 src/integrations/supabase/
 *.md
+src/features/location/data/
