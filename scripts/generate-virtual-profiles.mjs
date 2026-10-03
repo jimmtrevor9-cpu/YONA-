@@ -1,4 +1,4 @@
-// Génère la migration des profils virtuels (3 par pays, 27 pays) et des positions de
+// Génère la migration des profils virtuels (50 profils, 9 pays) et des positions de
 // pays (public.geo_countries), à partir de scripts/data/virtual-profiles-countries.mjs
 // et de la base géographique public/geo/.
 //
@@ -8,7 +8,20 @@ import { readFileSync, writeFileSync } from "node:fs";
 
 import { COUNTRIES } from "./data/virtual-profiles-countries.mjs";
 
-const PER_COUNTRY = 3;
+// Pays retenus et nombre de profils par pays (50 au total : 80 % pour 8 pays d'Afrique
+// francophone, 5 chacun ; 20 % pour la France). Les autres pays de
+// scripts/data/virtual-profiles-countries.mjs restent disponibles pour plus tard.
+const SELECTION = [
+  { code: "GA", count: 5 },
+  { code: "CM", count: 5 },
+  { code: "CI", count: 5 },
+  { code: "CG", count: 5 },
+  { code: "TG", count: 5 },
+  { code: "BJ", count: 5 },
+  { code: "SN", count: 5 },
+  { code: "ML", count: 5 },
+  { code: "FR", count: 10 },
+];
 const OUT = [
   "supabase/migrations/20261002110000_profils_virtuels_donnees.sql",
   "drizzle/migrations/0085_profils_virtuels_donnees.sql",
@@ -153,7 +166,9 @@ function birthDate(age) {
 
 const rows = [];
 const bios = new Set();
-for (const [countryIndex, country] of COUNTRIES.entries()) {
+for (const [countryIndex, selected] of SELECTION.entries()) {
+  const country = COUNTRIES.find((c) => c.code === selected.code);
+  if (!country) throw new Error(`Pays absent des données : ${selected.code}`);
   const meta = countries.find((c) => c.code === country.code);
   if (!meta) throw new Error(`Pays inconnu : ${country.code}`);
   const regions = geo(country.code).regions.filter(
@@ -167,7 +182,7 @@ for (const [countryIndex, country] of COUNTRIES.entries()) {
   const women = shuffle(country.women);
   const men = shuffle(country.men);
   const lastNames = shuffle(country.last);
-  for (let i = 0; i < PER_COUNTRY; i++) {
+  for (let i = 0; i < selected.count; i++) {
     // Nombre impair par pays : on commence une fois par une femme, une fois par un
     // homme, d'un pays à l'autre, pour garder un total presque égal.
     const gender = (i + countryIndex) % 2 === 0 ? "female" : "male";
@@ -340,7 +355,7 @@ const header = `-- ============================================================
 --
 -- * public.geo_countries : position de chaque pays (base GeoNames), pour « le pays le
 --   plus proche » quand il n'y a plus de profil virtuel dans le pays d'un nouveau membre.
--- * ${rows.length} profils virtuels : ${PER_COUNTRY} par pays (${rows.filter((r) => r.gender === "female").length} femmes et ${rows.filter((r) => r.gender === "male").length} hommes au total), ${COUNTRIES.length} pays,
+-- * ${rows.length} profils virtuels (${rows.filter((r) => r.gender === "female").length} femmes, ${rows.filter((r) => r.gender === "male").length} hommes) : ${SELECTION.map((x) => `${x.count} ${countries.find((c) => c.code === x.code).name}`).join(", ")},
 --   22 à 48 ans. Ce sont des comptes sans mot de passe (connexion impossible), marqués
 --   « virtual » dans le compte et is_virtual dans le profil. Aucune photo : la carte
 --   affiche l'initiale, en attendant de vraies photos.
