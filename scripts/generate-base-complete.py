@@ -13,7 +13,7 @@ l'ordre, puis on en tire :
     mai 2026 n'ouvrent plus automatiquement les nouvelles tables à l'API) ;
   - ce qui vit hors du schéma public : déclencheur sur auth.users, espaces de stockage
     et leurs règles, temps réel, tâches planifiées ;
-  - les données de départ (pays, 50 profils virtuels), reprises des migrations.
+  - les données de départ (pays, profils de démonstration), reprises des migrations.
 
 Utilisation (PostgreSQL local joignable par psql / pg_dump, variables PG* habituelles) :
     python3 scripts/generate-base-complete.py
@@ -28,7 +28,8 @@ MIG = os.path.join(ROOT, "supabase", "migrations")
 SHIM = os.path.join(ROOT, "scripts", "data", "supabase-local-shim.sql")
 OUT = os.path.join(ROOT, "supabase", "nouvelle-base", "creer-toute-la-base.sql")
 DB = os.environ.get("YONA_GEN_DB", "yona_generation_base")
-SEED_MIG = "20261002110000_profils_virtuels_donnees.sql"
+GEO_MIG = "20261002110000_profils_virtuels_donnees.sql"
+SEED_MIG = "20261003100100_profils_demo_donnees.sql"
 CRON_MIGS = [
     ("20260928090000_phase7_expirer_deblocage.sql", "fin des déblocages de conversation"),
     ("20260930120000_phase14_premium.sql", "fin des abonnements Premium"),
@@ -97,6 +98,12 @@ def dump_entries():
         typ, name = h["type"], h["name"]
         if typ == "SCHEMA" or (typ == "COMMENT" and name == "SCHEMA public"):
             continue
+        if typ in ("COMMENT", "SEQUENCE") and entries:
+            # Commentaire d'un objet, ou compteur d'une colonne « identity » : gardé juste
+            # après l'objet qu'il complète.
+            prev_typ, prev_name, prev_body = entries[-1]
+            entries[-1] = (prev_typ, prev_name, prev_body + "\n" + body)
+            continue
         if typ not in SECTION_TITLES:
             raise SystemExit(f"Type d'objet inattendu dans pg_dump : {typ} ({name})")
         entries.append((typ, name, body))
@@ -155,14 +162,16 @@ PRIV_LABELS = {"SELECT": "lecture", "INSERT": "ajout", "UPDATE": "modification",
 def acl_rows(kind):
     if kind == "table":
         return rows("""
-          SELECT c.oid::regclass::text AS obj, 'TABLE' AS kw,
+          SELECT c.oid::regclass::text AS obj,
+                 CASE c.relkind WHEN 'S' THEN 'SEQUENCE' ELSE 'TABLE' END AS kw,
                  coalesce((SELECT json_agg(json_build_object('g', CASE WHEN a.grantee = 0 THEN 'PUBLIC'
                                    ELSE a.grantee::regrole::text END, 'p', a.privilege_type))
-                           FROM aclexplode(coalesce(c.relacl, acldefault('r', c.relowner))) a
+                           FROM aclexplode(coalesce(c.relacl, acldefault(
+                             (CASE c.relkind WHEN 'S' THEN 's' ELSE 'r' END)::"char", c.relowner))) a
                            WHERE a.grantee <> c.relowner), '[]') AS acl
           FROM pg_class c
-          WHERE c.relnamespace = 'public'::regnamespace AND c.relkind IN ('r', 'p', 'v', 'm', 'f')
-          ORDER BY 1""")
+          WHERE c.relnamespace = 'public'::regnamespace AND c.relkind IN ('r', 'p', 'v', 'm', 'f', 'S')
+          ORDER BY c.relkind = 'S', 1""")
     return rows("""
       SELECT p.oid::regprocedure::text AS obj, CASE p.prokind WHEN 'p' THEN 'PROCEDURE' ELSE 'FUNCTION' END AS kw,
              coalesce((SELECT json_agg(json_build_object('g', CASE WHEN a.grantee = 0 THEN 'PUBLIC'
@@ -176,9 +185,6 @@ def acl_rows(kind):
 
 def check_no_other_acl():
     extra = rows("""
-      SELECT 'séquence ' || c.oid::regclass::text AS obj FROM pg_class c
-        WHERE c.relnamespace = 'public'::regnamespace AND c.relkind = 'S'
-      UNION ALL
       SELECT 'colonne ' || a.attrelid::regclass::text || '.' || a.attname FROM pg_attribute a
         JOIN pg_class c ON c.oid = a.attrelid
         WHERE c.relnamespace = 'public'::regnamespace AND a.attacl IS NOT NULL
@@ -189,20 +195,26 @@ def check_no_other_acl():
         raise SystemExit("Droits non pris en charge par le générateur : " + ", ".join(r["obj"] for r in extra))
 
 
-def privs_sql(privs, kind):
-    if kind == "table" and set(privs) == set(TABLE_PRIVS):
+SEQUENCE_PRIVS = ["USAGE", "SELECT", "UPDATE"]
+
+
+def privs_sql(privs, kind, kw="TABLE"):
+    full = SEQUENCE_PRIVS if kw == "SEQUENCE" else TABLE_PRIVS
+    if kind == "table" and set(privs) == set(full):
         return "ALL"
-    order = TABLE_PRIVS + ["EXECUTE"]
+    order = TABLE_PRIVS + ["USAGE", "EXECUTE"]
     return ", ".join(sorted(privs, key=order.index))
 
 
-def privs_label(privs, kind):
-    if kind == "table" and set(privs) == set(TABLE_PRIVS):
+def privs_label(privs, kind, kw="TABLE"):
+    full = SEQUENCE_PRIVS if kw == "SEQUENCE" else TABLE_PRIVS
+    if kind == "table" and set(privs) == set(full):
         return "tout"
     if kind == "function":
         return "exécution"
-    order = TABLE_PRIVS
-    return ", ".join(PRIV_LABELS[p] for p in sorted(privs, key=order.index))
+    order = TABLE_PRIVS + ["USAGE"]
+    labels = dict(PRIV_LABELS, USAGE="utilisation")
+    return ", ".join(labels[p] for p in sorted(privs, key=order.index))
 
 
 def grants_section(out):
@@ -224,9 +236,9 @@ def grants_section(out):
             sig = tuple(sorted((g, tuple(sorted(p))) for g, p in per_role.items()))
             groups.setdefault((r["kw"], sig), []).append(r["obj"])
         for (kw, sig), objs in sorted(groups.items(), key=lambda g: (-len(g[1]), g[0])):
-            label = " · ".join(f"{ROLE_LABELS[g]} : {privs_label(p, kind)}" for g, p in
+            label = " · ".join(f"{ROLE_LABELS[g]} : {privs_label(p, kind, kw)}" for g, p in
                                sorted(sig, key=lambda s: API_ROLES.index(s[0]))) or "propriétaire seulement"
-            noun = "tables" if kind == "table" else "fonctions"
+            noun = {"TABLE": "tables", "SEQUENCE": "compteurs"}.get(kw, "fonctions")
             listing = ",\n  ".join(objs)
             block = [f"-- {len(objs)} {noun} — {label}",
                      f"REVOKE ALL ON {kw}\n  {listing}\nFROM {', '.join(API_ROLES)};"]
@@ -235,7 +247,7 @@ def grants_section(out):
                 by_privs.setdefault(p, []).append(g)
             for p, grantees in sorted(by_privs.items()):
                 grantees.sort(key=API_ROLES.index)
-                block.append(f"GRANT {privs_sql(p, kind)} ON {kw}\n  {listing}\nTO {', '.join(grantees)};")
+                block.append(f"GRANT {privs_sql(p, kind, kw)} ON {kw}\n  {listing}\nTO {', '.join(grantees)};")
             out.write("\n" + "\n".join(block))
 
 
@@ -321,13 +333,13 @@ def cron_sql():
 
 
 def seed_sql():
-    text = read_mig(SEED_MIG)
-    geo = re.findall(r"^INSERT INTO public\.geo_countries .*?lng = EXCLUDED\.lng;", text, flags=re.S | re.M)
-    seed = re.findall(r"^DO \$do\$\n.*?^\$do\$;", text, flags=re.S | re.M)
+    geo = re.findall(r"^INSERT INTO public\.geo_countries .*?lng = EXCLUDED\.lng;", read_mig(GEO_MIG),
+                     flags=re.S | re.M)
+    seed = re.findall(r"^DO \$do\$\n.*?^\$do\$;", read_mig(SEED_MIG), flags=re.S | re.M)
     if len(geo) != 1 or len(seed) != 1:
-        raise SystemExit(f"Données de départ introuvables dans {SEED_MIG}")
+        raise SystemExit(f"Données de départ introuvables dans {GEO_MIG} / {SEED_MIG}")
     # Base neuve : aucun ancien profil virtuel à retirer (étape 0 de la migration).
-    seed_block, n = re.subn(r"\n  -- 0\. Profils virtuels laissés.*?= u\.email\);\n", "\n", seed[0], flags=re.S)
+    seed_block, n = re.subn(r"\n  -- 0\. Profils virtuels .*?= u\.email\);\n", "\n", seed[0], flags=re.S)
     if n != 1:
         raise SystemExit("Étape 0 (retrait des anciens profils virtuels) introuvable")
     return geo[0], seed_block

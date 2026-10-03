@@ -5,6 +5,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { AppHeader } from "@/components/AppHeader";
+import { DemoProfilesTab } from "@/components/admin/DemoProfilesTab";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -90,6 +91,9 @@ function AdminPage() {
             <TabsTrigger value="support" data-testid="admin-tab-support">
               Support
             </TabsTrigger>
+            <TabsTrigger value="demo" data-testid="admin-tab-demo">
+              Profils de démo
+            </TabsTrigger>
           </TabsList>
           <TabsContent value="dashboard">
             <Dashboard />
@@ -120,6 +124,9 @@ function AdminPage() {
           </TabsContent>
           <TabsContent value="support">
             <Support />
+          </TabsContent>
+          <TabsContent value="demo">
+            <DemoProfilesTab />
           </TabsContent>
         </Tabs>
       </main>

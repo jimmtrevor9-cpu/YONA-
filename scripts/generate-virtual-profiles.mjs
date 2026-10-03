@@ -1,6 +1,10 @@
-// Génère la migration des profils virtuels (50 profils, 9 pays) et des positions de
-// pays (public.geo_countries), à partir de scripts/data/virtual-profiles-countries.mjs
-// et de la base géographique public/geo/.
+// Génère la migration des 40 profils de démonstration (21 femmes, 19 hommes, 22 à 35 ans,
+// un seul prénom visible), à partir de scripts/data/virtual-profiles-countries.mjs et de
+// la base géographique public/geo/.
+//
+// Un profil de démonstration n'est montré aux membres que lorsqu'un administrateur lui a
+// donné une photo autorisée (/admin → Profils de démo) ; il porte toujours l'étiquette
+// « Profil de démonstration ».
 //
 // Le tirage est déterministe (graine fixe) : relancer le script donne le même fichier.
 //   node scripts/generate-virtual-profiles.mjs
@@ -8,23 +12,26 @@ import { readFileSync, writeFileSync } from "node:fs";
 
 import { COUNTRIES } from "./data/virtual-profiles-countries.mjs";
 
-// Pays retenus et nombre de profils par pays (50 au total : 80 % pour 8 pays d'Afrique
-// francophone, 5 chacun ; 20 % pour la France). Les autres pays de
-// scripts/data/virtual-profiles-countries.mjs restent disponibles pour plus tard.
+// 80 % en Afrique francophone (8 pays, 2 femmes et 2 hommes chacun), 20 % en France
+// (5 femmes, 3 hommes) : 21 femmes et 19 hommes.
 const SELECTION = [
-  { code: "GA", count: 5 },
-  { code: "CM", count: 5 },
-  { code: "CI", count: 5 },
-  { code: "CG", count: 5 },
-  { code: "TG", count: 5 },
-  { code: "BJ", count: 5 },
-  { code: "SN", count: 5 },
-  { code: "ML", count: 5 },
-  { code: "FR", count: 10 },
+  { code: "GA", women: 2, men: 2 },
+  { code: "CM", women: 2, men: 2 },
+  { code: "CI", women: 2, men: 2 },
+  { code: "CG", women: 2, men: 2 },
+  { code: "TG", women: 2, men: 2 },
+  { code: "BJ", women: 2, men: 2 },
+  { code: "SN", women: 2, men: 2 },
+  { code: "ML", women: 2, men: 2 },
+  { code: "FR", women: 5, men: 3 },
 ];
+const MIN_AGE = 22;
+const MAX_AGE = 35;
+// Date de référence des âges (jour de génération).
+const TODAY = new Date(Date.UTC(2026, 9, 3));
 const OUT = [
-  "supabase/migrations/20261002110000_profils_virtuels_donnees.sql",
-  "drizzle/migrations/0085_profils_virtuels_donnees.sql",
+  "supabase/migrations/20261003100100_profils_demo_donnees.sql",
+  "drizzle/migrations/0087_profils_demo_donnees.sql",
 ];
 const geo = (code) =>
   JSON.parse(readFileSync(new URL(`../public/geo/${code}.json`, import.meta.url)));
@@ -155,18 +162,31 @@ const sql = (value) =>
   value === null || value === undefined ? "NULL" : `'${String(value).replace(/'/g, "''")}'`;
 const sqlArray = (list) => `ARRAY[${list.map(sql).join(", ")}]::text[]`;
 
+/** Date de naissance donnant exactement `age` ans au jour de référence. */
 function birthDate(age) {
-  const today = new Date(Date.UTC(2026, 9, 2));
-  const year = today.getUTCFullYear() - age - 1;
-  const dayOfYear = 1 + Math.floor(random() * 360);
-  const date = new Date(Date.UTC(year, 0, dayOfYear));
-  // Anniversaire déjà passé ou à venir : l'âge reste age ou age + 1, toujours >= 18.
-  return date.toISOString().slice(0, 10);
+  const day = 24 * 3600 * 1000;
+  const latest = Date.UTC(TODAY.getUTCFullYear() - age, TODAY.getUTCMonth(), TODAY.getUTCDate());
+  const earliest =
+    Date.UTC(TODAY.getUTCFullYear() - age - 1, TODAY.getUTCMonth(), TODAY.getUTCDate()) + day;
+  const span = Math.round((latest - earliest) / day);
+  return new Date(earliest + Math.floor(random() * (span + 1)) * day).toISOString().slice(0, 10);
+}
+
+function ageOn(birth) {
+  const b = new Date(`${birth}T00:00:00Z`);
+  let age = TODAY.getUTCFullYear() - b.getUTCFullYear();
+  if (
+    TODAY.getUTCMonth() < b.getUTCMonth() ||
+    (TODAY.getUTCMonth() === b.getUTCMonth() && TODAY.getUTCDate() < b.getUTCDate())
+  )
+    age -= 1;
+  return age;
 }
 
 const rows = [];
 const bios = new Set();
-for (const [countryIndex, selected] of SELECTION.entries()) {
+const usedNames = new Set();
+for (const selected of SELECTION) {
   const country = COUNTRIES.find((c) => c.code === selected.code);
   if (!country) throw new Error(`Pays absent des données : ${selected.code}`);
   const meta = countries.find((c) => c.code === country.code);
@@ -174,22 +194,29 @@ for (const [countryIndex, selected] of SELECTION.entries()) {
   const regions = geo(country.code).regions.filter(
     (r) => !country.regionOnly || r.name === country.regionOnly,
   );
-  const places = country.cities.map((city) => {
-    const region = regions.find((r) => r.cities.includes(city));
-    if (!region) throw new Error(`${country.code} : ville absente de la base (${city})`);
-    return { city, region: region.name };
-  });
-  const women = shuffle(country.women);
-  const men = shuffle(country.men);
-  const lastNames = shuffle(country.last);
-  for (let i = 0; i < selected.count; i++) {
-    // Nombre impair par pays : on commence une fois par une femme, une fois par un
-    // homme, d'un pays à l'autre, pour garder un total presque égal.
-    const gender = (i + countryIndex) % 2 === 0 ? "female" : "male";
-    const firstName = gender === "female" ? women[Math.floor(i / 2)] : men[Math.floor(i / 2)];
-    const lastName = lastNames[i % lastNames.length];
-    const place = places[i % places.length];
-    const age = 22 + Math.floor(random() * 27); // 22 à 48 ans
+  const places = shuffle(
+    country.cities.map((city) => {
+      const region = regions.find((r) => r.cities.includes(city));
+      if (!region) throw new Error(`${country.code} : ville absente de la base (${city})`);
+      return { city, region: region.name };
+    }),
+  );
+  // Un prénom n'est jamais donné deux fois, tous pays confondus.
+  const names = {
+    female: shuffle(country.women).filter((n) => !usedNames.has(n)),
+    male: shuffle(country.men).filter((n) => !usedNames.has(n)),
+  };
+  const genders = [...Array(selected.women).fill("female"), ...Array(selected.men).fill("male")];
+  let number = 0;
+  for (const gender of genders) {
+    number += 1;
+    const firstName = names[gender].shift();
+    if (!firstName) throw new Error(`${country.code} : plus assez de prénoms (${gender})`);
+    usedNames.add(firstName);
+    const place = places[(number - 1) % places.length];
+    const age = MIN_AGE + Math.floor(random() * (MAX_AGE - MIN_AGE + 1));
+    const birth = birthDate(age);
+    if (ageOn(birth) !== age) throw new Error(`Âge incohérent pour ${firstName}`);
     const passions = shuffle(PASSION_KEYS).slice(0, 2 + Math.floor(random() * 3));
     let bio;
     do {
@@ -197,17 +224,15 @@ for (const [countryIndex, selected] of SELECTION.entries()) {
       bio = [pick(INTROS[gender])(a, b ?? a), pick(FAITH[gender]), pick(LOOKING[gender])].join(" ");
     } while (bios.has(bio));
     bios.add(bio);
-    const capitalized = bio.charAt(0).toUpperCase() + bio.slice(1);
     rows.push({
-      email: `virtuel.${country.code.toLowerCase()}.${String(i + 1).padStart(2, "0")}@profils-virtuels.yona.invalid`,
+      email: `demo.${country.code.toLowerCase()}.${String(number).padStart(2, "0")}@profils-virtuels.yona.invalid`,
       firstName,
-      lastName,
       gender,
-      birthDate: birthDate(age),
+      birthDate: birth,
       country: meta.name,
       region: place.region,
       city: place.city,
-      bio: capitalized,
+      bio: bio.charAt(0).toUpperCase() + bio.slice(1),
       interests: passions,
       denomination: pick(country.churches),
       attendance: pick(ATTENDANCE),
@@ -215,30 +240,28 @@ for (const [countryIndex, selected] of SELECTION.entries()) {
       importance: pick(IMPORTANCE),
       goal: pick(GOALS),
       prefGender: gender === "female" ? "male" : "female",
-      minAge: Math.max(18, age - 8),
+      minAge: Math.max(18, age - 6),
       maxAge: Math.min(99, age + 10),
     });
   }
 }
-
-const geoValues = countries
-  .map((c) => `  (${sql(c.code)}, ${sql(c.name)}, ${c.lat}, ${c.lng})`)
-  .join(",\n");
+const women = rows.filter((r) => r.gender === "female").length;
+if (rows.length !== 40 || women !== 21)
+  throw new Error(`Répartition inattendue : ${rows.length}/${women}`);
 
 // Les profils sont écrits dans un bloc DO, sous forme de liste JSON compacte (une ligne
 // par profil, valeurs dans un ordre fixe) : aucune table n'est créée, donc pas
 // d'avertissement « RLS » dans l'éditeur SQL de Supabase. Le JSON est encadré par
 // $seed$ … $seed$ : aucun échappement nécessaire.
-// Ordre des valeurs : 0 e-mail, 1 prénom, 2 nom, 3 sexe, 4 naissance, 5 pays, 6 région,
-// 7 ville, 8 bio, 9 centres d'intérêt, 10 église, 11 culte, 12 prière, 13 place de la foi,
-// 14 objectif, 15 sexe recherché, 16 âge min, 17 âge max.
+// Ordre des valeurs : 0 e-mail, 1 prénom, 2 sexe, 3 naissance, 4 pays, 5 région, 6 ville,
+// 7 bio, 8 centres d'intérêt, 9 église, 10 culte, 11 prière, 12 place de la foi,
+// 13 objectif, 14 sexe recherché, 15 âge min, 16 âge max.
 function seedBlock(list) {
   const json = `[\n${list
     .map((r) =>
       JSON.stringify([
         r.email,
         r.firstName,
-        r.lastName,
         r.gender,
         r.birthDate,
         r.country,
@@ -263,9 +286,9 @@ DECLARE
   _seed jsonb := $seed$${json}$seed$;
   _col text;
 BEGIN
-  -- 0. Profils virtuels laissés par une version précédente et absents de cette liste :
-  --    retirés (uniquement des comptes virtuels : fournisseur « virtual » + adresse
-  --    @profils-virtuels.yona.invalid). Il reste ainsi exactement ${list.length} profils virtuels.
+  -- 0. Profils virtuels d'une version précédente absents de cette liste : retirés
+  --    (uniquement des comptes virtuels : fournisseur « virtual » + adresse
+  --    @profils-virtuels.yona.invalid). Il reste ainsi exactement ${list.length} profils de démonstration.
   DELETE FROM auth.users u
   WHERE u.email LIKE '%@profils-virtuels.yona.invalid'
     AND u.raw_app_meta_data ->> 'provider' = 'virtual'
@@ -281,7 +304,7 @@ BEGIN
     '00000000-0000-0000-0000-000000000000', gen_random_uuid(), 'authenticated', 'authenticated',
     e ->> 0, '', now(),
     jsonb_build_object('provider', 'virtual', 'providers', jsonb_build_array('virtual')),
-    jsonb_build_object('first_name', e ->> 1, 'last_name', e ->> 2, 'is_virtual', true),
+    jsonb_build_object('first_name', e ->> 1, 'is_virtual', true),
     now(), now()
   FROM jsonb_array_elements(_seed) e
   WHERE NOT EXISTS (SELECT 1 FROM auth.users u WHERE u.email = e ->> 0);
@@ -303,18 +326,19 @@ BEGIN
     END IF;
   END LOOP;
 
-  -- 2. Profils complets, actifs et visibles.
+  -- 2. Profils complets, actifs et visibles. Ils restent cachés aux membres tant
+  --    qu'un administrateur ne leur a pas donné de photo (demo_photo_path).
   UPDATE public.profiles p
   SET first_name = e ->> 1,
-      gender = (e ->> 3)::public.gender,
-      birth_date = (e ->> 4)::date,
-      country = e ->> 5,
-      region = e ->> 6,
-      city = e ->> 7,
-      bio = e ->> 8,
-      interests = ARRAY(SELECT jsonb_array_elements_text(e -> 9)),
+      gender = (e ->> 2)::public.gender,
+      birth_date = (e ->> 3)::date,
+      country = e ->> 4,
+      region = e ->> 5,
+      city = e ->> 6,
+      bio = e ->> 7,
+      interests = ARRAY(SELECT jsonb_array_elements_text(e -> 8)),
       is_virtual = true,
-      terms_accepted_at = now(),
+      terms_accepted_at = coalesce(p.terms_accepted_at, now()),
       onboarding_step = 4,
       onboarding_completed_at = coalesce(p.onboarding_completed_at, now()),
       status = 'active',
@@ -324,19 +348,19 @@ BEGIN
   WHERE p.user_id = u.id;
 
   UPDATE public.christian_profiles c
-  SET denomination = e ->> 10,
-      church_attendance = e ->> 11,
-      prayer_practice = e ->> 12,
-      faith_importance = e ->> 13
+  SET denomination = e ->> 9,
+      church_attendance = e ->> 10,
+      prayer_practice = e ->> 11,
+      faith_importance = e ->> 12
   FROM jsonb_array_elements(_seed) e
   JOIN public.users u ON u.email = e ->> 0
   WHERE c.user_id = u.id;
 
   UPDATE public.preferences pr
-  SET relationship_goal = e ->> 14,
-      preferred_gender = (e ->> 15)::public.gender,
-      min_age = (e ->> 16)::smallint,
-      max_age = (e ->> 17)::smallint
+  SET relationship_goal = e ->> 13,
+      preferred_gender = (e ->> 14)::public.gender,
+      min_age = (e ->> 15)::smallint,
+      max_age = (e ->> 16)::smallint
   FROM jsonb_array_elements(_seed) e
   JOIN public.users u ON u.email = e ->> 0
   WHERE pr.user_id = u.id;
@@ -345,26 +369,30 @@ $do$;
 `;
 }
 
-const geoSql = `INSERT INTO public.geo_countries (code, name, lat, lng) VALUES
-${geoValues}
-ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name, lat = EXCLUDED.lat, lng = EXCLUDED.lng;
-`;
-
 const header = `-- ============================================================
--- Profils virtuels : données (générées par scripts/generate-virtual-profiles.mjs)
+-- Profils de démonstration : données (générées par scripts/generate-virtual-profiles.mjs)
 --
--- * public.geo_countries : position de chaque pays (base GeoNames), pour « le pays le
---   plus proche » quand il n'y a plus de profil virtuel dans le pays d'un nouveau membre.
--- * ${rows.length} profils virtuels (${rows.filter((r) => r.gender === "female").length} femmes, ${rows.filter((r) => r.gender === "male").length} hommes) : ${SELECTION.map((x) => `${x.count} ${countries.find((c) => c.code === x.code).name}`).join(", ")},
---   22 à 48 ans. Ce sont des comptes sans mot de passe (connexion impossible), marqués
---   « virtual » dans le compte et is_virtual dans le profil. Aucune photo : la carte
---   affiche l'initiale, en attendant de vraies photos.
+-- ${rows.length} profils (${women} femmes, ${rows.length - women} hommes), ${MIN_AGE} à ${MAX_AGE} ans, un seul prénom visible :
+-- ${SELECTION.map((x) => `${x.women + x.men} ${countries.find((c) => c.code === x.code).name}`).join(", ")}.
+-- Comptes sans mot de passe (connexion impossible), marqués « virtual » dans le compte et
+-- is_virtual dans le profil. Un profil de démonstration n'est montré aux membres que
+-- lorsqu'un administrateur lui a donné une photo autorisée (/admin → Profils de démo) ;
+-- il porte alors l'étiquette « Profil de démonstration ».
 -- Aucune table n'est créée. Rejouable sans risque : un profil déjà présent n'est pas
--- recréé, et les profils virtuels d'une version précédente absents de la liste sont retirés.
--- À exécuter APRÈS 20261002100000_profils_virtuels_et_verification.sql.
+-- recréé, et les profils virtuels d'une version précédente sont retirés.
+-- À exécuter APRÈS 20261003100000_profils_demo_40.sql.
 -- ============================================================
 `;
 
-const output = [header, geoSql, seedBlock(rows)].join("\n");
+const output = [header, seedBlock(rows)].join("\n");
 for (const path of OUT) writeFileSync(new URL(`../${path}`, import.meta.url), output);
-console.log(`${rows.length} profils virtuels, ${countries.length} pays → ${OUT.join(", ")}`);
+console.log(`${rows.length} profils de démonstration (${women} femmes) → ${OUT.join(", ")}`);
+console.table(
+  rows.map((r) => ({
+    prénom: r.firstName,
+    sexe: r.gender,
+    âge: ageOn(r.birthDate),
+    ville: r.city,
+    pays: r.country,
+  })),
+);

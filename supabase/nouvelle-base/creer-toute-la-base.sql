@@ -2,10 +2,10 @@
 -- YONA — CRÉER TOUTE LA BASE DE DONNÉES (projet Supabase neuf et vide)
 --
 -- Ce fichier installe en une seule fois tout ce dont le site a besoin :
---   31 tables, 122 fonctions, 84 règles d'accès, les droits de chaque rôle,
---   la création automatique du profil à l'inscription (e-mail ou Google), 3 espaces de
+--   32 tables, 126 fonctions, 88 règles d'accès, les droits de chaque rôle,
+--   la création automatique du profil à l'inscription (e-mail ou Google), 4 espaces de
 --   fichiers privés (photos, messages vocaux, vérifications), les messages en temps réel,
---   les tâches automatiques, les 247 pays et les 50 profils virtuels.
+--   les tâches automatiques, les 247 pays et les 40 profils virtuels.
 --
 -- Mode d'emploi : Supabase → SQL Editor → New query → coller TOUT le fichier → Run.
 -- Si Supabase affiche un avertissement (« destructive operation »), choisir
@@ -20,7 +20,7 @@
 -- Le déclencheur de la section « Comptes » relie chaque nouveau compte à son profil.
 --
 -- Fichier généré par scripts/generate-base-complete.py à partir de supabase/migrations/
--- (87 migrations). Ne pas modifier à la main.
+-- (89 migrations). Ne pas modifier à la main.
 -- ============================================================================
 
 -- ============================================================================
@@ -298,6 +298,20 @@ BEGIN
 END;
 $$;
 
+CREATE FUNCTION public.admin_list_demo_profiles() RETURNS TABLE(user_id uuid, first_name text, gender public.gender, birth_date date, city text, country text, demo_photo_path text, demo_photo_source text, created_at timestamp with time zone)
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+BEGIN
+  PERFORM public.assert_admin();
+  RETURN QUERY
+  SELECT p.user_id, p.first_name, p.gender, p.birth_date, p.city, p.country,
+         p.demo_photo_path, p.demo_photo_source, p.created_at
+  FROM public.profiles p
+  WHERE p.is_virtual
+  ORDER BY p.gender DESC, p.country, p.first_name;
+END; $$;
+
 CREATE FUNCTION public.admin_list_payments() RETURNS TABLE(id uuid, user_id uuid, email text, type public.payment_type, amount integer, currency text, provider text, status public.payment_status, provider_transaction_id text, created_at timestamp with time zone)
     LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path TO 'public'
@@ -521,6 +535,34 @@ BEGIN
   RETURN _path;
 END;
 $$;
+
+CREATE FUNCTION public.admin_set_demo_photo(_user_id uuid, _path text, _source text DEFAULT NULL::text) RETURNS text
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE
+  _old text;
+BEGIN
+  PERFORM public.assert_admin();
+  SELECT p.demo_photo_path INTO _old FROM public.profiles p
+  WHERE p.user_id = _user_id AND p.is_virtual FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'demo_profile_not_found' USING ERRCODE = 'P0002';
+  END IF;
+  IF _path IS NOT NULL THEN
+    IF _source IS NULL OR _source NOT IN ('generated', 'licensed', 'consent') THEN
+      RAISE EXCEPTION 'attestation_required' USING ERRCODE = '22023';
+    END IF;
+    IF split_part(_path, '/', 1) <> _user_id::text OR char_length(_path) > 300 THEN
+      RAISE EXCEPTION 'invalid_path' USING ERRCODE = '22023';
+    END IF;
+  END IF;
+  UPDATE public.profiles
+  SET demo_photo_path = _path,
+      demo_photo_source = CASE WHEN _path IS NULL THEN NULL ELSE _source END
+  WHERE user_id = _user_id;
+  RETURN CASE WHEN _old IS DISTINCT FROM _path THEN _old END;
+END; $$;
 
 CREATE FUNCTION public.admin_set_user_status(_user_id uuid, _action text, _reason text DEFAULT NULL::text) RETURNS public.account_status
     LANGUAGE plpgsql SECURITY DEFINER
@@ -1909,6 +1951,7 @@ CREATE FUNCTION public.is_discoverable_profile(_user_id uuid) RETURNS boolean
   SELECT EXISTS (
     SELECT 1 FROM public.profiles p JOIN public.users u ON u.id = p.user_id
     WHERE p.user_id = _user_id AND p.status = 'active' AND p.visibility = 'visible' AND u.status = 'active'
+      AND (NOT p.is_virtual OR p.demo_photo_path IS NOT NULL)
   )
 $$;
 
@@ -2273,6 +2316,13 @@ BEGIN
 END;
 $$;
 
+CREATE FUNCTION public.member_country(_user_id uuid) RETURNS text
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  SELECT p.country FROM public.profiles p WHERE p.user_id = _user_id
+$$;
+
 CREATE FUNCTION public.messages_block_phone_numbers() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
@@ -2450,9 +2500,13 @@ BEGIN
     IF TG_OP = 'INSERT' THEN
       NEW.is_virtual := false;
       NEW.verified_at := NULL;
+      NEW.demo_photo_path := NULL;
+      NEW.demo_photo_source := NULL;
     ELSE
       NEW.is_virtual := OLD.is_virtual;
       NEW.verified_at := OLD.verified_at;
+      NEW.demo_photo_path := OLD.demo_photo_path;
+      NEW.demo_photo_source := OLD.demo_photo_source;
     END IF;
   END IF;
   RETURN NEW;
@@ -2578,6 +2632,18 @@ BEGIN
 END;
 $$;
 
+CREATE FUNCTION public.refuse_contact_to_demo_profile() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM public.profiles p WHERE p.user_id = NEW.receiver_id AND p.is_virtual) THEN
+    RAISE EXCEPTION 'demo_profile' USING ERRCODE = '22023',
+      HINT = 'Profil de démonstration : il ne peut pas répondre.';
+  END IF;
+  RETURN NEW;
+END; $$;
+
 CREATE FUNCTION public.remove_one_virtual_profile(_country text, _gender public.gender) RETURNS uuid
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
@@ -2586,14 +2652,18 @@ DECLARE
   _key text := lower(btrim(coalesce(_country, '')));
   _origin public.geo_countries%ROWTYPE;
   _target uuid;
+  _photo text;
 BEGIN
+  -- D'abord dans le pays du membre : sexe recherché, puis profils visibles (avec photo).
   SELECT p.user_id INTO _target
   FROM public.profiles p
   WHERE p.is_virtual AND lower(btrim(p.country)) = _key
-  ORDER BY (p.gender IS NOT DISTINCT FROM _gender) DESC, p.created_at, p.user_id
+  ORDER BY (_gender IS NULL OR p.gender = _gender) DESC, (p.demo_photo_path IS NOT NULL) DESC,
+           p.created_at, p.user_id
   LIMIT 1
   FOR UPDATE SKIP LOCKED;
 
+  -- Sinon dans le pays le plus proche.
   IF _target IS NULL THEN
     SELECT * INTO _origin FROM public.geo_countries g WHERE lower(g.name) = _key LIMIT 1;
     SELECT p.user_id INTO _target
@@ -2606,7 +2676,8 @@ BEGIN
         ELSE power(g.lat - _origin.lat, 2)
            + power((g.lng - _origin.lng) * cos(radians((g.lat + _origin.lat) / 2)), 2)
       END,
-      (p.gender IS NOT DISTINCT FROM _gender) DESC, p.created_at, p.user_id
+      (_gender IS NULL OR p.gender = _gender) DESC, (p.demo_photo_path IS NOT NULL) DESC,
+      p.created_at, p.user_id
     LIMIT 1
     FOR UPDATE OF p SKIP LOCKED;
   END IF;
@@ -2615,13 +2686,20 @@ BEGIN
     RETURN NULL;
   END IF;
 
-  -- Double vérification : uniquement un compte virtuel (profil ET compte marqués).
+  SELECT p.demo_photo_path INTO _photo FROM public.profiles p WHERE p.user_id = _target;
+
+  -- Double vérification : uniquement un compte virtuel (profil ET compte marqués). La
+  -- suppression du compte efface en cascade profil, préférences, likes, favoris, visites…
   DELETE FROM auth.users u
   WHERE u.id = _target
     AND u.raw_app_meta_data ->> 'provider' = 'virtual'
     AND EXISTS (SELECT 1 FROM public.profiles p WHERE p.user_id = u.id AND p.is_virtual);
   IF NOT FOUND THEN
     RETURN NULL;
+  END IF;
+  IF _photo IS NOT NULL THEN
+    INSERT INTO public.storage_cleanup_queue (bucket_id, path, reason)
+    VALUES ('demo-profils', _photo, 'profil de démonstration retiré');
   END IF;
   RETURN _target;
 END; $$;
@@ -2632,22 +2710,26 @@ CREATE FUNCTION public.replace_virtual_profile_on_signup() RETURNS trigger
     AS $$
 DECLARE
   _removed uuid;
+  _sought public.gender;
 BEGIN
-  IF NEW.is_virtual OR OLD.onboarding_completed_at IS NOT NULL OR NEW.onboarding_completed_at IS NULL THEN
+  -- Seulement quand l'identité d'un vrai membre vient d'être vérifiée.
+  IF NEW.is_virtual OR OLD.verified_at IS NOT NULL OR NEW.verified_at IS NULL THEN
     RETURN NULL;
   END IF;
   BEGIN
-    -- Une seule fois par membre (même s'il recommence son inscription).
-    INSERT INTO public.virtual_profile_removals (user_id) VALUES (NEW.user_id)
+    -- Une seule fois par membre.
+    INSERT INTO public.virtual_profile_removals (user_id, reason)
+    VALUES (NEW.user_id, 'identité vérifiée')
     ON CONFLICT (user_id) DO NOTHING;
     IF NOT FOUND THEN
       RETURN NULL;
     END IF;
-    _removed := public.remove_one_virtual_profile(NEW.country, NEW.gender);
+    SELECT pr.preferred_gender INTO _sought FROM public.preferences pr WHERE pr.user_id = NEW.user_id;
+    _removed := public.remove_one_virtual_profile(public.member_country(NEW.user_id), _sought);
     UPDATE public.virtual_profile_removals SET removed_user_id = _removed
     WHERE user_id = NEW.user_id;
   EXCEPTION WHEN OTHERS THEN
-    -- Jamais d'échec d'inscription à cause des profils virtuels.
+    -- Jamais d'échec de vérification à cause des profils de démonstration.
     RAISE WARNING 'replace_virtual_profile_on_signup: %', SQLERRM;
   END;
   RETURN NULL;
@@ -3732,10 +3814,13 @@ CREATE TABLE public.profiles (
     terms_accepted_at timestamp with time zone,
     is_virtual boolean DEFAULT false NOT NULL,
     verified_at timestamp with time zone,
+    demo_photo_path text,
+    demo_photo_source text,
     CONSTRAINT profiles_bio_length CHECK (((bio IS NULL) OR (char_length(bio) <= 2000))),
     CONSTRAINT profiles_children_check CHECK (((children_count IS NULL) OR ((has_children IS TRUE) AND ((children_count >= 1) AND (children_count <= 20))))),
     CONSTRAINT profiles_city_length CHECK (((city IS NULL) OR (char_length(city) <= 100))),
     CONSTRAINT profiles_country_length CHECK (((country IS NULL) OR (char_length(country) <= 100))),
+    CONSTRAINT profiles_demo_photo_check CHECK ((((demo_photo_path IS NULL) AND (demo_photo_source IS NULL)) OR (is_virtual AND ((char_length(demo_photo_path) >= 1) AND (char_length(demo_photo_path) <= 300)) AND (split_part(demo_photo_path, '/'::text, 1) = (user_id)::text) AND (demo_photo_source = ANY (ARRAY['generated'::text, 'licensed'::text, 'consent'::text]))))),
     CONSTRAINT profiles_first_name_length CHECK (((first_name IS NULL) OR ((char_length(first_name) >= 1) AND (char_length(first_name) <= 60)))),
     CONSTRAINT profiles_interests_count CHECK ((cardinality(interests) <= 10)),
     CONSTRAINT profiles_interests_item_length CHECK (public.text_items_max_length(interests, 40)),
@@ -3744,6 +3829,8 @@ CREATE TABLE public.profiles (
     CONSTRAINT profiles_profession_length CHECK (((profession IS NULL) OR (char_length(profession) <= 100))),
     CONSTRAINT profiles_region_length CHECK (((region IS NULL) OR (char_length(region) <= 100)))
 );
+COMMENT ON COLUMN public.profiles.demo_photo_path IS 'Profil de démonstration : chemin de la photo dans le stockage public « demo-profils ».';
+COMMENT ON COLUMN public.profiles.demo_photo_source IS 'Nature attestée par l''administrateur : generated (personne qui n''existe pas), licensed (licence), consent (accord écrit).';
 
 CREATE TABLE public.reports (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
@@ -3757,6 +3844,24 @@ CREATE TABLE public.reports (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT reports_description_length CHECK (((description IS NULL) OR (char_length(description) <= 2000))),
     CONSTRAINT reports_no_self CHECK ((reporter_id <> reported_user_id))
+);
+
+CREATE TABLE public.storage_cleanup_queue (
+    id bigint NOT NULL,
+    bucket_id text NOT NULL,
+    path text NOT NULL,
+    reason text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    done_at timestamp with time zone,
+    CONSTRAINT storage_cleanup_queue_reason_length CHECK ((char_length(reason) <= 100))
+);
+ALTER TABLE public.storage_cleanup_queue ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.storage_cleanup_queue_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
 );
 
 CREATE TABLE public.subscriptions (
@@ -3833,7 +3938,8 @@ CREATE TABLE public.users (
 CREATE TABLE public.virtual_profile_removals (
     user_id uuid NOT NULL,
     removed_user_id uuid,
-    created_at timestamp with time zone DEFAULT now() NOT NULL
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    reason text
 );
 
 -- ============================================================================
@@ -3936,6 +4042,9 @@ ALTER TABLE ONLY public.profiles
 ALTER TABLE ONLY public.reports
     ADD CONSTRAINT reports_pkey PRIMARY KEY (id);
 
+ALTER TABLE ONLY public.storage_cleanup_queue
+    ADD CONSTRAINT storage_cleanup_queue_pkey PRIMARY KEY (id);
+
 ALTER TABLE ONLY public.subscriptions
     ADD CONSTRAINT subscriptions_pkey PRIMARY KEY (id);
 
@@ -4037,6 +4146,8 @@ CREATE INDEX profiles_virtual_country_idx ON public.profiles USING btree (lower(
 
 CREATE INDEX reports_status_idx ON public.reports USING btree (status, created_at DESC);
 
+CREATE INDEX storage_cleanup_queue_pending_idx ON public.storage_cleanup_queue USING btree (created_at) WHERE (done_at IS NULL);
+
 CREATE UNIQUE INDEX subscriptions_payment_unique ON public.subscriptions USING btree (payment_id) WHERE (payment_id IS NOT NULL);
 
 CREATE INDEX subscriptions_user_idx ON public.subscriptions USING btree (user_id, status, expires_at DESC);
@@ -4056,6 +4167,8 @@ CREATE TRIGGER ai_usage_updated_at BEFORE UPDATE ON public.ai_usage FOR EACH ROW
 CREATE TRIGGER christian_profiles_updated_at BEFORE UPDATE ON public.christian_profiles FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
 CREATE TRIGGER contact_requests_notify AFTER INSERT ON public.contact_requests FOR EACH ROW EXECUTE FUNCTION public.notify_contact_request();
+
+CREATE TRIGGER contact_requests_refuse_demo BEFORE INSERT ON public.contact_requests FOR EACH ROW EXECUTE FUNCTION public.refuse_contact_to_demo_profile();
 
 CREATE TRIGGER conversation_user_usage_updated_at BEFORE UPDATE ON public.conversation_user_usage FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
@@ -4119,7 +4232,7 @@ CREATE TRIGGER profiles_protect_status BEFORE UPDATE ON public.profiles FOR EACH
 
 CREATE TRIGGER profiles_protect_terms BEFORE INSERT OR UPDATE ON public.profiles FOR EACH ROW EXECUTE FUNCTION public.protect_terms_accepted_at();
 
-CREATE TRIGGER profiles_replace_virtual AFTER UPDATE OF onboarding_completed_at ON public.profiles FOR EACH ROW EXECUTE FUNCTION public.replace_virtual_profile_on_signup();
+CREATE TRIGGER profiles_replace_virtual AFTER UPDATE OF verified_at ON public.profiles FOR EACH ROW EXECUTE FUNCTION public.replace_virtual_profile_on_signup();
 
 CREATE TRIGGER profiles_updated_at BEFORE UPDATE ON public.profiles FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
@@ -4315,6 +4428,7 @@ ALTER TABLE public.profile_verifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.profile_visits ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.reports ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.storage_cleanup_queue ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.subscriptions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.support_tickets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_activity ENABLE ROW LEVEL SECURITY;
@@ -4616,14 +4730,24 @@ GRANT SELECT, TRUNCATE, REFERENCES, TRIGGER ON TABLE
   public.support_tickets
 TO anon, authenticated;
 
--- 2 tables — serveur du site : tout
+-- 3 tables — serveur du site : tout
 REVOKE ALL ON TABLE
   public.geo_countries,
+  public.storage_cleanup_queue,
   public.virtual_profile_removals
 FROM PUBLIC, anon, authenticated, service_role;
 GRANT ALL ON TABLE
   public.geo_countries,
+  public.storage_cleanup_queue,
   public.virtual_profile_removals
+TO service_role;
+
+-- 1 compteurs — serveur du site : tout
+REVOKE ALL ON SEQUENCE
+  public.storage_cleanup_queue_id_seq
+FROM PUBLIC, anon, authenticated, service_role;
+GRANT ALL ON SEQUENCE
+  public.storage_cleanup_queue_id_seq
 TO service_role;
 
 -- 1 tables — visiteurs : tout · membres connectés : tout · serveur du site : tout
@@ -4656,9 +4780,10 @@ GRANT SELECT, INSERT, DELETE ON TABLE
   public.favorites
 TO authenticated;
 
--- 76 fonctions — membres connectés : exécution · serveur du site : exécution
+-- 78 fonctions — membres connectés : exécution · serveur du site : exécution
 REVOKE ALL ON FUNCTION
   public.activate_profile_boost(),
+  public.admin_list_demo_profiles(),
   public.admin_list_payments(),
   public.admin_list_pending_photos(),
   public.admin_list_pending_verifications(),
@@ -4671,6 +4796,7 @@ REVOKE ALL ON FUNCTION
   public.admin_reply_support_ticket(uuid,text,boolean),
   public.admin_resolve_report(uuid,text,text),
   public.admin_review_verification(uuid,boolean),
+  public.admin_set_demo_photo(uuid,text,text),
   public.admin_set_user_status(uuid,text,text),
   public.admin_stats(),
   public.admin_user_detail(uuid),
@@ -4737,6 +4863,7 @@ REVOKE ALL ON FUNCTION
 FROM PUBLIC, anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION
   public.activate_profile_boost(),
+  public.admin_list_demo_profiles(),
   public.admin_list_payments(),
   public.admin_list_pending_photos(),
   public.admin_list_pending_verifications(),
@@ -4749,6 +4876,7 @@ GRANT EXECUTE ON FUNCTION
   public.admin_reply_support_ticket(uuid,text,boolean),
   public.admin_resolve_report(uuid,text,text),
   public.admin_review_verification(uuid,boolean),
+  public.admin_set_demo_photo(uuid,text,text),
   public.admin_set_user_status(uuid,text,text),
   public.admin_stats(),
   public.admin_user_detail(uuid),
@@ -4814,7 +4942,7 @@ GRANT EXECUTE ON FUNCTION
   public.unblock_user(uuid)
 TO authenticated, service_role;
 
--- 40 fonctions — serveur du site : exécution
+-- 42 fonctions — serveur du site : exécution
 REVOKE ALL ON FUNCTION
   public.activate_conversation_unlock(),
   public.activate_premium_subscription(),
@@ -4833,6 +4961,7 @@ REVOKE ALL ON FUNCTION
   public.handle_new_user(),
   public.init_conversation_usage(),
   public.lock_conversation_for_sending(uuid,uuid),
+  public.member_country(uuid),
   public.messages_block_phone_numbers(),
   public.notify_contact_request(),
   public.notify_favorite(),
@@ -4851,6 +4980,7 @@ REVOKE ALL ON FUNCTION
   public.recent_signups(),
   public.refund_ai_quota(uuid,text),
   public.refuse_blocked_interaction(),
+  public.refuse_contact_to_demo_profile(),
   public.remove_one_virtual_profile(text,public.gender),
   public.replace_virtual_profile_on_signup(),
   public.set_like_created_at(),
@@ -4875,6 +5005,7 @@ GRANT EXECUTE ON FUNCTION
   public.handle_new_user(),
   public.init_conversation_usage(),
   public.lock_conversation_for_sending(uuid,uuid),
+  public.member_country(uuid),
   public.messages_block_phone_numbers(),
   public.notify_contact_request(),
   public.notify_favorite(),
@@ -4893,6 +5024,7 @@ GRANT EXECUTE ON FUNCTION
   public.recent_signups(),
   public.refund_ai_quota(uuid,text),
   public.refuse_blocked_interaction(),
+  public.refuse_contact_to_demo_profile(),
   public.remove_one_virtual_profile(text,public.gender),
   public.replace_virtual_profile_on_signup(),
   public.set_like_created_at(),
@@ -4933,11 +5065,29 @@ CREATE TRIGGER on_auth_user_created AFTER INSERT ON auth.users FOR EACH ROW EXEC
 -- ============================================================================
 
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types) VALUES
+  ('demo-profils', 'demo-profils', true, 2097152, '{image/jpeg,image/png,image/webp}'),
   ('photos', 'photos', false, 5242880, '{image/jpeg,image/png,image/webp}'),
   ('verifications', 'verifications', false, 8388608, '{image/jpeg,image/png,image/webp}'),
   ('voice-messages', 'voice-messages', false, 2097152, '{audio/webm,audio/ogg,audio/mp4,audio/mpeg}')
 ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, public = EXCLUDED.public,
   file_size_limit = EXCLUDED.file_size_limit, allowed_mime_types = EXCLUDED.allowed_mime_types;
+
+CREATE POLICY demo_storage_delete_admin ON storage.objects
+  FOR DELETE TO authenticated
+  USING (((bucket_id = 'demo-profils'::text) AND public.is_admin()));
+
+CREATE POLICY demo_storage_insert_admin ON storage.objects
+  FOR INSERT TO authenticated
+  WITH CHECK (((bucket_id = 'demo-profils'::text) AND public.is_admin()));
+
+CREATE POLICY demo_storage_select_admin ON storage.objects
+  FOR SELECT TO authenticated
+  USING (((bucket_id = 'demo-profils'::text) AND public.is_admin()));
+
+CREATE POLICY demo_storage_update_admin ON storage.objects
+  FOR UPDATE TO authenticated
+  USING (((bucket_id = 'demo-profils'::text) AND public.is_admin()))
+  WITH CHECK (((bucket_id = 'demo-profils'::text) AND public.is_admin()));
 
 CREATE POLICY photos_storage_delete_own ON storage.objects
   FOR DELETE TO authenticated
@@ -5285,62 +5435,52 @@ INSERT INTO public.geo_countries (code, name, lat, lng) VALUES
 ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name, lat = EXCLUDED.lat, lng = EXCLUDED.lng;
 
 -- ============================================================================
--- 20. Données de départ : 50 profils virtuels (comptes sans mot de passe)
+-- 20. Données de départ : 40 profils virtuels (comptes sans mot de passe)
 -- ============================================================================
 
 DO $do$
 DECLARE
   _seed jsonb := $seed$[
-["virtuel.ga.01@profils-virtuels.yona.invalid","Prisca","Ondo","female","1997-10-29","Gabon","Estuaire","Libreville","Souriante et attentionnée, j'aime la cuisine et la louange. J'enseigne à l'école du dimanche. J'attends un homme de foi, doux et responsable.",["Louange","Cuisine"],"Adventiste","Plusieurs fois par semaine","Matin et soir","Au centre de ma vie","Relation sérieuse","male",20,38],
-["virtuel.ga.02@profils-virtuels.yona.invalid","Steeve","Mintsa","male","2000-04-03","Gabon","Ogooué-Maritime","Port-Gentil","Dynamique et fidèle en amitié, je consacre mon temps libre à la louange. La prière rythme mes journées. Je cherche une relation sérieuse, en vue du mariage.",["Nature","Louange","Voyages"],"Adventiste","Plusieurs fois par semaine","Plusieurs fois par semaine","Très importante","Mariage","female",18,35],
-["virtuel.ga.03@profils-virtuels.yona.invalid","Rachel","Obiang","female","1986-04-18","Gabon","Haut-Ogooué","Franceville","Calme et joyeuse, je partage mon temps entre mon travail et le cinéma. J'enseigne à l'école du dimanche. J'aimerais rencontrer un homme qui place Dieu au centre de sa vie.",["Voyages","Musique","Cinéma","Mode"],"Catholique","Chaque semaine","Matin et soir","Essentielle","Mariage","male",31,49],
-["virtuel.ga.04@profils-virtuels.yona.invalid","Brice","Bivigou","male","1979-03-27","Gabon","Woleu-Ntem","Oyem","Posé mais déterminé, j'aime les voyages, le cinéma et les longues discussions. Je joue dans le groupe de louange de mon église. Prêt à bâtir une famille fondée sur l'amour et la foi.",["Lecture","Voyages","Cinéma"],"Protestante (Église évangélique du Gabon)","Chaque semaine","Plusieurs fois par semaine","Essentielle","Mariage","female",38,56],
-["virtuel.ga.05@profils-virtuels.yona.invalid","Murielle","Nzé","female","2000-07-14","Gabon","Haut-Ogooué","Moanda","Je suis une femme simple, passionnée par la mode et la cuisine. La prière rythme mes journées. J'attends un homme de foi, doux et responsable.",["Cuisine","Nature","Mode","Bénévolat"],"Pentecôtiste","Chaque semaine","Plusieurs fois par semaine","Très importante","Relation sérieuse","male",18,35],
-["virtuel.cm.01@profils-virtuels.yona.invalid","Serge","Nana","male","1984-11-07","Cameroun","Centre","Yaoundé","Fils de Dieu avant tout, je trouve ma joie dans le cinéma et le sport. La prière rythme mes journées. Je cherche une relation sérieuse, en vue du mariage.",["Cinéma","Nature","Voyages","Sport"],"Pentecôtiste","Plusieurs fois par semaine","Tous les jours","Au centre de ma vie","Mariage","female",33,51],
-["virtuel.cm.02@profils-virtuels.yona.invalid","Brenda","Kamga","female","1984-06-04","Cameroun","Littoral","Douala","Douce mais déterminée, j'aime la photographie, les voyages et les longues discussions. J'enseigne à l'école du dimanche. J'attends un homme de foi, doux et responsable.",["Bénévolat","Voyages","Photographie"],"Pentecôtiste","Chaque semaine","Tous les jours","Essentielle","Relation sérieuse","male",33,51],
-["virtuel.cm.03@profils-virtuels.yona.invalid","Martial","Mbappé","male","1986-12-25","Cameroun","West","Bafoussam","Chaque journée est un cadeau de Dieu : je la remplis de louange et de musique. Le Psaume 23 m'accompagne depuis toujours. Je souhaite rencontrer une femme sincère pour construire un foyer béni.",["Louange","Danse","Musique"],"Baptiste","Chaque semaine","Plusieurs fois par semaine","Très importante","Relation sérieuse","female",31,49],
-["virtuel.cm.04@profils-virtuels.yona.invalid","Nadine","Nkoulou","female","1980-08-14","Cameroun","North-West","Bamenda","Souriante et attentionnée, j'aime la cuisine et la danse. J'enseigne à l'école du dimanche. J'aimerais rencontrer un homme qui place Dieu au centre de sa vie.",["Bénévolat","Cuisine","Danse","Cinéma"],"Pentecôtiste","Chaque semaine","Tous les jours","Essentielle","Mariage","male",37,55],
-["virtuel.cm.05@profils-virtuels.yona.invalid","Guy","Onana","male","2001-12-03","Cameroun","North","Garoua","Souriant et attentionné, j'aime la mode et le bénévolat. La prière rythme mes journées. Je souhaite rencontrer une femme sincère pour construire un foyer béni.",["Mode","Louange","Bénévolat"],"Évangélique","Plusieurs fois par semaine","Tous les jours","Très importante","Relation sérieuse","female",18,34],
-["virtuel.ci.01@profils-virtuels.yona.invalid","Grâce","Ouattara","female","2003-01-06","Côte d'Ivoire","Abidjan Autonomous District","Abidjan","Je suis une femme simple, passionnée par la musique et le cinéma. Ma foi guide chacune de mes décisions. Je cherche une relation sérieuse, en vue du mariage.",["Lecture","Musique","Cinéma"],"Catholique","Plusieurs fois par semaine","Matin et soir","Au centre de ma vie","Faire connaissance d'abord","male",18,32],
-["virtuel.ci.02@profils-virtuels.yona.invalid","Cyrille","Ehui","male","1982-10-06","Côte d'Ivoire","Vallée du Bandama District","Bouaké","Dynamique et fidèle en amitié, je consacre mon temps libre à la danse. Je sers à l'accueil de mon église le dimanche. Je cherche une relation sérieuse, en vue du mariage.",["Cuisine","Danse","Voyages"],"Catholique","Plusieurs fois par semaine","Matin et soir","Très importante","Mariage","female",35,53],
-["virtuel.ci.03@profils-virtuels.yona.invalid","Laetitia","Konan","female","1986-03-31","Côte d'Ivoire","Lacs District","Yamoussoukro","Chaque journée est un cadeau de Dieu : je la remplis de balades dans la nature et de danse. Le Psaume 23 m'accompagne depuis toujours. Prête à bâtir une famille fondée sur l'amour et la foi.",["Nature","Louange","Bénévolat","Danse"],"Baptiste","Chaque semaine","Tous les jours","Au centre de ma vie","Mariage","male",31,49],
-["virtuel.ci.04@profils-virtuels.yona.invalid","Didier","Kouamé","male","1977-07-01","Côte d'Ivoire","Sassandra-Marahoue","Daloa","Calme et joyeux, je partage mon temps entre mon travail et les balades dans la nature. J'aime méditer la Parole chaque matin. Je crois au mariage, à la fidélité et au respect.",["Sport","Nature","Voyages"],"Harriste","Chaque semaine","Plusieurs fois par semaine","Essentielle","Faire connaissance d'abord","female",40,58],
-["virtuel.ci.05@profils-virtuels.yona.invalid","Ange","Gnahoré","female","1991-09-06","Côte d'Ivoire","Bas-Sassandra District","San-Pédro","Dynamique et fidèle en amitié, je consacre mon temps libre à la cuisine. Je participe à un groupe de prière chaque semaine. Prête à bâtir une famille fondée sur l'amour et la foi.",["Sport","Cuisine"],"Méthodiste","Chaque semaine","Tous les jours","Essentielle","Mariage","male",26,44],
-["virtuel.cg.01@profils-virtuels.yona.invalid","Hardy","Matsiona","male","1990-06-30","Congo-Brazzaville","Brazzaville","Brazzaville","Posé mais déterminé, j'aime la lecture, la cuisine et les longues discussions. Ma foi guide chacune de mes décisions. Je souhaite rencontrer une femme sincère pour construire un foyer béni.",["Lecture","Cuisine"],"Salutiste (Armée du Salut)","Chaque semaine","Plusieurs fois par semaine","Au centre de ma vie","Relation sérieuse","female",27,45],
-["virtuel.cg.02@profils-virtuels.yona.invalid","Grâce","Ibara","female","1988-11-26","Congo-Brazzaville","Pointe-Noire","Pointe-Noire","Calme et joyeuse, je partage mon temps entre mon travail et la lecture. Ma foi guide chacune de mes décisions. Prête à bâtir une famille fondée sur l'amour et la foi.",["Voyages","Lecture"],"Kimbanguiste","Chaque semaine","Matin et soir","Très importante","Mariage","male",29,47],
-["virtuel.cg.03@profils-virtuels.yona.invalid","Varel","Miakassissa","male","2000-03-11","Congo-Brazzaville","Niari","Dolisie","Chaque journée est un cadeau de Dieu : je la remplis de musique et de mode. Ma foi guide chacune de mes décisions. J'aimerais rencontrer une femme qui place Dieu au centre de sa vie.",["Mode","Musique","Photographie"],"Pentecôtiste","Plusieurs fois par semaine","Plusieurs fois par semaine","Très importante","Faire connaissance d'abord","female",18,35],
-["virtuel.cg.04@profils-virtuels.yona.invalid","Victoire","Moukoko","female","1982-10-05","Congo-Brazzaville","Bouenza","Nkayi","Je suis une femme simple, passionnée par le sport et la musique. Je participe à un groupe de prière chaque semaine. Je cherche une relation sérieuse, en vue du mariage.",["Danse","Louange","Sport","Musique"],"Catholique","Chaque semaine","Matin et soir","Au centre de ma vie","Relation sérieuse","male",35,53],
-["virtuel.cg.05@profils-virtuels.yona.invalid","Ulrich","Kimbembé","male","1983-12-02","Congo-Brazzaville","Cuvette","Owando","Posé mais déterminé, j'aime le cinéma, la musique et les longues discussions. Je participe à un groupe de prière chaque semaine. J'attends une femme de foi, douce et pleine de joie.",["Cinéma","Musique"],"Kimbanguiste","Plusieurs fois par semaine","Tous les jours","Essentielle","Mariage","female",34,52],
-["virtuel.tg.01@profils-virtuels.yona.invalid","Dédé","Kudjoh","female","1980-07-30","Togo","Maritime","Lomé","Douce mais déterminée, j'aime la lecture, la danse et les longues discussions. Le Psaume 23 m'accompagne depuis toujours. Je cherche une relation sérieuse, en vue du mariage.",["Cinéma","Danse","Lecture"],"Évangélique presbytérienne","Deux à trois fois par mois","Plusieurs fois par semaine","Essentielle","Relation sérieuse","male",37,55],
-["virtuel.tg.02@profils-virtuels.yona.invalid","Dodji","Lawson","male","1994-12-24","Togo","Centrale","Sokodé","Calme et joyeux, je partage mon temps entre mon travail et la danse. Je suis engagé dans le groupe de jeunes de ma paroisse. J'aimerais rencontrer une femme qui place Dieu au centre de sa vie.",["Voyages","Bénévolat","Photographie","Danse"],"Assemblées de Dieu","Chaque semaine","Plusieurs fois par semaine","Très importante","Relation sérieuse","female",23,41],
-["virtuel.tg.03@profils-virtuels.yona.invalid","Dzifa","Ahadji","female","2002-03-28","Togo","Kara","Kara","Fille de Dieu avant tout, je trouve ma joie dans la lecture et les voyages. Je suis engagée dans le groupe de jeunes de ma paroisse. J'aimerais rencontrer un homme qui place Dieu au centre de sa vie.",["Musique","Lecture","Voyages"],"Catholique","Chaque semaine","Tous les jours","Au centre de ma vie","Relation sérieuse","male",18,33],
-["virtuel.tg.04@profils-virtuels.yona.invalid","Sénamé","Amegah","male","1984-12-04","Togo","Plateaux","Kpalimé","Chaque journée est un cadeau de Dieu : je la remplis de sport et de lecture. Je participe à un groupe de prière chaque semaine. Je souhaite rencontrer une femme sincère pour construire un foyer béni.",["Musique","Lecture","Mode","Sport"],"Évangélique presbytérienne","Chaque semaine","Matin et soir","Essentielle","Faire connaissance d'abord","female",33,51],
-["virtuel.tg.05@profils-virtuels.yona.invalid","Mawuena","Dossou","female","1985-01-06","Togo","Plateaux","Atakpamé","Douce mais déterminée, j'aime la lecture, les balades dans la nature et les longues discussions. Je sers à l'accueil de mon église le dimanche. J'attends un homme de foi, doux et responsable.",["Nature","Lecture","Sport"],"Assemblées de Dieu","Chaque semaine","Plusieurs fois par semaine","Au centre de ma vie","Relation sérieuse","male",32,50],
-["virtuel.bj.01@profils-virtuels.yona.invalid","Gildas","Agossou","male","1977-01-03","Bénin","Littoral","Cotonou","Souriant et attentionné, j'aime la mode et la danse. Le Psaume 23 m'accompagne depuis toujours. J'aimerais rencontrer une femme qui place Dieu au centre de sa vie.",["Musique","Danse","Mode"],"Église du christianisme céleste","Chaque semaine","Plusieurs fois par semaine","Essentielle","Relation sérieuse","female",40,58],
-["virtuel.bj.02@profils-virtuels.yona.invalid","Léonie","Kpossou","female","1999-11-22","Bénin","Ouémé","Porto-Novo","Je suis une femme simple, passionnée par le bénévolat et la mode. Le Psaume 23 m'accompagne depuis toujours. Je souhaite rencontrer un homme sincère pour construire un foyer béni.",["Mode","Photographie","Bénévolat"],"Église du christianisme céleste","Deux à trois fois par mois","Tous les jours","Très importante","Relation sérieuse","male",18,36],
-["virtuel.bj.03@profils-virtuels.yona.invalid","Arnaud","Hounkpatin","male","1983-01-01","Bénin","Borgou","Parakou","Dynamique et fidèle en amitié, je consacre mon temps libre à la photographie. La prière rythme mes journées. J'aimerais rencontrer une femme qui place Dieu au centre de sa vie.",["Voyages","Photographie","Danse"],"Méthodiste","Chaque semaine","Tous les jours","Très importante","Relation sérieuse","female",34,52],
-["virtuel.bj.04@profils-virtuels.yona.invalid","Ornella","Akpovo","female","1993-10-21","Bénin","Zou","Abomey","Chaque journée est un cadeau de Dieu : je la remplis de balades dans la nature et de voyages. J'aime méditer la Parole chaque matin. Je crois au mariage, à la fidélité et au respect.",["Nature","Bénévolat","Voyages"],"Église du christianisme céleste","Chaque semaine","Plusieurs fois par semaine","Au centre de ma vie","Mariage","male",24,42],
-["virtuel.bj.05@profils-virtuels.yona.invalid","Dieudonné","Zinsou","male","1983-02-23","Bénin","Atlantique","Abomey-Calavi","Je suis un homme simple, passionné par la cuisine et la lecture. Je sers à l'accueil de mon église le dimanche. Je souhaite rencontrer une femme sincère pour construire un foyer béni.",["Cuisine","Lecture"],"Assemblées de Dieu","Plusieurs fois par semaine","Tous les jours","Essentielle","Mariage","female",34,52],
-["virtuel.sn.01@profils-virtuels.yona.invalid","Joséphine","Diène","female","1979-12-05","Sénégal","Dakar","Dakar","Je suis une femme simple, passionnée par la mode et le cinéma. Je sers à l'accueil de mon église le dimanche. Je crois au mariage, à la fidélité et au respect.",["Sport","Cinéma","Photographie","Mode"],"Évangélique","Plusieurs fois par semaine","Tous les jours","Essentielle","Faire connaissance d'abord","male",38,56],
-["virtuel.sn.02@profils-virtuels.yona.invalid","Charles","Diouf","male","1989-01-17","Sénégal","Thies","Thiès","Je suis un homme simple, passionné par la photographie et la danse. J'aide à l'organisation des sorties de l'église. Je souhaite rencontrer une femme sincère pour construire un foyer béni.",["Mode","Danse","Sport","Photographie"],"Catholique","Chaque semaine","Tous les jours","Très importante","Relation sérieuse","female",28,46],
-["virtuel.sn.03@profils-virtuels.yona.invalid","Clémentine","Da Silva","female","1991-09-25","Sénégal","Ziguinchor","Ziguinchor","Souriante et attentionnée, j'aime la mode et le cinéma. Le Psaume 23 m'accompagne depuis toujours. J'attends un homme de foi, doux et responsable.",["Sport","Mode","Cinéma"],"Adventiste","Chaque semaine","Matin et soir","Au centre de ma vie","Mariage","male",26,44],
-["virtuel.sn.04@profils-virtuels.yona.invalid","Antoine","Ndour","male","1983-08-31","Sénégal","Saint-Louis","Saint-Louis","Fils de Dieu avant tout, je trouve ma joie dans la musique et la louange. J'aide à l'organisation des sorties de l'église. Je cherche une relation sérieuse, en vue du mariage.",["Louange","Musique","Cuisine"],"Catholique","Plusieurs fois par semaine","Tous les jours","Essentielle","Mariage","female",34,52],
-["virtuel.sn.05@profils-virtuels.yona.invalid","Cécile","Mendy","female","2000-09-23","Sénégal","Thies","Mbour","Souriante et attentionnée, j'aime le bénévolat et la danse. Le Psaume 23 m'accompagne depuis toujours. Je crois au mariage, à la fidélité et au respect.",["Danse","Louange","Bénévolat","Cuisine"],"Évangélique","Chaque semaine","Tous les jours","Très importante","Relation sérieuse","male",18,35],
-["virtuel.ml.01@profils-virtuels.yona.invalid","Bernard","Kéita","male","1987-07-23","Mali","Bamako","Bamako","Posé mais déterminé, j'aime la cuisine, la mode et les longues discussions. J'aime méditer la Parole chaque matin. Je crois au mariage, à la fidélité et au respect.",["Cuisine","Mode"],"Baptiste","Deux à trois fois par mois","Plusieurs fois par semaine","Essentielle","Mariage","female",30,48],
-["virtuel.ml.02@profils-virtuels.yona.invalid","Béatrice","Konaté","female","1991-03-31","Mali","Sikasso","Sikasso","Douce mais déterminée, j'aime la cuisine, la photographie et les longues discussions. Je participe à un groupe de prière chaque semaine. Je crois au mariage, à la fidélité et au respect.",["Cuisine","Photographie","Cinéma","Sport"],"Baptiste","Chaque semaine","Tous les jours","Au centre de ma vie","Mariage","male",26,44],
-["virtuel.ml.03@profils-virtuels.yona.invalid","Luc","Traoré","male","1990-08-01","Mali","Ségou","Ségou","Calme et joyeux, je partage mon temps entre mon travail et la musique. Je sers à l'accueil de mon église le dimanche. J'attends une femme de foi, douce et pleine de joie.",["Musique","Voyages"],"Baptiste","Deux à trois fois par mois","Matin et soir","Au centre de ma vie","Relation sérieuse","female",27,45],
-["virtuel.ml.04@profils-virtuels.yona.invalid","Marthe","Dara","female","1992-08-08","Mali","Mopti","Mopti","Dynamique et fidèle en amitié, je consacre mon temps libre aux balades dans la nature. Le Psaume 23 m'accompagne depuis toujours. J'attends un homme de foi, doux et responsable.",["Musique","Nature","Bénévolat"],"Baptiste","Chaque semaine","Matin et soir","Essentielle","Mariage","male",25,43],
-["virtuel.ml.05@profils-virtuels.yona.invalid","Timothée","Togo","male","1992-09-23","Mali","Sikasso","Koutiala","Dynamique et fidèle en amitié, je consacre mon temps libre au cinéma. Je sers à l'accueil de mon église le dimanche. Je cherche une relation sérieuse, en vue du mariage.",["Musique","Cuisine","Cinéma"],"Baptiste","Plusieurs fois par semaine","Matin et soir","Essentielle","Relation sérieuse","female",25,43],
-["virtuel.fr.01@profils-virtuels.yona.invalid","Anne","Bernard","female","1995-01-21","France","Île-de-France","Paris","Je suis une femme simple, passionnée par la mode et les voyages. Je sers à l'accueil de mon église le dimanche. J'attends un homme de foi, doux et responsable.",["Mode","Voyages","Lecture"],"Catholique","Plusieurs fois par semaine","Plusieurs fois par semaine","Essentielle","Faire connaissance d'abord","male",22,40],
-["virtuel.fr.02@profils-virtuels.yona.invalid","Benoît","Lambert","male","2003-01-25","France","Auvergne-Rhône-Alpes","Lyon","Souriant et attentionné, j'aime le bénévolat et la danse. Je suis engagé dans le groupe de jeunes de ma paroisse. Je crois au mariage, à la fidélité et au respect.",["Danse","Bénévolat"],"Baptiste","Chaque semaine","Matin et soir","Très importante","Mariage","female",18,32],
-["virtuel.fr.03@profils-virtuels.yona.invalid","Charlotte","Faure","female","1986-09-19","France","Provence-Alpes-Côte d'Azur","Marseille","Calme et joyeuse, je partage mon temps entre mon travail et la photographie. J'enseigne à l'école du dimanche. J'aimerais rencontrer un homme qui place Dieu au centre de sa vie.",["Photographie","Mode"],"Catholique","Deux à trois fois par mois","Tous les jours","Au centre de ma vie","Relation sérieuse","male",31,49],
-["virtuel.fr.04@profils-virtuels.yona.invalid","Antoine","André","male","1980-04-29","France","Occitanie","Toulouse","Dynamique et fidèle en amitié, je consacre mon temps libre à la photographie. Je participe à un groupe de prière chaque semaine. Je souhaite rencontrer une femme sincère pour construire un foyer béni.",["Nature","Photographie"],"Catholique","Plusieurs fois par semaine","Plusieurs fois par semaine","Très importante","Relation sérieuse","female",37,55],
-["virtuel.fr.05@profils-virtuels.yona.invalid","Sophie","Lefebvre","female","1993-06-22","France","New Aquitaine","Bordeaux","Fille de Dieu avant tout, je trouve ma joie dans les voyages et la musique. Je chante dans la chorale de mon église. J'aimerais rencontrer un homme qui place Dieu au centre de sa vie.",["Voyages","Musique"],"Catholique","Deux à trois fois par mois","Matin et soir","Au centre de ma vie","Faire connaissance d'abord","male",24,42],
-["virtuel.fr.06@profils-virtuels.yona.invalid","Julien","Masson","male","2003-02-02","France","Hauts-de-France","Lille","Fils de Dieu avant tout, je trouve ma joie dans la louange et la danse. La prière rythme mes journées. J'attends une femme de foi, douce et pleine de joie.",["Louange","Danse"],"Catholique","Deux à trois fois par mois","Tous les jours","Essentielle","Relation sérieuse","female",18,32],
-["virtuel.fr.07@profils-virtuels.yona.invalid","Laure","Laurent","female","2000-04-29","France","Pays de la Loire","Nantes","Je suis une femme simple, passionnée par la photographie et les voyages. Je participe à un groupe de prière chaque semaine. Prête à bâtir une famille fondée sur l'amour et la foi.",["Photographie","Voyages"],"Protestante réformée","Chaque semaine","Tous les jours","Essentielle","Relation sérieuse","male",18,35],
-["virtuel.fr.08@profils-virtuels.yona.invalid","David","Martin","male","1990-05-10","France","Grand Est","Strasbourg","Chaque journée est un cadeau de Dieu : je la remplis de danse et de louange. Je sers à l'accueil de mon église le dimanche. Je souhaite rencontrer une femme sincère pour construire un foyer béni.",["Louange","Photographie","Lecture","Danse"],"Baptiste","Plusieurs fois par semaine","Tous les jours","Très importante","Relation sérieuse","female",27,45],
-["virtuel.fr.09@profils-virtuels.yona.invalid","Sarah","Fontaine","female","1993-06-08","France","Brittany","Rennes","Douce mais déterminée, j'aime le sport, la lecture et les longues discussions. Je participe à un groupe de prière chaque semaine. Je souhaite rencontrer un homme sincère pour construire un foyer béni.",["Cuisine","Lecture","Sport"],"Évangélique","Chaque semaine","Tous les jours","Essentielle","Relation sérieuse","male",24,42],
-["virtuel.fr.10@profils-virtuels.yona.invalid","Nicolas","Rousseau","male","1978-09-29","France","Occitanie","Montpellier","Calme et joyeux, je partage mon temps entre mon travail et le sport. Le Psaume 23 m'accompagne depuis toujours. Je crois au mariage, à la fidélité et au respect.",["Mode","Sport","Lecture","Louange"],"Catholique","Deux à trois fois par mois","Plusieurs fois par semaine","Au centre de ma vie","Relation sérieuse","female",39,57]
+["demo.ga.01@profils-virtuels.yona.invalid","Vanessa","female","2003-08-09","Gabon","Ngounié","Mouila","Calme et joyeuse, je partage mon temps entre mon travail et la louange. J'aime méditer la Parole chaque matin. J'aimerais rencontrer un homme qui place Dieu au centre de sa vie.",["Louange","Cinéma"],"Pentecôtiste","Plusieurs fois par semaine","Plusieurs fois par semaine","Essentielle","Relation sérieuse","male",18,33],
+["demo.ga.02@profils-virtuels.yona.invalid","Murielle","female","2004-08-27","Gabon","Estuaire","Ntoum","Je suis une femme simple, passionnée par la musique et la lecture. J'enseigne à l'école du dimanche. Je crois au mariage, à la fidélité et au respect.",["Lecture","Musique"],"Protestante (Église évangélique du Gabon)","Chaque semaine","Tous les jours","Très importante","Mariage","male",18,32],
+["demo.ga.03@profils-virtuels.yona.invalid","Hervé","male","2002-07-05","Gabon","Haut-Ogooué","Franceville","Souriant et attentionné, j'aime la mode et la danse. Le Psaume 23 m'accompagne depuis toujours. Je cherche une relation sérieuse, en vue du mariage.",["Nature","Danse","Mode","Bénévolat"],"Adventiste","Plusieurs fois par semaine","Plusieurs fois par semaine","Essentielle","Mariage","female",18,34],
+["demo.ga.04@profils-virtuels.yona.invalid","Christian","male","2003-03-06","Gabon","Nyanga","Tchibanga","Je suis un homme simple, passionné par le bénévolat et la mode. Je suis engagé dans le groupe de jeunes de ma paroisse. Je crois au mariage, à la fidélité et au respect.",["Danse","Mode","Bénévolat","Cuisine"],"Catholique","Plusieurs fois par semaine","Matin et soir","Essentielle","Mariage","female",18,33],
+["demo.cm.01@profils-virtuels.yona.invalid","Pélagie","female","1992-08-25","Cameroun","North","Garoua","Douce mais déterminée, j'aime le sport, les voyages et les longues discussions. Ma foi guide chacune de mes décisions. J'aimerais rencontrer un homme qui place Dieu au centre de sa vie.",["Voyages","Sport"],"Évangélique","Deux à trois fois par mois","Tous les jours","Essentielle","Mariage","male",28,44],
+["demo.cm.02@profils-virtuels.yona.invalid","Aïcha","female","1993-08-20","Cameroun","West","Dschang","Souriante et attentionnée, j'aime les balades dans la nature et la mode. Le Psaume 23 m'accompagne depuis toujours. Je souhaite rencontrer un homme sincère pour construire un foyer béni.",["Mode","Lecture","Nature"],"Catholique","Plusieurs fois par semaine","Tous les jours","Essentielle","Faire connaissance d'abord","male",27,43],
+["demo.cm.03@profils-virtuels.yona.invalid","Arnaud","male","2003-03-30","Cameroun","South","Ébolowa","Fils de Dieu avant tout, je trouve ma joie dans la louange et les voyages. Le Psaume 23 m'accompagne depuis toujours. Je souhaite rencontrer une femme sincère pour construire un foyer béni.",["Photographie","Voyages","Sport","Louange"],"Baptiste","Deux à trois fois par mois","Tous les jours","Très importante","Relation sérieuse","female",18,33],
+["demo.cm.04@profils-virtuels.yona.invalid","Franck","male","1998-05-24","Cameroun","Littoral","Douala","Souriant et attentionné, j'aime la lecture et la louange. Je sers à l'accueil de mon église le dimanche. Prêt à bâtir une famille fondée sur l'amour et la foi.",["Louange","Lecture"],"Pentecôtiste","Chaque semaine","Plusieurs fois par semaine","Au centre de ma vie","Mariage","female",22,38],
+["demo.ci.01@profils-virtuels.yona.invalid","Amenan","female","2001-11-03","Côte d'Ivoire","Vallée du Bandama District","Bouaké","Calme et joyeuse, je partage mon temps entre mon travail et la mode. Le Psaume 23 m'accompagne depuis toujours. Je souhaite rencontrer un homme sincère pour construire un foyer béni.",["Mode","Cinéma","Nature"],"Méthodiste","Chaque semaine","Plusieurs fois par semaine","Très importante","Relation sérieuse","male",18,34],
+["demo.ci.02@profils-virtuels.yona.invalid","Chantal","female","2004-03-13","Côte d'Ivoire","Abidjan Autonomous District","Abidjan","Fille de Dieu avant tout, je trouve ma joie dans la photographie et la musique. Je sers à l'accueil de mon église le dimanche. Je crois au mariage, à la fidélité et au respect.",["Musique","Photographie","Cinéma","Cuisine"],"Harriste","Deux à trois fois par mois","Matin et soir","Au centre de ma vie","Relation sérieuse","male",18,32],
+["demo.ci.03@profils-virtuels.yona.invalid","Kouassi","male","1991-06-29","Côte d'Ivoire","Abidjan Autonomous District","Bingerville","Chaque journée est un cadeau de Dieu : je la remplis de cinéma et de voyages. J'aide à l'organisation des sorties de l'église. Prêt à bâtir une famille fondée sur l'amour et la foi.",["Voyages","Cinéma","Bénévolat","Louange"],"Baptiste","Chaque semaine","Tous les jours","Au centre de ma vie","Faire connaissance d'abord","female",29,45],
+["demo.ci.04@profils-virtuels.yona.invalid","Hermann","male","2004-07-21","Côte d'Ivoire","Bas-Sassandra District","San-Pédro","Je suis un homme simple, passionné par la musique et la cuisine. Ma foi guide chacune de mes décisions. Je cherche une relation sérieuse, en vue du mariage.",["Cuisine","Musique"],"Catholique","Chaque semaine","Matin et soir","Au centre de ma vie","Faire connaissance d'abord","female",18,32],
+["demo.cg.01@profils-virtuels.yona.invalid","Tendresse","female","1995-03-29","Congo-Brazzaville","Sangha","Ouesso","Souriante et attentionnée, j'aime les voyages et la photographie. La prière rythme mes journées. Je cherche une relation sérieuse, en vue du mariage.",["Voyages","Photographie","Mode"],"Salutiste (Armée du Salut)","Chaque semaine","Matin et soir","Très importante","Mariage","male",25,41],
+["demo.cg.02@profils-virtuels.yona.invalid","Orphée","female","1999-09-08","Congo-Brazzaville","Bouenza","Madingou","Souriante et attentionnée, j'aime la lecture et la cuisine. J'enseigne à l'école du dimanche. Je cherche une relation sérieuse, en vue du mariage.",["Bénévolat","Cuisine","Lecture","Louange"],"Salutiste (Armée du Salut)","Chaque semaine","Plusieurs fois par semaine","Essentielle","Mariage","male",21,37],
+["demo.cg.03@profils-virtuels.yona.invalid","Christ","male","2004-07-06","Congo-Brazzaville","Niari","Dolisie","Souriant et attentionné, j'aime les voyages et le cinéma. Je suis engagé dans le groupe de jeunes de ma paroisse. Je souhaite rencontrer une femme sincère pour construire un foyer béni.",["Voyages","Cinéma","Louange"],"Pentecôtiste","Chaque semaine","Matin et soir","Très importante","Relation sérieuse","female",18,32],
+["demo.cg.04@profils-virtuels.yona.invalid","Ulrich","male","2000-10-24","Congo-Brazzaville","Plateaux","Gamboma","Dynamique et fidèle en amitié, je consacre mon temps libre à la louange. Je joue dans le groupe de louange de mon église. Je cherche une relation sérieuse, en vue du mariage.",["Danse","Louange","Nature"],"Pentecôtiste","Chaque semaine","Tous les jours","Au centre de ma vie","Faire connaissance d'abord","female",19,35],
+["demo.tg.01@profils-virtuels.yona.invalid","Ablavi","female","2001-12-30","Togo","Plateaux","Kpalimé","Fille de Dieu avant tout, je trouve ma joie dans les voyages et le sport. La prière rythme mes journées. J'aimerais rencontrer un homme qui place Dieu au centre de sa vie.",["Sport","Mode","Cinéma","Voyages"],"Méthodiste","Deux à trois fois par mois","Plusieurs fois par semaine","Au centre de ma vie","Mariage","male",18,34],
+["demo.tg.02@profils-virtuels.yona.invalid","Dédé","female","1998-10-25","Togo","Maritime","Aného","Douce mais déterminée, j'aime les balades dans la nature, la danse et les longues discussions. Je participe à un groupe de prière chaque semaine. Je crois au mariage, à la fidélité et au respect.",["Danse","Nature","Louange"],"Évangélique presbytérienne","Chaque semaine","Plusieurs fois par semaine","Au centre de ma vie","Relation sérieuse","male",21,37],
+["demo.tg.03@profils-virtuels.yona.invalid","Yawo","male","1993-03-23","Togo","Maritime","Tsévié","Dynamique et fidèle en amitié, je consacre mon temps libre à la musique. Le Psaume 23 m'accompagne depuis toujours. J'aimerais rencontrer une femme qui place Dieu au centre de sa vie.",["Photographie","Musique"],"Assemblées de Dieu","Plusieurs fois par semaine","Tous les jours","Très importante","Relation sérieuse","female",27,43],
+["demo.tg.04@profils-virtuels.yona.invalid","Dodji","male","2000-10-02","Togo","Centrale","Sokodé","Calme et joyeux, je partage mon temps entre mon travail et la musique. Ma foi guide chacune de mes décisions. Je crois au mariage, à la fidélité et au respect.",["Mode","Musique","Photographie","Cinéma"],"Assemblées de Dieu","Plusieurs fois par semaine","Tous les jours","Très importante","Relation sérieuse","female",20,36],
+["demo.bj.01@profils-virtuels.yona.invalid","Nadège","female","2003-08-18","Bénin","Atlantique","Abomey-Calavi","Douce mais déterminée, j'aime la lecture, la danse et les longues discussions. Le Psaume 23 m'accompagne depuis toujours. Je cherche une relation sérieuse, en vue du mariage.",["Cinéma","Danse","Lecture"],"Église du christianisme céleste","Chaque semaine","Plusieurs fois par semaine","Au centre de ma vie","Mariage","male",18,33],
+["demo.bj.02@profils-virtuels.yona.invalid","Fernande","female","1995-02-12","Bénin","Collines","Savalou","Calme et joyeuse, je partage mon temps entre mon travail et la danse. Je suis engagée dans le groupe de jeunes de ma paroisse. J'aimerais rencontrer un homme qui place Dieu au centre de sa vie.",["Voyages","Bénévolat","Photographie","Danse"],"Assemblées de Dieu","Plusieurs fois par semaine","Tous les jours","Au centre de ma vie","Mariage","male",25,41],
+["demo.bj.03@profils-virtuels.yona.invalid","Narcisse","male","1993-10-22","Bénin","Atakora","Natitingou","Fils de Dieu avant tout, je trouve ma joie dans la lecture et les voyages. Je suis engagé dans le groupe de jeunes de ma paroisse. J'aimerais rencontrer une femme qui place Dieu au centre de sa vie.",["Musique","Lecture","Voyages"],"Méthodiste","Chaque semaine","Tous les jours","Essentielle","Faire connaissance d'abord","female",26,42],
+["demo.bj.04@profils-virtuels.yona.invalid","Romaric","male","1999-06-22","Bénin","Atlantique","Ouidah","Chaque journée est un cadeau de Dieu : je la remplis de sport et de lecture. Je participe à un groupe de prière chaque semaine. Je souhaite rencontrer une femme sincère pour construire un foyer béni.",["Musique","Lecture","Mode","Sport"],"Assemblées de Dieu","Chaque semaine","Tous les jours","Très importante","Mariage","female",21,37],
+["demo.sn.01@profils-virtuels.yona.invalid","Joséphine","female","2002-01-22","Sénégal","Kolda","Kolda","Calme et joyeuse, je partage mon temps entre mon travail et la louange. La prière rythme mes journées. J'attends un homme de foi, doux et responsable.",["Louange","Photographie"],"Adventiste","Deux à trois fois par mois","Tous les jours","Très importante","Mariage","male",18,34],
+["demo.sn.02@profils-virtuels.yona.invalid","Albertine","female","1994-04-30","Sénégal","Thies","Mbour","Calme et joyeuse, je partage mon temps entre mon travail et la musique. Le Psaume 23 m'accompagne depuis toujours. J'attends un homme de foi, doux et responsable.",["Musique","Lecture","Bénévolat"],"Adventiste","Chaque semaine","Tous les jours","Très importante","Mariage","male",26,42],
+["demo.sn.03@profils-virtuels.yona.invalid","Marcel","male","1994-10-08","Sénégal","Kaolack","Kaolack","Je suis un homme simple, passionné par la photographie et la danse. J'aide à l'organisation des sorties de l'église. Je cherche une relation sérieuse, en vue du mariage.",["Danse","Photographie"],"Adventiste","Chaque semaine","Matin et soir","Au centre de ma vie","Relation sérieuse","female",25,41],
+["demo.sn.04@profils-virtuels.yona.invalid","Raphaël","male","1994-12-07","Sénégal","Ziguinchor","Bignona","Je suis un homme simple, passionné par la lecture et la cuisine. J'aime méditer la Parole chaque matin. Prêt à bâtir une famille fondée sur l'amour et la foi.",["Bénévolat","Cinéma","Cuisine","Lecture"],"Catholique","Chaque semaine","Matin et soir","Très importante","Faire connaissance d'abord","female",25,41],
+["demo.ml.01@profils-virtuels.yona.invalid","Marthe","female","2004-04-14","Mali","Sikasso","Koutiala","Douce mais déterminée, j'aime la mode, la danse et les longues discussions. Je sers à l'accueil de mon église le dimanche. Je cherche une relation sérieuse, en vue du mariage.",["Danse","Mode"],"Catholique","Chaque semaine","Tous les jours","Essentielle","Relation sérieuse","male",18,32],
+["demo.ml.02@profils-virtuels.yona.invalid","Béatrice","female","1993-05-29","Mali","Ségou","Ségou","Je suis une femme simple, passionnée par la mode et le sport. Je participe à un groupe de prière chaque semaine. Je cherche une relation sérieuse, en vue du mariage.",["Mode","Sport","Danse"],"Protestante (Église chrétienne évangélique)","Deux à trois fois par mois","Tous les jours","Très importante","Faire connaissance d'abord","male",27,43],
+["demo.ml.03@profils-virtuels.yona.invalid","Emmanuel","male","2004-02-18","Mali","Kayes","Kayes","Chaque journée est un cadeau de Dieu : je la remplis de photographie et de cinéma. Ma foi guide chacune de mes décisions. Je cherche une relation sérieuse, en vue du mariage.",["Sport","Bénévolat","Cinéma","Photographie"],"Baptiste","Plusieurs fois par semaine","Tous les jours","Essentielle","Relation sérieuse","female",18,32],
+["demo.ml.04@profils-virtuels.yona.invalid","André","male","1993-02-16","Mali","Ségou","San","Souriant et attentionné, j'aime le sport et la musique. La prière rythme mes journées. J'attends une femme de foi, douce et pleine de joie.",["Sport","Cinéma","Musique","Cuisine"],"Évangélique","Plusieurs fois par semaine","Tous les jours","Très importante","Mariage","female",27,43],
+["demo.fr.01@profils-virtuels.yona.invalid","Émilie","female","1996-06-22","France","Occitanie","Montpellier","Souriante et attentionnée, j'aime la louange et le sport. La prière rythme mes journées. J'attends un homme de foi, doux et responsable.",["Louange","Photographie","Sport","Cuisine"],"Protestante réformée","Plusieurs fois par semaine","Tous les jours","Très importante","Mariage","male",24,40],
+["demo.fr.02@profils-virtuels.yona.invalid","Juliette","female","2000-10-14","France","Centre-Val de Loire","Tours","Chaque journée est un cadeau de Dieu : je la remplis de balades dans la nature et de louange. Je chante dans la chorale de mon église. Je souhaite rencontrer un homme sincère pour construire un foyer béni.",["Louange","Nature","Voyages"],"Baptiste","Deux à trois fois par mois","Matin et soir","Très importante","Mariage","male",19,35],
+["demo.fr.03@profils-virtuels.yona.invalid","Sophie","female","2001-03-09","France","Grand Est","Strasbourg","Douce mais déterminée, j'aime la louange, la photographie et les longues discussions. Ma foi guide chacune de mes décisions. J'attends un homme de foi, doux et responsable.",["Louange","Photographie"],"Protestante réformée","Plusieurs fois par semaine","Matin et soir","Au centre de ma vie","Faire connaissance d'abord","male",19,35],
+["demo.fr.04@profils-virtuels.yona.invalid","Lucie","female","1991-10-11","France","Pays de la Loire","Angers","Douce mais déterminée, j'aime la cuisine, la louange et les longues discussions. Le Psaume 23 m'accompagne depuis toujours. Je cherche une relation sérieuse, en vue du mariage.",["Nature","Louange","Cuisine"],"Catholique","Plusieurs fois par semaine","Tous les jours","Très importante","Mariage","male",28,44],
+["demo.fr.05@profils-virtuels.yona.invalid","Mathilde","female","2000-06-21","France","Auvergne-Rhône-Alpes","Lyon","Souriante et attentionnée, j'aime la louange et le sport. Je participe à un groupe de prière chaque semaine. J'attends un homme de foi, doux et responsable.",["Louange","Sport"],"Évangélique","Plusieurs fois par semaine","Matin et soir","Au centre de ma vie","Faire connaissance d'abord","male",20,36],
+["demo.fr.06@profils-virtuels.yona.invalid","Hugo","male","1990-12-25","France","Occitanie","Toulouse","Dynamique et fidèle en amitié, je consacre mon temps libre à la photographie. Je participe à un groupe de prière chaque semaine. Je crois au mariage, à la fidélité et au respect.",["Photographie","Cuisine","Cinéma"],"Adventiste","Deux à trois fois par mois","Matin et soir","Essentielle","Faire connaissance d'abord","female",29,45],
+["demo.fr.07@profils-virtuels.yona.invalid","Guillaume","male","2003-12-02","France","Auvergne-Rhône-Alpes","Grenoble","Souriant et attentionné, j'aime la louange et la lecture. Je participe à un groupe de prière chaque semaine. J'aimerais rencontrer une femme qui place Dieu au centre de sa vie.",["Lecture","Louange","Voyages"],"Baptiste","Deux à trois fois par mois","Matin et soir","Au centre de ma vie","Faire connaissance d'abord","female",18,32],
+["demo.fr.08@profils-virtuels.yona.invalid","Louis","male","1996-06-29","France","New Aquitaine","Bordeaux","Souriant et attentionné, j'aime la mode et le cinéma. Je participe à un groupe de prière chaque semaine. Je crois au mariage, à la fidélité et au respect.",["Mode","Photographie","Cinéma","Louange"],"Adventiste","Plusieurs fois par semaine","Plusieurs fois par semaine","Essentielle","Relation sérieuse","female",24,40]
 ]$seed$;
   _col text;
 BEGIN
@@ -5355,7 +5495,7 @@ BEGIN
     '00000000-0000-0000-0000-000000000000', gen_random_uuid(), 'authenticated', 'authenticated',
     e ->> 0, '', now(),
     jsonb_build_object('provider', 'virtual', 'providers', jsonb_build_array('virtual')),
-    jsonb_build_object('first_name', e ->> 1, 'last_name', e ->> 2, 'is_virtual', true),
+    jsonb_build_object('first_name', e ->> 1, 'is_virtual', true),
     now(), now()
   FROM jsonb_array_elements(_seed) e
   WHERE NOT EXISTS (SELECT 1 FROM auth.users u WHERE u.email = e ->> 0);
@@ -5377,18 +5517,19 @@ BEGIN
     END IF;
   END LOOP;
 
-  -- 2. Profils complets, actifs et visibles.
+  -- 2. Profils complets, actifs et visibles. Ils restent cachés aux membres tant
+  --    qu'un administrateur ne leur a pas donné de photo (demo_photo_path).
   UPDATE public.profiles p
   SET first_name = e ->> 1,
-      gender = (e ->> 3)::public.gender,
-      birth_date = (e ->> 4)::date,
-      country = e ->> 5,
-      region = e ->> 6,
-      city = e ->> 7,
-      bio = e ->> 8,
-      interests = ARRAY(SELECT jsonb_array_elements_text(e -> 9)),
+      gender = (e ->> 2)::public.gender,
+      birth_date = (e ->> 3)::date,
+      country = e ->> 4,
+      region = e ->> 5,
+      city = e ->> 6,
+      bio = e ->> 7,
+      interests = ARRAY(SELECT jsonb_array_elements_text(e -> 8)),
       is_virtual = true,
-      terms_accepted_at = now(),
+      terms_accepted_at = coalesce(p.terms_accepted_at, now()),
       onboarding_step = 4,
       onboarding_completed_at = coalesce(p.onboarding_completed_at, now()),
       status = 'active',
@@ -5398,19 +5539,19 @@ BEGIN
   WHERE p.user_id = u.id;
 
   UPDATE public.christian_profiles c
-  SET denomination = e ->> 10,
-      church_attendance = e ->> 11,
-      prayer_practice = e ->> 12,
-      faith_importance = e ->> 13
+  SET denomination = e ->> 9,
+      church_attendance = e ->> 10,
+      prayer_practice = e ->> 11,
+      faith_importance = e ->> 12
   FROM jsonb_array_elements(_seed) e
   JOIN public.users u ON u.email = e ->> 0
   WHERE c.user_id = u.id;
 
   UPDATE public.preferences pr
-  SET relationship_goal = e ->> 14,
-      preferred_gender = (e ->> 15)::public.gender,
-      min_age = (e ->> 16)::smallint,
-      max_age = (e ->> 17)::smallint
+  SET relationship_goal = e ->> 13,
+      preferred_gender = (e ->> 14)::public.gender,
+      min_age = (e ->> 15)::smallint,
+      max_age = (e ->> 16)::smallint
   FROM jsonb_array_elements(_seed) e
   JOIN public.users u ON u.email = e ->> 0
   WHERE pr.user_id = u.id;
@@ -5437,13 +5578,17 @@ SELECT b.element AS "Élément", b.trouve AS "Dans la base", b.attendu AS "Atten
             WHEN b.facultatif THEN '⚠️ facultatif'
             ELSE '❌' END AS "État"
 FROM (VALUES
-  (1, 'Tables', (SELECT count(*) FROM pg_catalog.pg_tables WHERE schemaname = 'public')::text, '31', false),
-  (2, 'Fonctions', (SELECT count(*) FROM pg_catalog.pg_proc WHERE pronamespace = 'public'::regnamespace)::text, '122', false),
+  (1, 'Tables', (SELECT count(*) FROM pg_catalog.pg_tables WHERE schemaname = 'public')::text, '32', false),
+  (2, 'Fonctions', (SELECT count(*) FROM pg_catalog.pg_proc WHERE pronamespace = 'public'::regnamespace)::text, '126', false),
   (3, 'Règles d''accès des tables', (SELECT count(*) FROM pg_catalog.pg_policies WHERE schemaname = 'public')::text, '75', false),
-  (4, 'Tables protégées (RLS)', (SELECT count(*) FROM pg_catalog.pg_class WHERE relnamespace = 'public'::regnamespace AND relkind = 'r' AND relrowsecurity)::text, '31', false),
+  (4, 'Tables protégées (RLS)', (SELECT count(*) FROM pg_catalog.pg_class WHERE relnamespace = 'public'::regnamespace AND relkind = 'r' AND relrowsecurity)::text, '32', false),
   (5, 'Profil créé à l''inscription', (SELECT CASE WHEN count(*) > 0 THEN 'oui' ELSE 'non' END FROM pg_catalog.pg_trigger WHERE tgrelid = 'auth.users'::regclass AND tgname = 'on_auth_user_created'), 'oui', false),
-  (6, 'Espaces de fichiers', (SELECT count(*) FROM storage.buckets WHERE id IN ('photos', 'verifications', 'voice-messages'))::text, '3', false),
-  (7, 'Règles d''accès des fichiers', (SELECT count(*) FROM pg_catalog.pg_policies WHERE schemaname = 'storage' AND policyname IN ('photos_storage_delete_own',
+  (6, 'Espaces de fichiers', (SELECT count(*) FROM storage.buckets WHERE id IN ('demo-profils', 'photos', 'verifications', 'voice-messages'))::text, '4', false),
+  (7, 'Règles d''accès des fichiers', (SELECT count(*) FROM pg_catalog.pg_policies WHERE schemaname = 'storage' AND policyname IN ('demo_storage_delete_admin',
+      'demo_storage_insert_admin',
+      'demo_storage_select_admin',
+      'demo_storage_update_admin',
+      'photos_storage_delete_own',
       'photos_storage_insert_own',
       'photos_storage_select',
       'verifications_storage_delete',
@@ -5451,10 +5596,10 @@ FROM (VALUES
       'verifications_storage_select',
       'voice_storage_delete_own',
       'voice_storage_insert_premium',
-      'voice_storage_select_participant'))::text, '9', false),
+      'voice_storage_select_participant'))::text, '13', false),
   (8, 'Messages en temps réel', (SELECT CASE WHEN count(*) > 0 THEN 'oui' ELSE 'non' END FROM pg_catalog.pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'messages'), 'oui', false),
   (9, 'Tâches automatiques', current_setting('yona.taches', true), '2', true),
   (10, 'Pays', (SELECT count(*) FROM public.geo_countries)::text, '247', false),
-  (11, 'Profils virtuels', (SELECT count(*) FROM public.profiles WHERE is_virtual)::text, '50', false)
+  (11, 'Profils virtuels', (SELECT count(*) FROM public.profiles WHERE is_virtual)::text, '40', false)
 ) AS b(n, element, trouve, attendu, facultatif)
 ORDER BY b.n;

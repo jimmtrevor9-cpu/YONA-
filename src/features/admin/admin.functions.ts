@@ -53,3 +53,13 @@ export const adminSetUserStatus = createServerFn({ method: "POST" })
     }
     return { status };
   });
+
+/** Supprime les fichiers en attente (photos de profils de démonstration retirés…). */
+export const adminRunStorageCleanup = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { data: isAdmin } = await context.supabase.rpc("is_admin");
+    if (!isAdmin) throw new Error(ADMIN_ERRORS["admin_required"]);
+    const { processStorageCleanup } = await import("@/features/admin/storage-cleanup.server");
+    return { removed: await processStorageCleanup() };
+  });

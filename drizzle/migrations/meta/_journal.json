@@ -603,6 +603,20 @@
       "when": 1790737200000,
       "tag": "0085_profils_virtuels_donnees",
       "breakpoints": true
+    },
+    {
+      "idx": 86,
+      "version": "7",
+      "when": 1790841600000,
+      "tag": "0086_profils_demo_40",
+      "breakpoints": true
+    },
+    {
+      "idx": 87,
+      "version": "7",
+      "when": 1790841660000,
+      "tag": "0087_profils_demo_donnees",
+      "breakpoints": true
     }
   ]
 }

@@ -71,9 +71,11 @@ const SECTIONS: LegalSection[] = [
     ],
   },
   {
-    title: "9. Profils d'exemple",
+    title: "9. Profils de démonstration",
     blocks: [
-      `Pour que les nouveaux membres découvrent le fonctionnement de ${APP_NAME}, des profils d'exemple (fictifs) peuvent apparaître dans la découverte. Ils ne vous écrivent jamais, ne vous demandent jamais d'argent et ne donnent lieu à aucun paiement. Ils disparaissent au fur et à mesure que de vrais membres s'inscrivent.`,
+      `Pendant le lancement, ${APP_NAME} peut afficher des profils de démonstration destinés à animer la communauté et à montrer le fonctionnement du service. Ce ne sont pas des membres : ils sont toujours signalés par l'étiquette « Profil de démonstration ».`,
+      "Ils ne vous écrivent jamais, ne peuvent pas recevoir de demande de contact ni de Message Flash, ne vous demandent jamais d'argent et ne donnent lieu à aucun paiement. Ils disparaissent au fur et à mesure que de vrais membres, dont l'identité est vérifiée, s'inscrivent.",
+      "Tous les membres inscrits passent par une vérification d'identité.",
     ],
   },
   {

@@ -920,6 +920,8 @@ export type Database = {
           city: string | null
           country: string | null
           created_at: string
+          demo_photo_path: string | null
+          demo_photo_source: string | null
           education_level: string | null
           first_name: string | null
           gender: Database["public"]["Enums"]["gender"] | null
@@ -949,6 +951,8 @@ export type Database = {
           city?: string | null
           country?: string | null
           created_at?: string
+          demo_photo_path?: string | null
+          demo_photo_source?: string | null
           education_level?: string | null
           first_name?: string | null
           gender?: Database["public"]["Enums"]["gender"] | null
@@ -978,6 +982,8 @@ export type Database = {
           city?: string | null
           country?: string | null
           created_at?: string
+          demo_photo_path?: string | null
+          demo_photo_source?: string | null
           education_level?: string | null
           first_name?: string | null
           gender?: Database["public"]["Enums"]["gender"] | null
@@ -1074,6 +1080,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      storage_cleanup_queue: {
+        Row: {
+          bucket_id: string
+          created_at: string
+          done_at: string | null
+          id: number
+          path: string
+          reason: string
+        }
+        Insert: {
+          bucket_id: string
+          created_at?: string
+          done_at?: string | null
+          id?: number
+          path: string
+          reason: string
+        }
+        Update: {
+          bucket_id?: string
+          created_at?: string
+          done_at?: string | null
+          id?: number
+          path?: string
+          reason?: string
+        }
+        Relationships: []
       }
       subscriptions: {
         Row: {
@@ -1307,6 +1340,20 @@ export type Database = {
     }
     Functions: {
       activate_profile_boost: { Args: never; Returns: string }
+      admin_list_demo_profiles: {
+        Args: never
+        Returns: {
+          birth_date: string | null
+          city: string | null
+          country: string | null
+          created_at: string
+          demo_photo_path: string | null
+          demo_photo_source: string | null
+          first_name: string | null
+          gender: Database["public"]["Enums"]["gender"] | null
+          user_id: string
+        }[]
+      }
       admin_list_payments: {
         Args: never
         Returns: {
@@ -1429,6 +1476,10 @@ export type Database = {
       }
       admin_review_verification: {
         Args: { _approve: boolean; _verification_id: string }
+        Returns: string
+      }
+      admin_set_demo_photo: {
+        Args: { _path: string | null; _source?: string; _user_id: string }
         Returns: string
       }
       admin_set_user_status: {
