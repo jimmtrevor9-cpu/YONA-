@@ -1,0 +1,11 @@
+{
+  "r": ["Autres villes"],
+  "c": [
+    ["Gibraltar", 0, 36.14, -5.35],
+    ["Reclamation Areas", 0, 36.14, -5.36],
+    ["Town Area", 0, 36.12, -5.35],
+    ["Upper Town", 0, 36.14, -5.35],
+    ["Sandpits", 0, 36.14, -5.36],
+    ["South District", 0, 36.11, -5.35]
+  ]
+}

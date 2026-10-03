@@ -1,0 +1,24 @@
+{
+  "r": ["Guyane", "Autres villes"],
+  "c": [
+    ["Sinnamary", 0, 5.38, -52.96],
+    ["Saint-Laurent-du-Maroni", 0, 5.5, -54.03],
+    ["Saint-Georges", 0, 3.89, -51.8],
+    ["Roura", 0, 4.73, -52.32],
+    ["Rémire", 0, 4.89, -52.28],
+    ["Régina", 0, 4.31, -52.13],
+    ["Rémire-Montjoly", 0, 4.92, -52.27],
+    ["Matoury", 0, 4.85, -52.32],
+    ["Maripasoula", 0, 3.64, -54.03],
+    ["Mana", 0, 5.67, -53.78],
+    ["Macouria", 0, 4.91, -52.37],
+    ["Kourou", 0, 5.16, -52.64],
+    ["Iracoubo", 0, 5.48, -53.21],
+    ["Grand-Santi", 0, 4.27, -54.38],
+    ["Cayenne", 0, 4.94, -52.33],
+    ["Apatou", 0, 5.16, -54.34],
+    ["Awala-Yalimapo", 0, 5.74, -53.91],
+    ["Résidence Arc-en-Ciel", 1, 4.89, -52.29],
+    ["Résidence Cogneau-Larivot", 1, 4.89, -52.34]
+  ]
+}

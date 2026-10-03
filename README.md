@@ -142,6 +142,24 @@ local) : `site_url = "http://127.0.0.1:4173"`, `enable_confirmations = true`,
 `max_frequency = "60s"`, et le modèle d'e-mail
 `supabase/templates/reinitialisation-mot-de-passe.html` pour `[auth.email.template.recovery]`.
 
+**Localisation des membres** (vrais membres) : la position retenue suit cet ordre, avec
+repli automatique : 1) la position de l'appareil (GPS / Wi-Fi, avec l'accord du membre :
+« Pour te montrer des personnes près de chez toi ») ; 2) la ville déclarée à l'étape
+« Où es-tu ? » ; 3) l'adresse IP (en-têtes Vercel), seulement si le membre n'a déclaré aucun
+pays. Le serveur trouve la ville (géocodage inverse) avec les positions GeoNames embarquées
+dans son code (`src/features/location/data/`, générées par
+`scripts/generate-geo-positions.mjs`) : aucun service extérieur. La base
+(`profile_locations`, fonction `set_member_location`) garde la position retenue, compare à
+chaque visite le pays de l'adresse IP et le fuseau horaire du navigateur
+(`geo_timezones`, base IANA) et lève un drapeau « incohérence de localisation » (VPN
+possible) visible dans `/admin` (fiche du membre, Journaux → Localisation). Rien n'est
+bloqué automatiquement. Le pays retenu sert au retrait d'un profil de démonstration et au
+ciblage des publicités. **Limites** : un VPN ne change pas la position de l'appareil, mais
+un membre peut refuser de la partager ; sans elle, la ville déclarée fait foi, et l'IP
+n'est qu'un indice (un VPN la change). Un membre peut aussi tromper son appareil (fausse
+position GPS) : aucune méthode n'est fiable à 100 %. Les profils de démonstration gardent
+leur propre ville (ils ne prennent pas celle du membre).
+
 ## 5. Organisation du code
 
 ```
@@ -163,3 +181,5 @@ docs/verification/     tests automatiques et rapports
 - Aucun service d'e-mail n'est branché : le choix « notifications par e-mail » est
   enregistré, mais aucun e-mail n'est envoyé.
 - Premium = paiement unique (mensuel ou annuel), sans renouvellement automatique.
+- Localisation : sans la position de l'appareil, un VPN peut fausser l'adresse IP ; elle
+  n'est alors qu'un indice (drapeau dans l'administration), jamais une vérité.

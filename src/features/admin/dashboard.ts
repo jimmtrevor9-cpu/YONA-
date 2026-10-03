@@ -338,7 +338,8 @@ export type LogTable =
   | "activity_events"
   | "admin_audit_log"
   | "server_errors"
-  | "ad_events";
+  | "ad_events"
+  | "location_history";
 
 export interface LogColumn {
   key: string;
@@ -400,6 +401,9 @@ export const EVENT_LABELS: Record<string, string> = {
   view: "Vue",
   click: "Clic",
   skip: "Passer",
+  device: "Appareil (GPS)",
+  declared: "Ville déclarée",
+  ip: "Adresse IP",
 };
 
 const kinds = (...values: string[]) =>
@@ -521,6 +525,27 @@ export const LOGS: LogDefinition[] = [
       { key: "ad_id", label: "Publicité" },
       { key: "placement", label: "Emplacement", sortable: true },
       { key: "country", label: "Pays", sortable: true },
+      { key: "user_id", label: "Membre" },
+    ],
+  },
+  {
+    table: "location_history",
+    label: "Localisation",
+    kindColumn: "inconsistent",
+    kinds: [
+      { value: "true", label: "Incohérentes (VPN possible)" },
+      { value: "false", label: "Cohérentes" },
+    ],
+    searchColumns: ["country", "city", "ip_country", "timezone"],
+    columns: [
+      { key: "created_at", label: "Date", sortable: true },
+      { key: "source", label: "Reçue", sortable: true },
+      { key: "retained_source", label: "Retenue", sortable: true },
+      { key: "country", label: "Pays retenu", sortable: true },
+      { key: "city", label: "Ville" },
+      { key: "ip_country", label: "Pays de l'IP", sortable: true },
+      { key: "timezone", label: "Fuseau" },
+      { key: "inconsistency", label: "Incohérence" },
       { key: "user_id", label: "Membre" },
     ],
   },

@@ -1,0 +1,7 @@
+{
+  "r": ["Saint-Pierre", "Miquelon-Langlade"],
+  "c": [
+    ["Saint-Pierre", 0, 46.78, -56.18],
+    ["Miquelon", 1, 47.1, -56.38]
+  ]
+}

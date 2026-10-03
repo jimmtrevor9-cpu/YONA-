@@ -18,12 +18,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { welcomeKey } from "@/features/auth/signup-draft";
 import { FAITH_SHORT_MAX_LENGTH } from "@/features/profiles/christian-info";
-import {
-  locationErrorMessage,
-  readDevicePosition,
-  saveMyLocation,
-} from "@/features/profiles/location";
+import { locationErrorMessage } from "@/features/profiles/location";
 import { photoErrorMessage, uploadPhoto, validatePhotoFile } from "@/features/profiles/photos";
+import { useShareDeviceLocation } from "@/features/location/useDeviceLocation";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 
@@ -39,6 +36,7 @@ const ORIGIN_MAX_LENGTH = 60;
  */
 export function WelcomeSequence({ userId, firstName }: { userId: string; firstName: string }) {
   const queryClient = useQueryClient();
+  const shareLocation = useShareDeviceLocation();
   const [steps, setSteps] = useState<Step[]>([]);
   const [index, setIndex] = useState(0);
   const [photoCount, setPhotoCount] = useState(0);
@@ -117,8 +115,7 @@ export function WelcomeSequence({ userId, firstName }: { userId: string; firstNa
   async function enableLocation() {
     setBusy(true);
     try {
-      const { latitude, longitude } = await readDevicePosition();
-      await saveMyLocation(latitude, longitude);
+      await shareLocation();
       await queryClient.invalidateQueries({ queryKey: ["profiles", "location"] });
       toast.success("Position activée.");
       next();
@@ -234,8 +231,8 @@ export function WelcomeSequence({ userId, firstName }: { userId: string; firstNa
               </div>
               <DialogTitle className="text-center">Découvre qui est tout près</DialogTitle>
               <DialogDescription className="text-center">
-                Active ta position pour voir les membres proches de toi. Ta position exacte n'est
-                jamais montrée.
+                Pour te montrer des personnes près de chez toi, active ta position. Elle n'est
+                jamais montrée aux autres membres.
               </DialogDescription>
             </DialogHeader>
             <DialogFooter className="flex-col gap-2 sm:flex-col">

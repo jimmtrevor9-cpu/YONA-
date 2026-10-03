@@ -1,0 +1,11 @@
+{
+  "r": ["Tinian", "Saipan"],
+  "c": [
+    ["San Jose Village", 0, 14.97, 145.62],
+    ["Saipan", 1, 15.21, 145.75],
+    ["Garapan", 1, 15.21, 145.72],
+    ["Chalan Laulau Village", 1, 15.18, 145.71],
+    ["Chalan Piao village", 1, 15.14, 145.7],
+    ["Fananganan village", 1, 15.21, 145.73]
+  ]
+}

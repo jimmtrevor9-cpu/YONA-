@@ -1,0 +1,28 @@
+{
+  "r": [
+    "Serravalle",
+    "San Marino",
+    "Chiesanuova",
+    "Montegiardino",
+    "Fiorentino",
+    "Faetano",
+    "Domagnano",
+    "Borgo Maggiore",
+    "Acquaviva"
+  ],
+  "c": [
+    ["Serravalle", 0, 43.97, 12.48],
+    ["San Marino", 1, 43.94, 12.45],
+    ["Poggio di Chiesanuova", 2, 43.9, 12.42],
+    ["Monte Giardino", 3, 43.91, 12.48],
+    ["Fiorentino", 4, 43.91, 12.46],
+    ["Faetano", 5, 43.93, 12.5],
+    ["Domagnano", 6, 43.95, 12.47],
+    ["Dogana", 0, 43.98, 12.49],
+    ["Borgo Maggiore", 7, 43.94, 12.45],
+    ["Acquaviva", 8, 43.95, 12.42],
+    ["Murata", 1, 43.92, 12.45],
+    ["Cailungo", 7, 43.95, 12.45],
+    ["Valdragone", 7, 43.94, 12.46]
+  ]
+}

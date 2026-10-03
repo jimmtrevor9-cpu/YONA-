@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -32,6 +33,8 @@ import {
   preferencesServerError,
   validateAgeRange,
 } from "@/features/profiles/preferences";
+import { recordDeclaredLocation } from "@/features/location/location.functions";
+import { browserHints } from "@/features/profiles/location";
 import { onboardingDataQuery } from "@/features/profiles/queries";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
@@ -75,6 +78,7 @@ export function FullProfileEditor() {
   // Pré-remplissage avec les données déjà enregistrées (prénom saisi à l'inscription,
   // ou profil complet si l'onboarding est rouvert) pour ne jamais les écraser à vide.
   const queryClient = useQueryClient();
+  const declareLocation = useServerFn(recordDeclaredLocation);
   const { data: saved } = useQuery({ ...onboardingDataQuery(userId), enabled: !!userId });
   const [prefilled, setPrefilled] = useState(false);
   useEffect(() => {
@@ -186,6 +190,8 @@ export function FullProfileEditor() {
       if (profile.error) throw profile.error;
     },
     onSuccess: () => {
+      // Position de la ville déclarée (tâche E) : sans effet sur l'enregistrement si elle échoue.
+      void declareLocation({ data: browserHints() }).catch(() => undefined);
       void queryClient.invalidateQueries({ queryKey: ["profiles"] });
       toast.success("Votre profil est prêt.");
       navigate({ to: "/discover", replace: true });

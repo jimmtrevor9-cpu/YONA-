@@ -1,0 +1,14 @@
+{
+  "r": ["Nanumanga", "Nui", "Niutao", "Funafuti", "Vaitupu", "Nukufetau"],
+  "c": [
+    ["Toga Village", 0, -6.29, 176.31],
+    ["Tanrake Village", 1, -7.25, 177.15],
+    ["Kulia Village", 2, -6.11, 177.33],
+    ["Funafuti", 3, -8.52, 179.19],
+    ["Asau Village", 4, -7.49, 178.68],
+    ["Savave Village", 5, -8.03, 178.31],
+    ["Alapi Village", 3, -8.52, 179.2],
+    ["Senala Village", 3, -8.52, 179.2],
+    ["Fakaifou Village", 3, -8.52, 179.2]
+  ]
+}

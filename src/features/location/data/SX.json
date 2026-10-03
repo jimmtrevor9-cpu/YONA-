@@ -1,0 +1,11 @@
+{
+  "r": ["Autres villes"],
+  "c": [
+    ["Upper Prince's Quarter", 0, 18.03, -63.03],
+    ["Philipsburg", 0, 18.03, -63.05],
+    ["Lower Prince's Quarter", 0, 18.05, -63.04],
+    ["Cul de Sac", 0, 18.05, -63.07],
+    ["Koolbaai", 0, 18.04, -63.08],
+    ["Little Bay", 0, 18.03, -63.06]
+  ]
+}

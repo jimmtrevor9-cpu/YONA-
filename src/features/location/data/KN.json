@@ -1,0 +1,36 @@
+{
+  "r": [
+    "Trinity Palmetto Point",
+    "Saint Anne Sandy Point",
+    "Saint Paul Capesterre",
+    "Saint John Capesterre",
+    "Middle Island",
+    "Christ Church Nichola Town",
+    "Saint James Windwa",
+    "Saint Peter Basseterre",
+    "Saint George Gingerland",
+    "Saint John Figtree",
+    "Saint Thomas Lowland",
+    "Saint Paul Charlestown",
+    "Saint Mary Cayon",
+    "Saint George Basseterre"
+  ],
+  "c": [
+    ["Trinity", 0, 17.3, -62.78],
+    ["Sandy Point Town", 1, 17.36, -62.85],
+    ["Saint Paul's", 2, 17.41, -62.84],
+    ["Sadlers", 3, 17.4, -62.79],
+    ["Old Road Town", 4, 17.32, -62.8],
+    ["Nicola Town", 5, 17.38, -62.75],
+    ["Newcastle", 6, 17.2, -62.58],
+    ["Monkey Hill", 7, 17.32, -62.73],
+    ["Middle Island", 4, 17.33, -62.81],
+    ["Market Shop", 8, 17.13, -62.57],
+    ["Fig Tree", 9, 17.13, -62.6],
+    ["Dieppe Bay Town", 3, 17.41, -62.81],
+    ["Cotton Ground", 10, 17.17, -62.62],
+    ["Charlestown", 11, 17.13, -62.62],
+    ["Cayon", 12, 17.35, -62.73],
+    ["Basseterre", 13, 17.3, -62.72]
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "r": ["Our Lady of Carmo", "Autres villes", "Saint Francis Xavier"],
+  "c": [
+    ["Taipa", 0, 22.16, 113.56],
+    ["Macau", 1, 22.2, 113.55],
+    ["Lai Chi Van", 2, 22.12, 113.55],
+    ["Luhuan", 2, 22.12, 113.55],
+    ["Zhuojiacun", 0, 22.16, 113.56],
+    ["Cotai", 1, 22.14, 113.56],
+    ["Sé", 1, 22.19, 113.55]
+  ]
+}

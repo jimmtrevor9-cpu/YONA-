@@ -4,6 +4,8 @@ import { useRouter } from "@tanstack/react-router";
 import type { Session, User } from "@supabase/supabase-js";
 
 import { recordSessionContext } from "@/features/journal/journal.functions";
+import { recordLocationHints } from "@/features/location/location.functions";
+import { browserHints } from "@/features/profiles/location";
 import { supabase } from "@/integrations/supabase/client";
 
 /**
@@ -21,6 +23,8 @@ function recordSessionOnce(session: Session | null) {
   }
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   void recordSessionContext({ data: { timezone } }).catch(() => {});
+  // Localisation (tâche E) : pays de l'IP et fuseau comparés à la position retenue.
+  void recordLocationHints({ data: browserHints() }).catch(() => {});
 }
 
 interface AuthState {

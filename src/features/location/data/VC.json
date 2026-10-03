@@ -1,0 +1,32 @@
+{
+  "r": [
+    "Saint Andrew Parish",
+    "Grenadines Parish",
+    "Charlotte Parish",
+    "Saint George Parish",
+    "Saint David Parish",
+    "Saint Patrick Parish"
+  ],
+  "c": [
+    ["Questelles", 0, 13.18, -61.25],
+    ["Port Elizabeth", 1, 13.01, -61.24],
+    ["Peruvian Vale", 2, 13.18, -61.14],
+    ["New Montrose", 0, 13.16, -61.23],
+    ["Layou", 0, 13.2, -61.27],
+    ["Kingstown", 3, 13.16, -61.23],
+    ["Greiggs", 2, 13.21, -61.16],
+    ["Georgetown", 2, 13.28, -61.12],
+    ["Chateaubelair", 4, 13.29, -61.24],
+    ["Byera Village", 2, 13.26, -61.12],
+    ["Biabou", 2, 13.19, -61.14],
+    ["Barrouallie", 5, 13.24, -61.27],
+    ["Redemption", 0, 13.16, -61.23],
+    ["Calliaqua", 3, 13.13, -61.19],
+    ["Petit Bordel", 4, 13.29, -61.24],
+    ["Sion Hill", 3, 13.15, -61.22],
+    ["Old Montrose", 3, 13.17, -61.23],
+    ["Diamond", 3, 13.14, -61.17],
+    ["Friendly Village", 2, 13.23, -61.13],
+    ["Bottle and Glass", 5, 13.24, -61.27]
+  ]
+}

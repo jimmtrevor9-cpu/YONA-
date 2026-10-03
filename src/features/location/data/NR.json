@@ -1,0 +1,25 @@
+{
+  "r": [
+    "Aiwo District",
+    "Uaboe District",
+    "Baiti District",
+    "Ijuw District",
+    "Anibare District",
+    "Anabar District",
+    "Yaren District",
+    "Meneng District",
+    "Denigomodu District"
+  ],
+  "c": [
+    ["Yangor", 0, -0.54, 166.91],
+    ["Uaboe", 1, -0.51, 166.92],
+    ["Baiti", 2, -0.51, 166.93],
+    ["Ijuw", 3, -0.52, 166.96],
+    ["Anibare", 4, -0.53, 166.95],
+    ["Anabar", 5, -0.51, 166.95],
+    ["Yaren", 6, -0.55, 166.93],
+    ["Arijejen", 0, -0.53, 166.91],
+    ["Menen", 7, -0.55, 166.95],
+    ["Denigomodu", 8, -0.53, 166.91]
+  ]
+}

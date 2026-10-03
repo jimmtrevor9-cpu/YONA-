@@ -1,0 +1,22 @@
+{
+  "r": [
+    "Saint Mark Parish",
+    "Saint Patrick Parish",
+    "Saint George Parish",
+    "Saint David Parish",
+    "Carriacou and Petite Martinique",
+    "Saint Andrew Parish",
+    "Saint John Parish"
+  ],
+  "c": [
+    ["Victoria", 0, 12.19, -61.71],
+    ["Upper La Taste", 1, 12.19, -61.62],
+    ["Sauteurs", 1, 12.22, -61.64],
+    ["Saint George's", 2, 12.05, -61.75],
+    ["Saint David's", 3, 12.05, -61.67],
+    ["Hillsborough", 4, 12.48, -61.46],
+    ["Grenville", 5, 12.12, -61.62],
+    ["Grand Roy", 6, 12.13, -61.75],
+    ["Gouyave", 6, 12.16, -61.73]
+  ]
+}

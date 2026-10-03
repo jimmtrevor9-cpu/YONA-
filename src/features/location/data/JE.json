@@ -1,0 +1,11 @@
+{
+  "r": ["St John", "St Helier", "Trinity", "Autres villes", "St Martîn", "St Clement"],
+  "c": [
+    ["Saint John", 0, 49.25, -2.14],
+    ["Saint Helier", 1, 49.19, -2.1],
+    ["Trinity", 2, 49.23, -2.09],
+    ["St Lawrence", 3, 49.22, -2.14],
+    ["St Martin", 4, 49.22, -2.05],
+    ["Le Hocq", 5, 49.17, -2.06]
+  ]
+}

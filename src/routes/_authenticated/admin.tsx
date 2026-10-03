@@ -11,6 +11,7 @@ import { LogsTab } from "@/components/admin/LogsTab";
 import { MembersTable } from "@/components/admin/MembersTable";
 import { StatsTab } from "@/components/admin/StatsTab";
 import { DeleteMemberSection, UserHistory } from "@/components/admin/UserHistory";
+import { UserLocation } from "@/components/admin/UserLocation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -281,6 +282,8 @@ function UserDetail({ userId, onBack }: { userId: string; onBack: () => void }) 
           <p className="text-xs text-muted-foreground">Aucun paiement.</p>
         )}
       </section>
+
+      <UserLocation userId={userId} />
 
       <UserHistory userId={userId} />
 

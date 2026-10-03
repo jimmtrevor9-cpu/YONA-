@@ -1,0 +1,28 @@
+{
+  "r": [
+    "Saint George",
+    "Hamilton city",
+    "Pembroke",
+    "Devonshire",
+    "Smithʼs",
+    "Hamilton",
+    "Saint Georgeʼs",
+    "Paget",
+    "Warwick",
+    "Southampton",
+    "Sandys"
+  ],
+  "c": [
+    ["Saint George", 0, 32.38, -64.68],
+    ["Hamilton", 1, 32.29, -64.78],
+    ["Pembroke Parish", 2, 32.3, -64.79],
+    ["Devonshire Parish", 3, 32.31, -64.76],
+    ["Smith's Parish", 4, 32.31, -64.74],
+    ["Hamilton Parish", 5, 32.34, -64.73],
+    ["St George's Parish", 6, 32.37, -64.7],
+    ["Paget Parish", 7, 32.28, -64.78],
+    ["Warwick Parish", 8, 32.27, -64.81],
+    ["Southampton Parish", 9, 32.25, -64.85],
+    ["Sandys Parish", 10, 32.3, -64.87]
+  ]
+}

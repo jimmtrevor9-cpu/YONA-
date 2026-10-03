@@ -2,7 +2,7 @@
 -- YONA — CRÉER TOUTE LA BASE DE DONNÉES (projet Supabase neuf et vide)
 --
 -- Ce fichier installe en une seule fois tout ce dont le site a besoin :
---   41 tables, 156 fonctions, 105 règles d'accès, les droits de chaque rôle,
+--   43 tables, 160 fonctions, 106 règles d'accès, les droits de chaque rôle,
 --   la création automatique du profil à l'inscription (e-mail ou Google), 5 espaces de
 --   fichiers (privés : photos, messages vocaux, vérifications ; publics : images des profils
 --   de démonstration, publicités), les messages en temps réel,
@@ -21,7 +21,7 @@
 -- Le déclencheur de la section « Comptes » relie chaque nouveau compte à son profil.
 --
 -- Fichier généré par scripts/generate-base-complete.py à partir de supabase/migrations/
--- (94 migrations). Ne pas modifier à la main.
+-- (95 migrations). Ne pas modifier à la main.
 -- ============================================================================
 
 -- ============================================================================
@@ -709,6 +709,25 @@ BEGIN
 END;
 $$;
 
+CREATE FUNCTION public.admin_location_flags(_limit integer DEFAULT 100) RETURNS TABLE(user_id uuid, email text, first_name text, source text, country text, region text, city text, declared_country text, declared_city text, ip_country text, ip_city text, timezone text, language text, inconsistency text[], checked_at timestamp with time zone)
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+#variable_conflict use_column
+BEGIN
+  PERFORM public.assert_admin();
+  RETURN QUERY
+  SELECT l.user_id, u.email, p.first_name, l.source, l.country, l.region, l.city, p.country, p.city,
+         l.ip_country, l.ip_city, l.timezone, l.language, l.inconsistency, l.checked_at
+  FROM public.profile_locations l
+  JOIN public.users u ON u.id = l.user_id
+  LEFT JOIN public.profiles p ON p.user_id = l.user_id
+  WHERE l.inconsistent
+  ORDER BY l.checked_at DESC NULLS LAST
+  LIMIT least(greatest(coalesce(_limit, 100), 1), 1000);
+END;
+$$;
+
 CREATE FUNCTION public.admin_log_action(_action text, _target_table text, _target_id text, _details jsonb DEFAULT '{}'::jsonb) RETURNS void
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
@@ -1070,6 +1089,23 @@ BEGIN
                  'admin', (SELECT u.email FROM public.users u WHERE u.id = l.admin_id)) ORDER BY l.created_at DESC), '[]'::jsonb)
               FROM (SELECT * FROM public.admin_audit_log WHERE target_id = _user_id::text
                     ORDER BY created_at DESC LIMIT 50) l)
+  );
+END;
+$$;
+
+CREATE FUNCTION public.admin_user_location(_user_id uuid) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+BEGIN
+  PERFORM public.assert_admin();
+  RETURN jsonb_build_object(
+    'current', (SELECT to_jsonb(l) - 'user_id' FROM public.profile_locations l WHERE l.user_id = _user_id),
+    'declared', (SELECT jsonb_build_object('country', p.country, 'region', p.region, 'city', p.city)
+                 FROM public.profiles p WHERE p.user_id = _user_id),
+    'history', (SELECT coalesce(jsonb_agg(to_jsonb(h) - 'user_id' ORDER BY h.created_at DESC), '[]'::jsonb)
+                FROM (SELECT * FROM public.location_history WHERE user_id = _user_id
+                      ORDER BY created_at DESC LIMIT 30) h)
   );
 END;
 $$;
@@ -2766,6 +2802,13 @@ BEGIN
 END;
 $$;
 
+CREATE FUNCTION public.location_priority(_source text) RETURNS integer
+    LANGUAGE sql IMMUTABLE
+    SET search_path TO 'public'
+    AS $$
+  SELECT CASE _source WHEN 'device' THEN 3 WHEN 'declared' THEN 2 WHEN 'ip' THEN 1 ELSE 0 END
+$$;
+
 -- ============================================================================
 -- 5. Table utilisée par les fonctions qui suivent
 -- ============================================================================
@@ -3087,7 +3130,9 @@ CREATE FUNCTION public.member_country(_user_id uuid) RETURNS text
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
-  SELECT p.country FROM public.profiles p WHERE p.user_id = _user_id
+  SELECT coalesce(
+    (SELECT l.country FROM public.profile_locations l WHERE l.user_id = _user_id AND l.country IS NOT NULL),
+    (SELECT p.country FROM public.profiles p WHERE p.user_id = _user_id))
 $$;
 
 CREATE FUNCTION public.messages_block_phone_numbers() RETURNS trigger
@@ -3333,6 +3378,8 @@ BEGIN
   WHERE created_at < now() - interval '12 months' AND (ip IS NOT NULL OR user_agent IS NOT NULL);
   GET DIAGNOSTICS _c = ROW_COUNT; _n := _n + _c;
   DELETE FROM public.server_errors WHERE created_at < now() - interval '12 months';
+  GET DIAGNOSTICS _c = ROW_COUNT; _n := _n + _c;
+  DELETE FROM public.location_history WHERE created_at < now() - interval '12 months';
   GET DIAGNOSTICS _c = ROW_COUNT; _n := _n + _c;
   RETURN _n;
 END; $$;
@@ -4329,6 +4376,105 @@ BEGIN
   RETURN NEW;
 END; $$;
 
+CREATE FUNCTION public.set_member_location(_user_id uuid, _source text, _latitude double precision DEFAULT NULL::double precision, _longitude double precision DEFAULT NULL::double precision, _country_code text DEFAULT NULL::text, _region text DEFAULT NULL::text, _city text DEFAULT NULL::text, _accuracy_m integer DEFAULT NULL::integer, _timezone text DEFAULT NULL::text, _language text DEFAULT NULL::text, _ip_country text DEFAULT NULL::text, _ip_city text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $_$
+DECLARE
+  _cur public.profile_locations%ROWTYPE;
+  _found boolean;
+  _code text := upper(nullif(btrim(coalesce(_country_code, '')), ''));
+  _ipc text := upper(nullif(btrim(coalesce(_ip_country, public.request_context() ->> 'country', '')), ''));
+  _ipcity text := left(nullif(btrim(coalesce(_ip_city, public.request_context() ->> 'city', '')), ''), 120);
+  _tz text := left(nullif(btrim(coalesce(_timezone, '')), ''), 64);
+  _replace boolean;
+  _reasons text[] := '{}';
+  _row public.profile_locations%ROWTYPE;
+BEGIN
+  IF _user_id IS NULL OR NOT EXISTS (SELECT 1 FROM public.users u WHERE u.id = _user_id) THEN
+    RAISE EXCEPTION 'user_not_found' USING ERRCODE = 'P0002';
+  END IF;
+  IF _source IS NULL OR _source NOT IN ('device', 'declared', 'ip') THEN
+    RAISE EXCEPTION 'invalid_source' USING ERRCODE = '22023';
+  END IF;
+  IF (_latitude IS NULL) <> (_longitude IS NULL)
+     OR (_latitude IS NOT NULL AND (_latitude NOT BETWEEN -90 AND 90 OR _longitude NOT BETWEEN -180 AND 180
+                                    OR _latitude = 'NaN'::double precision OR _longitude = 'NaN'::double precision)) THEN
+    RAISE EXCEPTION 'invalid_location' USING ERRCODE = '22023';
+  END IF;
+  IF _code IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public.geo_countries g WHERE g.code = _code) THEN
+    _code := NULL;
+  END IF;
+  IF _ipc !~ '^[A-Z]{2}$' OR _ipc = 'XX' THEN
+    _ipc := NULL;
+  END IF;
+
+  SELECT * INTO _cur FROM public.profile_locations l WHERE l.user_id = _user_id FOR UPDATE;
+  _found := FOUND;
+  -- La plus haute priorité disponible l'emporte (appareil > déclarée > IP) ; une position
+  -- de plus de 6 mois peut être remplacée par n'importe quelle source.
+  _replace := _latitude IS NOT NULL AND (
+    NOT _found
+    OR public.location_priority(_source) >= public.location_priority(_cur.source)
+    OR _cur.updated_at < now() - interval '6 months'
+    -- Ancienne position sans pays connu : une position avec pays la remplace.
+    OR (_cur.country_code IS NULL AND _code IS NOT NULL));
+
+  IF _replace THEN
+    INSERT INTO public.profile_locations AS l (
+      user_id, latitude, longitude, updated_at, source, country_code, country, region, city, accuracy_m)
+    VALUES (_user_id, round(_latitude::numeric, 2)::double precision, round(_longitude::numeric, 2)::double precision,
+            now(), _source, _code, (SELECT g.name FROM public.geo_countries g WHERE g.code = _code),
+            left(nullif(btrim(_region), ''), 120), left(nullif(btrim(_city), ''), 120),
+            CASE WHEN _accuracy_m > 0 THEN least(_accuracy_m, 1000000) END)
+    ON CONFLICT (user_id) DO UPDATE SET
+      latitude = EXCLUDED.latitude, longitude = EXCLUDED.longitude, updated_at = now(),
+      source = EXCLUDED.source, country_code = EXCLUDED.country_code, country = EXCLUDED.country,
+      region = EXCLUDED.region, city = EXCLUDED.city, accuracy_m = EXCLUDED.accuracy_m;
+  ELSIF NOT _found THEN
+    -- Aucune position connue et rien à retenir : seulement l'historique.
+    INSERT INTO public.location_history (user_id, source, retained_source, ip_country, timezone)
+    VALUES (_user_id, _source, _source, _ipc, _tz);
+    RETURN jsonb_build_object('retained', NULL);
+  END IF;
+
+  SELECT * INTO _row FROM public.profile_locations l WHERE l.user_id = _user_id;
+  -- Indices : pays de l'IP (sauf si la position retenue vient justement de l'IP) et fuseau.
+  IF _row.country_code IS NOT NULL THEN
+    IF _ipc IS NOT NULL AND _row.source <> 'ip' AND _ipc <> _row.country_code THEN
+      _reasons := _reasons || ('ip_country:' || _ipc);
+    END IF;
+    IF _tz IS NOT NULL AND EXISTS (SELECT 1 FROM public.geo_timezones t WHERE t.tz = _tz)
+       AND NOT EXISTS (SELECT 1 FROM public.geo_timezones t WHERE t.tz = _tz AND _row.country_code = ANY (t.country_codes)) THEN
+      _reasons := _reasons || ('timezone:' || _tz);
+    END IF;
+    -- Position de l'appareil dans un autre pays que celui affiché sur le profil.
+    IF _row.source = 'device' AND _row.country IS NOT NULL AND EXISTS (
+         SELECT 1 FROM public.profiles p WHERE p.user_id = _user_id AND p.country IS NOT NULL
+           AND lower(p.country) <> lower(_row.country)) THEN
+      _reasons := _reasons || ('declared_country:' || (SELECT p.country FROM public.profiles p WHERE p.user_id = _user_id));
+    END IF;
+  END IF;
+  UPDATE public.profile_locations l SET
+    ip_country = coalesce(_ipc, l.ip_country),
+    ip_city = CASE WHEN _ipc IS NOT NULL THEN _ipcity ELSE l.ip_city END,
+    timezone = coalesce(_tz, l.timezone),
+    language = coalesce(left(nullif(btrim(_language), ''), 35), l.language),
+    inconsistent = cardinality(_reasons) > 0,
+    inconsistency = _reasons,
+    checked_at = now()
+  WHERE l.user_id = _user_id
+  RETURNING * INTO _row;
+  INSERT INTO public.location_history (user_id, source, retained_source, country_code, country, city,
+                                       ip_country, timezone, inconsistent, inconsistency)
+  VALUES (_user_id, _source, _row.source, _row.country_code, _row.country, _row.city,
+          _row.ip_country, _row.timezone, _row.inconsistent, _row.inconsistency);
+  RETURN jsonb_build_object(
+    'retained', _row.source, 'replaced', _replace, 'country', _row.country, 'region', _row.region,
+    'city', _row.city, 'inconsistent', _row.inconsistent, 'inconsistency', to_jsonb(_row.inconsistency));
+END;
+$_$;
+
 CREATE FUNCTION public.set_my_location(_latitude double precision, _longitude double precision) RETURNS void
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
@@ -4342,11 +4488,13 @@ BEGIN
      OR _latitude = 'NaN'::double precision OR _longitude = 'NaN'::double precision THEN
     RAISE EXCEPTION 'invalid_location' USING ERRCODE = '22023';
   END IF;
-  INSERT INTO public.profile_locations AS l (user_id, latitude, longitude, updated_at)
+  INSERT INTO public.profile_locations AS l (user_id, latitude, longitude, updated_at, source)
   VALUES (auth.uid(), round(_latitude::numeric, 2)::double precision,
-          round(_longitude::numeric, 2)::double precision, now())
+          round(_longitude::numeric, 2)::double precision, now(), 'device')
   ON CONFLICT (user_id) DO UPDATE
-    SET latitude = EXCLUDED.latitude, longitude = EXCLUDED.longitude, updated_at = now();
+    SET latitude = EXCLUDED.latitude, longitude = EXCLUDED.longitude, updated_at = now(),
+        source = 'device', country_code = NULL, country = NULL, region = NULL, city = NULL,
+        accuracy_m = NULL;
 END;
 $$;
 
@@ -4843,6 +4991,12 @@ CREATE TABLE public.geo_countries (
     lng double precision NOT NULL
 );
 
+CREATE TABLE public.geo_timezones (
+    tz text NOT NULL,
+    country_codes text[] NOT NULL
+);
+COMMENT ON TABLE public.geo_timezones IS 'Fuseau horaire IANA → pays où il est utilisé (indice de localisation).';
+
 CREATE TABLE public.likes (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     sender_id uuid NOT NULL,
@@ -4851,6 +5005,32 @@ CREATE TABLE public.likes (
     status public.like_status DEFAULT 'active'::public.like_status NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT likes_no_self CHECK ((sender_id <> receiver_id))
+);
+
+CREATE TABLE public.location_history (
+    id bigint NOT NULL,
+    user_id uuid NOT NULL,
+    source text NOT NULL,
+    retained_source text NOT NULL,
+    country_code text,
+    country text,
+    city text,
+    ip_country text,
+    timezone text,
+    inconsistent boolean DEFAULT false NOT NULL,
+    inconsistency text[] DEFAULT '{}'::text[] NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT location_history_retained_source_check CHECK ((retained_source = ANY (ARRAY['device'::text, 'declared'::text, 'ip'::text]))),
+    CONSTRAINT location_history_source_check CHECK ((source = ANY (ARRAY['device'::text, 'declared'::text, 'ip'::text])))
+);
+COMMENT ON TABLE public.location_history IS 'Positions reçues (appareil, déclarée, IP) et position retenue ; indices d''incohérence. Administration seulement.';
+ALTER TABLE public.location_history ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.location_history_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
 );
 
 CREATE TABLE public.matches (
@@ -4988,9 +5168,26 @@ CREATE TABLE public.profile_locations (
     latitude double precision NOT NULL,
     longitude double precision NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    source text DEFAULT 'device'::text NOT NULL,
+    country_code text,
+    country text,
+    region text,
+    city text,
+    accuracy_m integer,
+    ip_country text,
+    ip_city text,
+    timezone text,
+    language text,
+    inconsistent boolean DEFAULT false NOT NULL,
+    inconsistency text[] DEFAULT '{}'::text[] NOT NULL,
+    checked_at timestamp with time zone,
+    CONSTRAINT profile_locations_country_code_check CHECK (((country_code IS NULL) OR (country_code ~ '^[A-Z]{2}$'::text))),
     CONSTRAINT profile_locations_latitude_check CHECK (((latitude >= ('-90'::integer)::double precision) AND (latitude <= (90)::double precision))),
-    CONSTRAINT profile_locations_longitude_check CHECK (((longitude >= ('-180'::integer)::double precision) AND (longitude <= (180)::double precision)))
+    CONSTRAINT profile_locations_longitude_check CHECK (((longitude >= ('-180'::integer)::double precision) AND (longitude <= (180)::double precision))),
+    CONSTRAINT profile_locations_source_check CHECK ((source = ANY (ARRAY['device'::text, 'declared'::text, 'ip'::text])))
 );
+COMMENT ON COLUMN public.profile_locations.source IS 'Origine de la position retenue : device (appareil), declared (ville choisie), ip (adresse IP, dernier recours).';
+COMMENT ON COLUMN public.profile_locations.inconsistency IS 'Indices qui contredisent la position retenue (ip_country:FR, timezone:Europe/Paris, declared_country:France) : VPN possible.';
 
 CREATE TABLE public.profile_verifications (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
@@ -5276,11 +5473,17 @@ ALTER TABLE ONLY public.favorites
 ALTER TABLE ONLY public.geo_countries
     ADD CONSTRAINT geo_countries_pkey PRIMARY KEY (code);
 
+ALTER TABLE ONLY public.geo_timezones
+    ADD CONSTRAINT geo_timezones_pkey PRIMARY KEY (tz);
+
 ALTER TABLE ONLY public.likes
     ADD CONSTRAINT likes_pkey PRIMARY KEY (id);
 
 ALTER TABLE ONLY public.likes
     ADD CONSTRAINT likes_sender_id_receiver_id_key UNIQUE (sender_id, receiver_id);
+
+ALTER TABLE ONLY public.location_history
+    ADD CONSTRAINT location_history_pkey PRIMARY KEY (id);
 
 ALTER TABLE ONLY public.matches
     ADD CONSTRAINT matches_pkey PRIMARY KEY (id);
@@ -5427,6 +5630,10 @@ CREATE INDEX geo_countries_name_idx ON public.geo_countries USING btree (lower(n
 
 CREATE INDEX likes_receiver_idx ON public.likes USING btree (receiver_id, kind, status);
 
+CREATE INDEX location_history_created_idx ON public.location_history USING btree (created_at DESC);
+
+CREATE INDEX location_history_user_idx ON public.location_history USING btree (user_id, created_at DESC);
+
 CREATE INDEX matches_user_2_idx ON public.matches USING btree (user_2_id);
 
 CREATE INDEX messages_conversation_idx ON public.messages USING btree (conversation_id, created_at);
@@ -5452,6 +5659,8 @@ CREATE UNIQUE INDEX photos_one_primary_idx ON public.photos USING btree (user_id
 CREATE INDEX photos_user_idx ON public.photos USING btree (user_id, "position");
 
 CREATE INDEX profile_boosts_user_idx ON public.profile_boosts USING btree (user_id, expires_at DESC);
+
+CREATE INDEX profile_locations_inconsistent_idx ON public.profile_locations USING btree (checked_at DESC) WHERE inconsistent;
 
 CREATE INDEX profile_verifications_pending_idx ON public.profile_verifications USING btree (created_at) WHERE (status = 'pending'::text);
 
@@ -5704,6 +5913,9 @@ ALTER TABLE ONLY public.likes
 ALTER TABLE ONLY public.likes
     ADD CONSTRAINT likes_sender_id_fkey FOREIGN KEY (sender_id) REFERENCES public.users(id) ON DELETE CASCADE;
 
+ALTER TABLE ONLY public.location_history
+    ADD CONSTRAINT location_history_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+
 ALTER TABLE ONLY public.matches
     ADD CONSTRAINT matches_user_1_id_fkey FOREIGN KEY (user_1_id) REFERENCES public.users(id) ON DELETE CASCADE;
 
@@ -5814,7 +6026,9 @@ ALTER TABLE public.conversation_user_usage ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.conversations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.favorites ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.geo_countries ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.geo_timezones ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.likes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.location_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.matches ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.moderation_actions ENABLE ROW LEVEL SECURITY;
@@ -5931,6 +6145,9 @@ CREATE POLICY likes_select_admin ON public.likes FOR SELECT TO authenticated USI
 CREATE POLICY likes_select_sent ON public.likes FOR SELECT TO authenticated USING ((sender_id = auth.uid()));
 
 CREATE POLICY likes_update_own ON public.likes FOR UPDATE TO authenticated USING ((sender_id = auth.uid())) WITH CHECK (((sender_id = auth.uid()) AND ((status = 'withdrawn'::public.like_status) OR ((NOT public.is_blocked_between(sender_id, receiver_id)) AND public.can_browse_profiles() AND public.is_discoverable_profile(receiver_id)))));
+
+-- location_history
+CREATE POLICY location_history_admin_select ON public.location_history FOR SELECT TO authenticated USING (public.is_admin());
 
 -- matches
 CREATE POLICY matches_select_admin ON public.matches FOR SELECT TO authenticated USING (public.is_admin());
@@ -6169,12 +6386,13 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
   public.users
 TO authenticated;
 
--- 8 compteurs — serveur du site : tout
+-- 9 compteurs — serveur du site : tout
 REVOKE ALL ON SEQUENCE
   public.activity_events_id_seq,
   public.ad_events_id_seq,
   public.admin_audit_log_id_seq,
   public.auth_events_id_seq,
+  public.location_history_id_seq,
   public.payment_events_id_seq,
   public.server_errors_id_seq,
   public.signup_events_id_seq,
@@ -6185,10 +6403,39 @@ GRANT ALL ON SEQUENCE
   public.ad_events_id_seq,
   public.admin_audit_log_id_seq,
   public.auth_events_id_seq,
+  public.location_history_id_seq,
   public.payment_events_id_seq,
   public.server_errors_id_seq,
   public.signup_events_id_seq,
   public.storage_cleanup_queue_id_seq
+TO service_role;
+
+-- 4 tables — membres connectés : tout · serveur du site : tout
+REVOKE ALL ON TABLE
+  public.ad_events,
+  public.ad_settings,
+  public.ads,
+  public.location_history
+FROM PUBLIC, anon, authenticated, service_role;
+GRANT ALL ON TABLE
+  public.ad_events,
+  public.ad_settings,
+  public.ads,
+  public.location_history
+TO authenticated, service_role;
+
+-- 4 tables — serveur du site : tout
+REVOKE ALL ON TABLE
+  public.geo_countries,
+  public.geo_timezones,
+  public.storage_cleanup_queue,
+  public.virtual_profile_removals
+FROM PUBLIC, anon, authenticated, service_role;
+GRANT ALL ON TABLE
+  public.geo_countries,
+  public.geo_timezones,
+  public.storage_cleanup_queue,
+  public.virtual_profile_removals
 TO service_role;
 
 -- 3 tables — visiteurs : lecture, vidage, références, déclencheurs · membres connectés : lecture, vidage, références, déclencheurs · serveur du site : tout
@@ -6207,30 +6454,6 @@ GRANT SELECT, TRUNCATE, REFERENCES, TRIGGER ON TABLE
   public.profile_boosts,
   public.support_tickets
 TO anon, authenticated;
-
--- 3 tables — membres connectés : tout · serveur du site : tout
-REVOKE ALL ON TABLE
-  public.ad_events,
-  public.ad_settings,
-  public.ads
-FROM PUBLIC, anon, authenticated, service_role;
-GRANT ALL ON TABLE
-  public.ad_events,
-  public.ad_settings,
-  public.ads
-TO authenticated, service_role;
-
--- 3 tables — serveur du site : tout
-REVOKE ALL ON TABLE
-  public.geo_countries,
-  public.storage_cleanup_queue,
-  public.virtual_profile_removals
-FROM PUBLIC, anon, authenticated, service_role;
-GRANT ALL ON TABLE
-  public.geo_countries,
-  public.storage_cleanup_queue,
-  public.virtual_profile_removals
-TO service_role;
 
 -- 1 tables — visiteurs : tout · membres connectés : tout · serveur du site : tout
 REVOKE ALL ON TABLE
@@ -6262,7 +6485,7 @@ GRANT SELECT, INSERT, DELETE ON TABLE
   public.favorites
 TO authenticated;
 
--- 89 fonctions — membres connectés : exécution · serveur du site : exécution
+-- 91 fonctions — membres connectés : exécution · serveur du site : exécution
 REVOKE ALL ON FUNCTION
   public.activate_profile_boost(),
   public.admin_ad_stats(uuid,timestamp with time zone,timestamp with time zone,text,text),
@@ -6276,6 +6499,7 @@ REVOKE ALL ON FUNCTION
   public.admin_list_support_tickets(),
   public.admin_list_unlocks(),
   public.admin_list_users(text,text,integer,integer),
+  public.admin_location_flags(integer),
   public.admin_log_action(text,text,text,jsonb),
   public.admin_members(text,text,text,text,boolean,integer,integer),
   public.admin_moderate_photo(uuid,boolean,text),
@@ -6287,6 +6511,7 @@ REVOKE ALL ON FUNCTION
   public.admin_stats(),
   public.admin_user_detail(uuid),
   public.admin_user_history(uuid),
+  public.admin_user_location(uuid),
   public.assert_admin(),
   public.block_user(uuid),
   public.can_browse_profiles(),
@@ -6367,6 +6592,7 @@ GRANT EXECUTE ON FUNCTION
   public.admin_list_support_tickets(),
   public.admin_list_unlocks(),
   public.admin_list_users(text,text,integer,integer),
+  public.admin_location_flags(integer),
   public.admin_log_action(text,text,text,jsonb),
   public.admin_members(text,text,text,text,boolean,integer,integer),
   public.admin_moderate_photo(uuid,boolean,text),
@@ -6378,6 +6604,7 @@ GRANT EXECUTE ON FUNCTION
   public.admin_stats(),
   public.admin_user_detail(uuid),
   public.admin_user_history(uuid),
+  public.admin_user_location(uuid),
   public.assert_admin(),
   public.block_user(uuid),
   public.can_browse_profiles(),
@@ -6446,7 +6673,7 @@ GRANT EXECUTE ON FUNCTION
   public.undo_last_pass()
 TO authenticated, service_role;
 
--- 58 fonctions — serveur du site : exécution
+-- 59 fonctions — serveur du site : exécution
 REVOKE ALL ON FUNCTION
   public.activate_conversation_unlock(),
   public.activate_premium_subscription(),
@@ -6504,6 +6731,7 @@ REVOKE ALL ON FUNCTION
   public.replace_virtual_profile_on_signup(),
   public.request_context(),
   public.set_like_created_at(),
+  public.set_member_location(uuid,text,double precision,double precision,text,text,text,integer,text,text,text,text),
   public.set_updated_at(),
   public.wants_notification(uuid,text)
 FROM PUBLIC, anon, authenticated, service_role;
@@ -6564,15 +6792,17 @@ GRANT EXECUTE ON FUNCTION
   public.replace_virtual_profile_on_signup(),
   public.request_context(),
   public.set_like_created_at(),
+  public.set_member_location(uuid,text,double precision,double precision,text,text,text,integer,text,text,text,text),
   public.set_updated_at(),
   public.wants_notification(uuid,text)
 TO service_role;
 
--- 9 fonctions — tout le monde : exécution · visiteurs : exécution · membres connectés : exécution · serveur du site : exécution
+-- 10 fonctions — tout le monde : exécution · visiteurs : exécution · membres connectés : exécution · serveur du site : exécution
 REVOKE ALL ON FUNCTION
   public.ai_usage_day(),
   public.auth_method(text),
   public.clear_profile_coordinates(),
+  public.location_priority(text),
   public.payment_product(public.payment_type,jsonb),
   public.premium_plan_amount(public.subscription_plan),
   public.set_favorite_created_at(),
@@ -6584,6 +6814,7 @@ GRANT EXECUTE ON FUNCTION
   public.ai_usage_day(),
   public.auth_method(text),
   public.clear_profile_coordinates(),
+  public.location_priority(text),
   public.payment_product(public.payment_type,jsonb),
   public.premium_plan_amount(public.subscription_plan),
   public.set_favorite_created_at(),
@@ -6742,10 +6973,554 @@ END;
 $cron$;
 
 -- ============================================================================
--- 19. Données de départ : réglages (fréquence des publicités)
+-- 19. Données de départ : réglages (fréquence des publicités) et fuseaux horaires
 -- ============================================================================
 
 INSERT INTO public.ad_settings (id) VALUES (true) ON CONFLICT (id) DO NOTHING;
+INSERT INTO public.geo_timezones (tz, country_codes) VALUES
+  ('Africa/Abidjan', ARRAY['BF', 'CI', 'GH', 'GM', 'GN', 'IS', 'ML', 'MR', 'SH', 'SL', 'SN', 'TG']),
+  ('Africa/Accra', ARRAY['GH']),
+  ('Africa/Addis_Ababa', ARRAY['ET']),
+  ('Africa/Algiers', ARRAY['DZ']),
+  ('Africa/Asmara', ARRAY['ER']),
+  ('Africa/Asmera', ARRAY['ER']),
+  ('Africa/Bamako', ARRAY['ML']),
+  ('Africa/Bangui', ARRAY['CF']),
+  ('Africa/Banjul', ARRAY['GM']),
+  ('Africa/Bissau', ARRAY['GW']),
+  ('Africa/Blantyre', ARRAY['MW']),
+  ('Africa/Brazzaville', ARRAY['CG']),
+  ('Africa/Bujumbura', ARRAY['BI']),
+  ('Africa/Cairo', ARRAY['EG']),
+  ('Africa/Casablanca', ARRAY['MA']),
+  ('Africa/Ceuta', ARRAY['ES']),
+  ('Africa/Conakry', ARRAY['GN']),
+  ('Africa/Dakar', ARRAY['SN']),
+  ('Africa/Dar_es_Salaam', ARRAY['TZ']),
+  ('Africa/Djibouti', ARRAY['DJ']),
+  ('Africa/Douala', ARRAY['CM']),
+  ('Africa/El_Aaiun', ARRAY['EH']),
+  ('Africa/Freetown', ARRAY['SL']),
+  ('Africa/Gaborone', ARRAY['BW']),
+  ('Africa/Harare', ARRAY['ZW']),
+  ('Africa/Johannesburg', ARRAY['LS', 'SZ', 'ZA']),
+  ('Africa/Juba', ARRAY['SS']),
+  ('Africa/Kampala', ARRAY['UG']),
+  ('Africa/Khartoum', ARRAY['SD']),
+  ('Africa/Kigali', ARRAY['RW']),
+  ('Africa/Kinshasa', ARRAY['CD']),
+  ('Africa/Lagos', ARRAY['AO', 'BJ', 'CD', 'CF', 'CG', 'CM', 'GA', 'GQ', 'NE', 'NG']),
+  ('Africa/Libreville', ARRAY['GA']),
+  ('Africa/Lome', ARRAY['TG']),
+  ('Africa/Luanda', ARRAY['AO']),
+  ('Africa/Lubumbashi', ARRAY['CD']),
+  ('Africa/Lusaka', ARRAY['ZM']),
+  ('Africa/Malabo', ARRAY['GQ']),
+  ('Africa/Maputo', ARRAY['BI', 'BW', 'CD', 'MW', 'MZ', 'RW', 'ZM', 'ZW']),
+  ('Africa/Maseru', ARRAY['LS']),
+  ('Africa/Mbabane', ARRAY['SZ']),
+  ('Africa/Mogadishu', ARRAY['SO']),
+  ('Africa/Monrovia', ARRAY['LR']),
+  ('Africa/Nairobi', ARRAY['DJ', 'ER', 'ET', 'KE', 'KM', 'MG', 'SO', 'TZ', 'UG', 'YT']),
+  ('Africa/Ndjamena', ARRAY['TD']),
+  ('Africa/Niamey', ARRAY['NE']),
+  ('Africa/Nouakchott', ARRAY['MR']),
+  ('Africa/Ouagadougou', ARRAY['BF']),
+  ('Africa/Porto-Novo', ARRAY['BJ']),
+  ('Africa/Sao_Tome', ARRAY['ST']),
+  ('Africa/Timbuktu', ARRAY['ML']),
+  ('Africa/Tripoli', ARRAY['LY']),
+  ('Africa/Tunis', ARRAY['TN']),
+  ('Africa/Windhoek', ARRAY['NA']),
+  ('America/Adak', ARRAY['US']),
+  ('America/Anchorage', ARRAY['US']),
+  ('America/Anguilla', ARRAY['AI']),
+  ('America/Antigua', ARRAY['AG']),
+  ('America/Araguaina', ARRAY['BR']),
+  ('America/Argentina/Buenos_Aires', ARRAY['AR']),
+  ('America/Argentina/Catamarca', ARRAY['AR']),
+  ('America/Argentina/ComodRivadavia', ARRAY['AR']),
+  ('America/Argentina/Cordoba', ARRAY['AR']),
+  ('America/Argentina/Jujuy', ARRAY['AR']),
+  ('America/Argentina/La_Rioja', ARRAY['AR']),
+  ('America/Argentina/Mendoza', ARRAY['AR']),
+  ('America/Argentina/Rio_Gallegos', ARRAY['AR']),
+  ('America/Argentina/Salta', ARRAY['AR']),
+  ('America/Argentina/San_Juan', ARRAY['AR']),
+  ('America/Argentina/San_Luis', ARRAY['AR']),
+  ('America/Argentina/Tucuman', ARRAY['AR']),
+  ('America/Argentina/Ushuaia', ARRAY['AR']),
+  ('America/Aruba', ARRAY['AW']),
+  ('America/Asuncion', ARRAY['PY']),
+  ('America/Atikokan', ARRAY['CA']),
+  ('America/Atka', ARRAY['US']),
+  ('America/Bahia', ARRAY['BR']),
+  ('America/Bahia_Banderas', ARRAY['MX']),
+  ('America/Barbados', ARRAY['BB']),
+  ('America/Belem', ARRAY['BR']),
+  ('America/Belize', ARRAY['BZ']),
+  ('America/Blanc-Sablon', ARRAY['CA']),
+  ('America/Boa_Vista', ARRAY['BR']),
+  ('America/Bogota', ARRAY['CO']),
+  ('America/Boise', ARRAY['US']),
+  ('America/Buenos_Aires', ARRAY['AR']),
+  ('America/Cambridge_Bay', ARRAY['CA']),
+  ('America/Campo_Grande', ARRAY['BR']),
+  ('America/Cancun', ARRAY['MX']),
+  ('America/Caracas', ARRAY['VE']),
+  ('America/Catamarca', ARRAY['AR']),
+  ('America/Cayenne', ARRAY['GF']),
+  ('America/Cayman', ARRAY['KY']),
+  ('America/Chicago', ARRAY['US']),
+  ('America/Chihuahua', ARRAY['MX']),
+  ('America/Ciudad_Juarez', ARRAY['MX']),
+  ('America/Coral_Harbour', ARRAY['CA']),
+  ('America/Cordoba', ARRAY['AR']),
+  ('America/Costa_Rica', ARRAY['CR']),
+  ('America/Coyhaique', ARRAY['CL']),
+  ('America/Creston', ARRAY['CA']),
+  ('America/Cuiaba', ARRAY['BR']),
+  ('America/Curacao', ARRAY['CW']),
+  ('America/Danmarkshavn', ARRAY['GL']),
+  ('America/Dawson', ARRAY['CA']),
+  ('America/Dawson_Creek', ARRAY['CA']),
+  ('America/Denver', ARRAY['US']),
+  ('America/Detroit', ARRAY['US']),
+  ('America/Dominica', ARRAY['DM']),
+  ('America/Edmonton', ARRAY['CA']),
+  ('America/Eirunepe', ARRAY['BR']),
+  ('America/El_Salvador', ARRAY['SV']),
+  ('America/Ensenada', ARRAY['MX']),
+  ('America/Fort_Nelson', ARRAY['CA']),
+  ('America/Fort_Wayne', ARRAY['US']),
+  ('America/Fortaleza', ARRAY['BR']),
+  ('America/Glace_Bay', ARRAY['CA']),
+  ('America/Godthab', ARRAY['GL']),
+  ('America/Goose_Bay', ARRAY['CA']),
+  ('America/Grand_Turk', ARRAY['TC']),
+  ('America/Grenada', ARRAY['GD']),
+  ('America/Guadeloupe', ARRAY['GP']),
+  ('America/Guatemala', ARRAY['GT']),
+  ('America/Guayaquil', ARRAY['EC']),
+  ('America/Guyana', ARRAY['GY']),
+  ('America/Halifax', ARRAY['CA']),
+  ('America/Havana', ARRAY['CU']),
+  ('America/Hermosillo', ARRAY['MX']),
+  ('America/Indiana/Indianapolis', ARRAY['US']),
+  ('America/Indiana/Knox', ARRAY['US']),
+  ('America/Indiana/Marengo', ARRAY['US']),
+  ('America/Indiana/Petersburg', ARRAY['US']),
+  ('America/Indiana/Tell_City', ARRAY['US']),
+  ('America/Indiana/Vevay', ARRAY['US']),
+  ('America/Indiana/Vincennes', ARRAY['US']),
+  ('America/Indiana/Winamac', ARRAY['US']),
+  ('America/Indianapolis', ARRAY['US']),
+  ('America/Inuvik', ARRAY['CA']),
+  ('America/Iqaluit', ARRAY['CA']),
+  ('America/Jamaica', ARRAY['JM']),
+  ('America/Jujuy', ARRAY['AR']),
+  ('America/Juneau', ARRAY['US']),
+  ('America/Kentucky/Louisville', ARRAY['US']),
+  ('America/Kentucky/Monticello', ARRAY['US']),
+  ('America/Knox_IN', ARRAY['US']),
+  ('America/Kralendijk', ARRAY['BQ', 'CW']),
+  ('America/La_Paz', ARRAY['BO']),
+  ('America/Lima', ARRAY['PE']),
+  ('America/Los_Angeles', ARRAY['US']),
+  ('America/Louisville', ARRAY['US']),
+  ('America/Lower_Princes', ARRAY['CW', 'SX']),
+  ('America/Maceio', ARRAY['BR']),
+  ('America/Managua', ARRAY['NI']),
+  ('America/Manaus', ARRAY['BR']),
+  ('America/Marigot', ARRAY['MF', 'TT']),
+  ('America/Martinique', ARRAY['MQ']),
+  ('America/Matamoros', ARRAY['MX']),
+  ('America/Mazatlan', ARRAY['MX']),
+  ('America/Mendoza', ARRAY['AR']),
+  ('America/Menominee', ARRAY['US']),
+  ('America/Merida', ARRAY['MX']),
+  ('America/Metlakatla', ARRAY['US']),
+  ('America/Mexico_City', ARRAY['MX']),
+  ('America/Miquelon', ARRAY['PM']),
+  ('America/Moncton', ARRAY['CA']),
+  ('America/Monterrey', ARRAY['MX']),
+  ('America/Montevideo', ARRAY['UY']),
+  ('America/Montreal', ARRAY['BS', 'CA']),
+  ('America/Montserrat', ARRAY['MS']),
+  ('America/Nassau', ARRAY['BS']),
+  ('America/New_York', ARRAY['US']),
+  ('America/Nipigon', ARRAY['BS', 'CA']),
+  ('America/Nome', ARRAY['US']),
+  ('America/Noronha', ARRAY['BR']),
+  ('America/North_Dakota/Beulah', ARRAY['US']),
+  ('America/North_Dakota/Center', ARRAY['US']),
+  ('America/North_Dakota/New_Salem', ARRAY['US']),
+  ('America/Nuuk', ARRAY['GL']),
+  ('America/Ojinaga', ARRAY['MX']),
+  ('America/Panama', ARRAY['CA', 'KY', 'PA']),
+  ('America/Pangnirtung', ARRAY['CA']),
+  ('America/Paramaribo', ARRAY['SR']),
+  ('America/Phoenix', ARRAY['CA', 'US']),
+  ('America/Port_of_Spain', ARRAY['TT']),
+  ('America/Port-au-Prince', ARRAY['HT']),
+  ('America/Porto_Acre', ARRAY['BR']),
+  ('America/Porto_Velho', ARRAY['BR']),
+  ('America/Puerto_Rico', ARRAY['AG', 'AI', 'AW', 'BL', 'BQ', 'CA', 'CW', 'DM', 'GD', 'GP', 'KN', 'LC', 'MF', 'MS', 'PR', 'SX', 'TT', 'VC', 'VG', 'VI']),
+  ('America/Punta_Arenas', ARRAY['CL']),
+  ('America/Rainy_River', ARRAY['CA']),
+  ('America/Rankin_Inlet', ARRAY['CA']),
+  ('America/Recife', ARRAY['BR']),
+  ('America/Regina', ARRAY['CA']),
+  ('America/Resolute', ARRAY['CA']),
+  ('America/Rio_Branco', ARRAY['BR']),
+  ('America/Rosario', ARRAY['AR']),
+  ('America/Santa_Isabel', ARRAY['MX']),
+  ('America/Santarem', ARRAY['BR']),
+  ('America/Santiago', ARRAY['CL']),
+  ('America/Santo_Domingo', ARRAY['DO']),
+  ('America/Sao_Paulo', ARRAY['BR']),
+  ('America/Scoresbysund', ARRAY['GL']),
+  ('America/Shiprock', ARRAY['US']),
+  ('America/Sitka', ARRAY['US']),
+  ('America/St_Barthelemy', ARRAY['BL', 'TT']),
+  ('America/St_Johns', ARRAY['CA']),
+  ('America/St_Kitts', ARRAY['KN']),
+  ('America/St_Lucia', ARRAY['LC']),
+  ('America/St_Thomas', ARRAY['VI']),
+  ('America/St_Vincent', ARRAY['VC']),
+  ('America/Swift_Current', ARRAY['CA']),
+  ('America/Tegucigalpa', ARRAY['HN']),
+  ('America/Thule', ARRAY['GL']),
+  ('America/Thunder_Bay', ARRAY['BS', 'CA']),
+  ('America/Tijuana', ARRAY['MX']),
+  ('America/Toronto', ARRAY['BS', 'CA']),
+  ('America/Tortola', ARRAY['VG']),
+  ('America/Vancouver', ARRAY['CA']),
+  ('America/Virgin', ARRAY['VI']),
+  ('America/Whitehorse', ARRAY['CA']),
+  ('America/Winnipeg', ARRAY['CA']),
+  ('America/Yakutat', ARRAY['US']),
+  ('America/Yellowknife', ARRAY['CA']),
+  ('Antarctica/Casey', ARRAY['AQ']),
+  ('Antarctica/Davis', ARRAY['AQ']),
+  ('Antarctica/DumontDUrville', ARRAY['AQ']),
+  ('Antarctica/Macquarie', ARRAY['AU']),
+  ('Antarctica/Mawson', ARRAY['AQ']),
+  ('Antarctica/McMurdo', ARRAY['AQ']),
+  ('Antarctica/Palmer', ARRAY['AQ']),
+  ('Antarctica/Rothera', ARRAY['AQ']),
+  ('Antarctica/South_Pole', ARRAY['AQ']),
+  ('Antarctica/Syowa', ARRAY['AQ']),
+  ('Antarctica/Troll', ARRAY['AQ']),
+  ('Antarctica/Vostok', ARRAY['AQ']),
+  ('Arctic/Longyearbyen', ARRAY['NO', 'SJ']),
+  ('Asia/Aden', ARRAY['YE']),
+  ('Asia/Almaty', ARRAY['KZ']),
+  ('Asia/Amman', ARRAY['JO']),
+  ('Asia/Anadyr', ARRAY['RU']),
+  ('Asia/Aqtau', ARRAY['KZ']),
+  ('Asia/Aqtobe', ARRAY['KZ']),
+  ('Asia/Ashgabat', ARRAY['TM']),
+  ('Asia/Ashkhabad', ARRAY['TM']),
+  ('Asia/Atyrau', ARRAY['KZ']),
+  ('Asia/Baghdad', ARRAY['IQ']),
+  ('Asia/Bahrain', ARRAY['BH']),
+  ('Asia/Baku', ARRAY['AZ']),
+  ('Asia/Bangkok', ARRAY['CX', 'KH', 'LA', 'TH', 'VN']),
+  ('Asia/Barnaul', ARRAY['RU']),
+  ('Asia/Beirut', ARRAY['LB']),
+  ('Asia/Bishkek', ARRAY['KG']),
+  ('Asia/Brunei', ARRAY['BN']),
+  ('Asia/Calcutta', ARRAY['IN']),
+  ('Asia/Chita', ARRAY['RU']),
+  ('Asia/Choibalsan', ARRAY['MN']),
+  ('Asia/Chongqing', ARRAY['CN']),
+  ('Asia/Chungking', ARRAY['CN']),
+  ('Asia/Colombo', ARRAY['LK']),
+  ('Asia/Dacca', ARRAY['BD']),
+  ('Asia/Damascus', ARRAY['SY']),
+  ('Asia/Dhaka', ARRAY['BD']),
+  ('Asia/Dili', ARRAY['TL']),
+  ('Asia/Dubai', ARRAY['AE', 'OM', 'RE', 'SC', 'TF']),
+  ('Asia/Dushanbe', ARRAY['TJ']),
+  ('Asia/Famagusta', ARRAY['CY']),
+  ('Asia/Gaza', ARRAY['PS']),
+  ('Asia/Harbin', ARRAY['CN']),
+  ('Asia/Hebron', ARRAY['PS']),
+  ('Asia/Ho_Chi_Minh', ARRAY['VN']),
+  ('Asia/Hong_Kong', ARRAY['HK']),
+  ('Asia/Hovd', ARRAY['MN']),
+  ('Asia/Irkutsk', ARRAY['RU']),
+  ('Asia/Istanbul', ARRAY['TR']),
+  ('Asia/Jakarta', ARRAY['ID']),
+  ('Asia/Jayapura', ARRAY['ID']),
+  ('Asia/Jerusalem', ARRAY['IL']),
+  ('Asia/Kabul', ARRAY['AF']),
+  ('Asia/Kamchatka', ARRAY['RU']),
+  ('Asia/Karachi', ARRAY['PK']),
+  ('Asia/Kashgar', ARRAY['CN']),
+  ('Asia/Kathmandu', ARRAY['NP']),
+  ('Asia/Katmandu', ARRAY['NP']),
+  ('Asia/Khandyga', ARRAY['RU']),
+  ('Asia/Kolkata', ARRAY['IN']),
+  ('Asia/Krasnoyarsk', ARRAY['RU']),
+  ('Asia/Kuala_Lumpur', ARRAY['MY']),
+  ('Asia/Kuching', ARRAY['BN', 'MY']),
+  ('Asia/Kuwait', ARRAY['KW']),
+  ('Asia/Macao', ARRAY['MO']),
+  ('Asia/Macau', ARRAY['MO']),
+  ('Asia/Magadan', ARRAY['RU']),
+  ('Asia/Makassar', ARRAY['ID']),
+  ('Asia/Manila', ARRAY['PH']),
+  ('Asia/Muscat', ARRAY['OM']),
+  ('Asia/Nicosia', ARRAY['CY']),
+  ('Asia/Novokuznetsk', ARRAY['RU']),
+  ('Asia/Novosibirsk', ARRAY['RU']),
+  ('Asia/Omsk', ARRAY['RU']),
+  ('Asia/Oral', ARRAY['KZ']),
+  ('Asia/Phnom_Penh', ARRAY['KH']),
+  ('Asia/Pontianak', ARRAY['ID']),
+  ('Asia/Pyongyang', ARRAY['KP']),
+  ('Asia/Qatar', ARRAY['BH', 'QA']),
+  ('Asia/Qostanay', ARRAY['KZ']),
+  ('Asia/Qyzylorda', ARRAY['KZ']),
+  ('Asia/Rangoon', ARRAY['CC', 'MM']),
+  ('Asia/Riyadh', ARRAY['AQ', 'KW', 'SA', 'YE']),
+  ('Asia/Saigon', ARRAY['VN']),
+  ('Asia/Sakhalin', ARRAY['RU']),
+  ('Asia/Samarkand', ARRAY['UZ']),
+  ('Asia/Seoul', ARRAY['KR']),
+  ('Asia/Shanghai', ARRAY['CN']),
+  ('Asia/Singapore', ARRAY['AQ', 'MY', 'SG']),
+  ('Asia/Srednekolymsk', ARRAY['RU']),
+  ('Asia/Taipei', ARRAY['TW']),
+  ('Asia/Tashkent', ARRAY['UZ']),
+  ('Asia/Tbilisi', ARRAY['GE']),
+  ('Asia/Tehran', ARRAY['IR']),
+  ('Asia/Tel_Aviv', ARRAY['IL']),
+  ('Asia/Thimbu', ARRAY['BT']),
+  ('Asia/Thimphu', ARRAY['BT']),
+  ('Asia/Tokyo', ARRAY['AU', 'JP']),
+  ('Asia/Tomsk', ARRAY['RU']),
+  ('Asia/Ujung_Pandang', ARRAY['ID']),
+  ('Asia/Ulaanbaatar', ARRAY['MN']),
+  ('Asia/Ulan_Bator', ARRAY['MN']),
+  ('Asia/Urumqi', ARRAY['CN']),
+  ('Asia/Ust-Nera', ARRAY['RU']),
+  ('Asia/Vientiane', ARRAY['LA']),
+  ('Asia/Vladivostok', ARRAY['RU']),
+  ('Asia/Yakutsk', ARRAY['RU']),
+  ('Asia/Yangon', ARRAY['CC', 'MM']),
+  ('Asia/Yekaterinburg', ARRAY['RU']),
+  ('Asia/Yerevan', ARRAY['AM']),
+  ('Atlantic/Azores', ARRAY['PT']),
+  ('Atlantic/Bermuda', ARRAY['BM']),
+  ('Atlantic/Canary', ARRAY['ES']),
+  ('Atlantic/Cape_Verde', ARRAY['CV']),
+  ('Atlantic/Faeroe', ARRAY['FO']),
+  ('Atlantic/Faroe', ARRAY['FO']),
+  ('Atlantic/Jan_Mayen', ARRAY['NO']),
+  ('Atlantic/Madeira', ARRAY['PT']),
+  ('Atlantic/Reykjavik', ARRAY['IS']),
+  ('Atlantic/South_Georgia', ARRAY['GS']),
+  ('Atlantic/St_Helena', ARRAY['SH']),
+  ('Atlantic/Stanley', ARRAY['FK']),
+  ('Australia/ACT', ARRAY['AU']),
+  ('Australia/Adelaide', ARRAY['AU']),
+  ('Australia/Brisbane', ARRAY['AU']),
+  ('Australia/Broken_Hill', ARRAY['AU']),
+  ('Australia/Canberra', ARRAY['AU']),
+  ('Australia/Currie', ARRAY['AU']),
+  ('Australia/Darwin', ARRAY['AU']),
+  ('Australia/Eucla', ARRAY['AU']),
+  ('Australia/Hobart', ARRAY['AU']),
+  ('Australia/LHI', ARRAY['AU']),
+  ('Australia/Lindeman', ARRAY['AU']),
+  ('Australia/Lord_Howe', ARRAY['AU']),
+  ('Australia/Melbourne', ARRAY['AU']),
+  ('Australia/North', ARRAY['AU']),
+  ('Australia/NSW', ARRAY['AU']),
+  ('Australia/Perth', ARRAY['AU']),
+  ('Australia/Queensland', ARRAY['AU']),
+  ('Australia/South', ARRAY['AU']),
+  ('Australia/Sydney', ARRAY['AU']),
+  ('Australia/Tasmania', ARRAY['AU']),
+  ('Australia/Victoria', ARRAY['AU']),
+  ('Australia/West', ARRAY['AU']),
+  ('Australia/Yancowinna', ARRAY['AU']),
+  ('Brazil/Acre', ARRAY['BR']),
+  ('Brazil/DeNoronha', ARRAY['BR']),
+  ('Brazil/East', ARRAY['BR']),
+  ('Brazil/West', ARRAY['BR']),
+  ('Canada/Atlantic', ARRAY['CA']),
+  ('Canada/Central', ARRAY['CA']),
+  ('Canada/Eastern', ARRAY['BS', 'CA']),
+  ('Canada/Mountain', ARRAY['CA']),
+  ('Canada/Newfoundland', ARRAY['CA']),
+  ('Canada/Pacific', ARRAY['CA']),
+  ('Canada/Saskatchewan', ARRAY['CA']),
+  ('Canada/Yukon', ARRAY['CA']),
+  ('Chile/Continental', ARRAY['CL']),
+  ('Chile/EasterIsland', ARRAY['CL']),
+  ('Cuba', ARRAY['CU']),
+  ('Egypt', ARRAY['EG']),
+  ('Eire', ARRAY['IE']),
+  ('Europe/Amsterdam', ARRAY['NL']),
+  ('Europe/Andorra', ARRAY['AD']),
+  ('Europe/Astrakhan', ARRAY['RU']),
+  ('Europe/Athens', ARRAY['GR']),
+  ('Europe/Belfast', ARRAY['GB', 'GG', 'IM', 'JE']),
+  ('Europe/Belgrade', ARRAY['BA', 'HR', 'ME', 'MK', 'RS', 'SI']),
+  ('Europe/Berlin', ARRAY['DE', 'DK', 'NO', 'SE', 'SJ']),
+  ('Europe/Bratislava', ARRAY['CZ', 'SK']),
+  ('Europe/Brussels', ARRAY['BE', 'LU', 'NL']),
+  ('Europe/Bucharest', ARRAY['RO']),
+  ('Europe/Budapest', ARRAY['HU']),
+  ('Europe/Busingen', ARRAY['CH', 'DE', 'LI']),
+  ('Europe/Chisinau', ARRAY['MD']),
+  ('Europe/Copenhagen', ARRAY['DK']),
+  ('Europe/Dublin', ARRAY['IE']),
+  ('Europe/Gibraltar', ARRAY['GI']),
+  ('Europe/Guernsey', ARRAY['GG']),
+  ('Europe/Helsinki', ARRAY['AX', 'FI']),
+  ('Europe/Isle_of_Man', ARRAY['IM']),
+  ('Europe/Istanbul', ARRAY['TR']),
+  ('Europe/Jersey', ARRAY['JE']),
+  ('Europe/Kaliningrad', ARRAY['RU']),
+  ('Europe/Kiev', ARRAY['UA']),
+  ('Europe/Kirov', ARRAY['RU']),
+  ('Europe/Kyiv', ARRAY['UA']),
+  ('Europe/Lisbon', ARRAY['PT']),
+  ('Europe/Ljubljana', ARRAY['SI']),
+  ('Europe/London', ARRAY['GB', 'GG', 'IM', 'JE']),
+  ('Europe/Luxembourg', ARRAY['LU']),
+  ('Europe/Madrid', ARRAY['ES']),
+  ('Europe/Malta', ARRAY['MT']),
+  ('Europe/Mariehamn', ARRAY['AX', 'FI']),
+  ('Europe/Minsk', ARRAY['BY']),
+  ('Europe/Monaco', ARRAY['MC']),
+  ('Europe/Moscow', ARRAY['RU']),
+  ('Europe/Nicosia', ARRAY['CY']),
+  ('Europe/Oslo', ARRAY['NO']),
+  ('Europe/Paris', ARRAY['FR', 'MC']),
+  ('Europe/Podgorica', ARRAY['BA', 'HR', 'ME', 'MK', 'RS', 'SI']),
+  ('Europe/Prague', ARRAY['CZ', 'SK']),
+  ('Europe/Riga', ARRAY['LV']),
+  ('Europe/Rome', ARRAY['IT', 'SM', 'VA']),
+  ('Europe/Samara', ARRAY['RU']),
+  ('Europe/San_Marino', ARRAY['IT', 'SM', 'VA']),
+  ('Europe/Sarajevo', ARRAY['BA']),
+  ('Europe/Saratov', ARRAY['RU']),
+  ('Europe/Simferopol', ARRAY['RU', 'UA']),
+  ('Europe/Skopje', ARRAY['MK']),
+  ('Europe/Sofia', ARRAY['BG']),
+  ('Europe/Stockholm', ARRAY['SE']),
+  ('Europe/Tallinn', ARRAY['EE']),
+  ('Europe/Tirane', ARRAY['AL']),
+  ('Europe/Tiraspol', ARRAY['MD']),
+  ('Europe/Ulyanovsk', ARRAY['RU']),
+  ('Europe/Uzhgorod', ARRAY['UA']),
+  ('Europe/Vaduz', ARRAY['LI']),
+  ('Europe/Vatican', ARRAY['IT', 'SM', 'VA']),
+  ('Europe/Vienna', ARRAY['AT']),
+  ('Europe/Vilnius', ARRAY['LT']),
+  ('Europe/Volgograd', ARRAY['RU']),
+  ('Europe/Warsaw', ARRAY['PL']),
+  ('Europe/Zagreb', ARRAY['HR']),
+  ('Europe/Zaporozhye', ARRAY['UA']),
+  ('Europe/Zurich', ARRAY['CH', 'DE', 'LI']),
+  ('GB', ARRAY['GB', 'GG', 'IM', 'JE']),
+  ('GB-Eire', ARRAY['GB', 'GG', 'IM', 'JE']),
+  ('Hongkong', ARRAY['HK']),
+  ('Iceland', ARRAY['IS']),
+  ('Indian/Antananarivo', ARRAY['MG']),
+  ('Indian/Chagos', ARRAY['IO']),
+  ('Indian/Christmas', ARRAY['CX']),
+  ('Indian/Cocos', ARRAY['CC']),
+  ('Indian/Comoro', ARRAY['KM']),
+  ('Indian/Kerguelen', ARRAY['TF']),
+  ('Indian/Mahe', ARRAY['SC']),
+  ('Indian/Maldives', ARRAY['MV', 'TF']),
+  ('Indian/Mauritius', ARRAY['MU']),
+  ('Indian/Mayotte', ARRAY['YT']),
+  ('Indian/Reunion', ARRAY['RE']),
+  ('Iran', ARRAY['IR']),
+  ('Israel', ARRAY['IL']),
+  ('Jamaica', ARRAY['JM']),
+  ('Japan', ARRAY['AU', 'JP']),
+  ('Kwajalein', ARRAY['MH']),
+  ('Libya', ARRAY['LY']),
+  ('Mexico/BajaNorte', ARRAY['MX']),
+  ('Mexico/BajaSur', ARRAY['MX']),
+  ('Mexico/General', ARRAY['MX']),
+  ('Navajo', ARRAY['US']),
+  ('NZ', ARRAY['AQ', 'NZ']),
+  ('NZ-CHAT', ARRAY['NZ']),
+  ('Pacific/Apia', ARRAY['WS']),
+  ('Pacific/Auckland', ARRAY['AQ', 'NZ']),
+  ('Pacific/Bougainville', ARRAY['PG']),
+  ('Pacific/Chatham', ARRAY['NZ']),
+  ('Pacific/Chuuk', ARRAY['FM']),
+  ('Pacific/Easter', ARRAY['CL']),
+  ('Pacific/Efate', ARRAY['VU']),
+  ('Pacific/Enderbury', ARRAY['KI']),
+  ('Pacific/Fakaofo', ARRAY['TK']),
+  ('Pacific/Fiji', ARRAY['FJ']),
+  ('Pacific/Funafuti', ARRAY['TV']),
+  ('Pacific/Galapagos', ARRAY['EC']),
+  ('Pacific/Gambier', ARRAY['PF']),
+  ('Pacific/Guadalcanal', ARRAY['FM', 'SB']),
+  ('Pacific/Guam', ARRAY['GU', 'MP']),
+  ('Pacific/Honolulu', ARRAY['US']),
+  ('Pacific/Johnston', ARRAY['US']),
+  ('Pacific/Kanton', ARRAY['KI']),
+  ('Pacific/Kiritimati', ARRAY['KI']),
+  ('Pacific/Kosrae', ARRAY['FM']),
+  ('Pacific/Kwajalein', ARRAY['MH']),
+  ('Pacific/Majuro', ARRAY['MH']),
+  ('Pacific/Marquesas', ARRAY['PF']),
+  ('Pacific/Midway', ARRAY['UM']),
+  ('Pacific/Nauru', ARRAY['NR']),
+  ('Pacific/Niue', ARRAY['NU']),
+  ('Pacific/Norfolk', ARRAY['NF']),
+  ('Pacific/Noumea', ARRAY['NC']),
+  ('Pacific/Pago_Pago', ARRAY['AS', 'UM']),
+  ('Pacific/Palau', ARRAY['PW']),
+  ('Pacific/Pitcairn', ARRAY['PN']),
+  ('Pacific/Pohnpei', ARRAY['FM']),
+  ('Pacific/Ponape', ARRAY['FM']),
+  ('Pacific/Port_Moresby', ARRAY['AQ', 'FM', 'PG']),
+  ('Pacific/Rarotonga', ARRAY['CK']),
+  ('Pacific/Saipan', ARRAY['MP']),
+  ('Pacific/Samoa', ARRAY['AS', 'UM']),
+  ('Pacific/Tahiti', ARRAY['PF']),
+  ('Pacific/Tarawa', ARRAY['KI', 'MH', 'TV', 'UM', 'WF']),
+  ('Pacific/Tongatapu', ARRAY['TO']),
+  ('Pacific/Truk', ARRAY['FM']),
+  ('Pacific/Wake', ARRAY['UM']),
+  ('Pacific/Wallis', ARRAY['WF']),
+  ('Pacific/Yap', ARRAY['FM']),
+  ('Poland', ARRAY['PL']),
+  ('Portugal', ARRAY['PT']),
+  ('PRC', ARRAY['CN']),
+  ('ROC', ARRAY['TW']),
+  ('ROK', ARRAY['KR']),
+  ('Singapore', ARRAY['AQ', 'MY', 'SG']),
+  ('Turkey', ARRAY['TR']),
+  ('US/Alaska', ARRAY['US']),
+  ('US/Aleutian', ARRAY['US']),
+  ('US/Arizona', ARRAY['CA', 'US']),
+  ('US/Central', ARRAY['US']),
+  ('US/East-Indiana', ARRAY['US']),
+  ('US/Eastern', ARRAY['US']),
+  ('US/Hawaii', ARRAY['US']),
+  ('US/Indiana-Starke', ARRAY['US']),
+  ('US/Michigan', ARRAY['US']),
+  ('US/Mountain', ARRAY['US']),
+  ('US/Pacific', ARRAY['US']),
+  ('US/Samoa', ARRAY['AS', 'UM']),
+  ('W-SU', ARRAY['RU'])
+ON CONFLICT (tz) DO UPDATE SET country_codes = EXCLUDED.country_codes;
 
 -- ============================================================================
 -- 20. Données de départ : 247 pays (position, pour le pays le plus proche)
@@ -7149,10 +7924,10 @@ SELECT b.element AS "Élément", b.trouve AS "Dans la base", b.attendu AS "Atten
             WHEN b.facultatif THEN '⚠️ facultatif'
             ELSE '❌' END AS "État"
 FROM (VALUES
-  (1, 'Tables', (SELECT count(*) FROM pg_catalog.pg_tables WHERE schemaname = 'public')::text, '41', false),
-  (2, 'Fonctions', (SELECT count(*) FROM pg_catalog.pg_proc WHERE pronamespace = 'public'::regnamespace)::text, '156', false),
-  (3, 'Règles d''accès des tables', (SELECT count(*) FROM pg_catalog.pg_policies WHERE schemaname = 'public')::text, '88', false),
-  (4, 'Tables protégées (RLS)', (SELECT count(*) FROM pg_catalog.pg_class WHERE relnamespace = 'public'::regnamespace AND relkind = 'r' AND relrowsecurity)::text, '41', false),
+  (1, 'Tables', (SELECT count(*) FROM pg_catalog.pg_tables WHERE schemaname = 'public')::text, '43', false),
+  (2, 'Fonctions', (SELECT count(*) FROM pg_catalog.pg_proc WHERE pronamespace = 'public'::regnamespace)::text, '160', false),
+  (3, 'Règles d''accès des tables', (SELECT count(*) FROM pg_catalog.pg_policies WHERE schemaname = 'public')::text, '89', false),
+  (4, 'Tables protégées (RLS)', (SELECT count(*) FROM pg_catalog.pg_class WHERE relnamespace = 'public'::regnamespace AND relkind = 'r' AND relrowsecurity)::text, '43', false),
   (5, 'Profil créé à l''inscription', (SELECT CASE WHEN count(*) > 0 THEN 'oui' ELSE 'non' END FROM pg_catalog.pg_trigger WHERE tgrelid = 'auth.users'::regclass AND tgname = 'on_auth_user_created'), 'oui', false),
   (6, 'Espaces de fichiers', (SELECT count(*) FROM storage.buckets WHERE id IN ('ads', 'demo-profils', 'photos', 'verifications', 'voice-messages'))::text, '5', false),
   (7, 'Règles d''accès des fichiers', (SELECT count(*) FROM pg_catalog.pg_policies WHERE schemaname = 'storage' AND policyname IN ('ads_storage_delete_admin',

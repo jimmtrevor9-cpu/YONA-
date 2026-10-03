@@ -1,0 +1,28 @@
+{
+  "r": [
+    "Torteval",
+    "St Sampson",
+    "St Peter Port",
+    "Alderney",
+    "Saint Saviour",
+    "Castel",
+    "Saint Andrew",
+    "St Martin",
+    "Autres villes",
+    "Forest",
+    "St Pierre du Bois"
+  ],
+  "c": [
+    ["Torteval", 0, 49.43, -2.65],
+    ["Saint Sampson", 1, 49.48, -2.52],
+    ["Saint Peter Port", 2, 49.46, -2.54],
+    ["St Anne", 3, 49.72, -2.21],
+    ["Saint Saviour", 4, 49.46, -2.64],
+    ["Castel", 5, 49.47, -2.6],
+    ["Saint Andrew", 6, 49.44, -2.58],
+    ["St Martin", 7, 49.44, -2.55],
+    ["Vale Parish", 8, 49.49, -2.52],
+    ["Forest Parish", 9, 49.43, -2.6],
+    ["Saint Pierre du Bois Parish", 10, 49.45, -2.64]
+  ]
+}

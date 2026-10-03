@@ -1,0 +1,37 @@
+{
+  "r": [
+    "Essequibo Islands-West Demerara",
+    "East Berbice-Corentyne",
+    "Mahaica-Berbice",
+    "Demerara-Mahaica",
+    "Potaro-Siparuni",
+    "Barima-Waini",
+    "Upper Demerara-Berbice",
+    "Upper Takutu-Upper Essequibo",
+    "Cuyuni-Mazaruni",
+    "Pomeroon-Supenaam"
+  ],
+  "c": [
+    ["Windsor Forest", 0, 6.85, -58.24],
+    ["Vreed-en-Hoop", 0, 6.81, -58.19],
+    ["Tuschen", 0, 6.88, -58.34],
+    ["Skeldon", 1, 5.87, -57.15],
+    ["Rosignol", 2, 6.27, -57.54],
+    ["Rose Hall", 1, 6.26, -57.36],
+    ["Parika", 0, 6.84, -58.43],
+    ["Paradise", 3, 6.76, -58],
+    ["New Amsterdam", 1, 6.25, -57.52],
+    ["Mahdia", 4, 5.28, -59.15],
+    ["Mahaicony Village", 2, 6.57, -57.81],
+    ["Mahaica Village", 3, 6.68, -57.92],
+    ["Mabaruma", 5, 8.2, -59.78],
+    ["Linden", 6, 6.01, -58.31],
+    ["Lethem", 7, 3.37, -59.8],
+    ["Helena Number One", 3, 6.67, -57.92],
+    ["Georgetown", 3, 6.8, -58.16],
+    ["Bartica", 8, 6.41, -58.62],
+    ["Anna Regina", 9, 7.27, -58.48],
+    ["Fort Wellington", 2, 6.39, -57.6],
+    ["Corriverton", 1, 5.93, -57.15]
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "r": [
+    "Saint Andrew",
+    "Saint Thomas",
+    "Saint Philip",
+    "Saint Peter",
+    "Christ Church",
+    "Saint James",
+    "Saint John",
+    "Saint Lucy",
+    "Saint Michael",
+    "Saint Joseph"
+  ],
+  "c": [
+    ["White Hill", 0, 13.21, -59.58],
+    ["Welchman Hall", 1, 13.19, -59.58],
+    ["Crane", 2, 13.1, -59.45],
+    ["Speightstown", 3, 13.25, -59.64],
+    ["Six Cross Roads", 4, 13.12, -59.48],
+    ["Oistins", 4, 13.07, -59.55],
+    ["Mile and a Quarter", 3, 13.27, -59.62],
+    ["Holetown", 5, 13.19, -59.64],
+    ["Hastings", 4, 13.08, -59.6],
+    ["Greenland", 0, 13.26, -59.58],
+    ["Four Cross Roads", 6, 13.17, -59.52],
+    ["Checker Hall", 7, 13.28, -59.64],
+    ["Bridgetown", 8, 13.11, -59.62],
+    ["Bathsheba", 9, 13.21, -59.53]
+  ]
+}

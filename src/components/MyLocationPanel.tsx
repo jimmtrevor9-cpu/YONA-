@@ -7,9 +7,9 @@ import {
   clearMyLocation,
   locationErrorMessage,
   myLocationQuery,
-  readDevicePosition,
-  saveMyLocation,
+  LOCATION_SOURCE_LABEL,
 } from "@/features/profiles/location";
+import { useShareDeviceLocation } from "@/features/location/useDeviceLocation";
 
 const savedOn = new Intl.DateTimeFormat("fr-FR", {
   day: "numeric",
@@ -23,12 +23,11 @@ export function MyLocationPanel({ userId }: { userId: string }) {
   const { queryKey } = myLocationQuery(userId);
   const { data: location, isLoading } = useQuery({ ...myLocationQuery(userId), enabled: !!userId });
 
+  const shareLocation = useShareDeviceLocation();
   const refresh = () => queryClient.invalidateQueries({ queryKey });
   const save = useMutation({
-    mutationFn: async () => {
-      const { latitude, longitude } = await readDevicePosition();
-      await saveMyLocation(latitude, longitude);
-    },
+    // « Mettre à jour » : nouvelle mesure, jamais une position gardée par le navigateur.
+    mutationFn: () => shareLocation(true),
     onSuccess: () => {
       toast.success("Position enregistrée.");
       void refresh();
@@ -55,10 +54,11 @@ export function MyLocationPanel({ userId }: { userId: string }) {
             {isLoading
               ? "…"
               : location
-                ? `Enregistrée le ${savedOn.format(new Date(location.updatedAt))}.`
+                ? `${location.city ? `${location.city}${location.country ? `, ${location.country}` : ""} — ` : ""}${LOCATION_SOURCE_LABEL[location.source]}, enregistrée le ${savedOn.format(new Date(location.updatedAt))}.`
                 : "Aucune position enregistrée."}{" "}
-            Elle sert uniquement à la recherche par distance, arrondie à environ 1 km, et n'est
-            jamais montrée aux autres membres.
+            Pour vous montrer des personnes près de chez vous : la position de votre appareil est la
+            plus fiable (un VPN ne la change pas). Elle est arrondie à environ 1 km et n'est jamais
+            montrée aux autres membres.
           </p>
         </div>
       </div>

@@ -18,6 +18,7 @@ import {
   type LogTable,
 } from "@/features/admin/dashboard";
 import { formatMoney } from "@/features/admin/queries";
+import { reasonLabel } from "@/features/location/labels";
 
 /**
  * Tâche D1 / D2 — Journaux : connexions (réussies et échouées), étapes d'inscription,
@@ -47,17 +48,24 @@ export function LogsTab() {
 
   const columns: Column<LogRow>[] = def.columns.map((c) => ({
     ...c,
-    ...(c.key === "event" || c.key === "step"
+    ...(c.key === "event" || c.key === "step" || c.key === "source" || c.key === "retained_source"
       ? { render: (r: LogRow) => EVENT_LABELS[String(r[c.key])] ?? String(r[c.key]) }
-      : c.key === "amount"
+      : c.key === "inconsistency"
         ? {
             render: (r: LogRow) =>
-              typeof r["amount"] === "number"
-                ? formatMoney(r["amount"], String(r["currency"] ?? "EUR"))
+              Array.isArray(r["inconsistency"]) && r["inconsistency"].length
+                ? (r["inconsistency"] as string[]).map(reasonLabel).join(" · ")
                 : "—",
-            className: "text-right",
           }
-        : {}),
+        : c.key === "amount"
+          ? {
+              render: (r: LogRow) =>
+                typeof r["amount"] === "number"
+                  ? formatMoney(r["amount"], String(r["currency"] ?? "EUR"))
+                  : "—",
+              className: "text-right",
+            }
+          : {}),
   }));
 
   async function exportCsv() {

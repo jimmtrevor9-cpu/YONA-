@@ -1,0 +1,17 @@
+{
+  "r": ["Municipality of Monaco"],
+  "c": [
+    ["Monte-Carlo", 0, 43.74, 7.43],
+    ["Monaco", 0, 43.74, 7.42],
+    ["La Condamine", 0, 43.73, 7.42],
+    ["Fontvieille", 0, 43.73, 7.42],
+    ["Saint-Roman", 0, 43.75, 7.43],
+    ["Moneghetti", 0, 43.74, 7.42],
+    ["Les Révoires", 0, 43.73, 7.41],
+    ["Monaco-Ville", 0, 43.73, 7.42],
+    ["Jardin Exotique", 0, 43.73, 7.41],
+    ["La Rousse", 0, 43.75, 7.43],
+    ["Larvotto", 0, 43.74, 7.43],
+    ["Mareterra", 0, 43.74, 7.43]
+  ]
+}

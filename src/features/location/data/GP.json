@@ -1,0 +1,30 @@
+{
+  "r": ["Guadeloupe"],
+  "c": [
+    ["Vieux-Habitants", 0, 16.06, -61.77],
+    ["Trois-Rivières", 0, 15.98, -61.64],
+    ["Petites Anses", 0, 15.85, -61.64],
+    ["Saint-François", 0, 16.25, -61.27],
+    ["Sainte-Rose", 0, 16.33, -61.7],
+    ["Sainte-Anne", 0, 16.23, -61.38],
+    ["Saint-Claude", 0, 16.03, -61.7],
+    ["Port-Louis", 0, 16.42, -61.53],
+    ["Pointe-Noire", 0, 16.23, -61.79],
+    ["Pointe-à-Pitre", 0, 16.24, -61.53],
+    ["Petit-Canal", 0, 16.38, -61.49],
+    ["Petit-Bourg", 0, 16.19, -61.59],
+    ["Les Abymes", 0, 16.27, -61.51],
+    ["Le Moule", 0, 16.33, -61.35],
+    ["Le Gosier", 0, 16.21, -61.49],
+    ["Lamentin", 0, 16.27, -61.63],
+    ["Beauséjour", 0, 16.3, -61.07],
+    ["Grand-Bourg", 0, 15.88, -61.31],
+    ["Gourbeyre", 0, 15.99, -61.69],
+    ["Deshaies", 0, 16.31, -61.79],
+    ["Capesterre-Belle-Eau", 0, 16.04, -61.56],
+    ["Basse-Terre", 0, 16, -61.73],
+    ["Baillif", 0, 16.02, -61.75],
+    ["Baie-Mahault", 0, 16.27, -61.59],
+    ["Anse-Bertrand", 0, 16.47, -61.51]
+  ]
+}

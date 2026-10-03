@@ -1,0 +1,11 @@
+{
+  "r": ["Saint Thomas Island", "Saint Croix Island", "Saint John Island"],
+  "c": [
+    ["Altona", 0, 18.34, -64.95],
+    ["Charlotte Amalie", 0, 18.34, -64.93],
+    ["Christiansted", 1, 17.75, -64.71],
+    ["Cruz Bay", 2, 18.33, -64.79],
+    ["Saint Croix", 1, 17.73, -64.75],
+    ["Tutu", 0, 18.34, -64.89]
+  ]
+}

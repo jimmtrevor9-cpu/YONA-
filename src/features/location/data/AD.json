@@ -1,0 +1,28 @@
+{
+  "r": [
+    "Encamp",
+    "Canillo",
+    "Sant Julià de Loria",
+    "Andorra la Vella",
+    "Ordino",
+    "Escaldes-Engordany",
+    "La Massana"
+  ],
+  "c": [
+    ["Vila", 0, 42.53, 1.57],
+    ["El Tarter", 1, 42.58, 1.65],
+    ["Sant Julià de Lòria", 2, 42.46, 1.49],
+    ["Santa Coloma", 3, 42.49, 1.5],
+    ["Pas de la Casa", 0, 42.54, 1.73],
+    ["Ordino", 4, 42.56, 1.53],
+    ["les Escaldes", 5, 42.51, 1.53],
+    ["Les Bons", 0, 42.54, 1.59],
+    ["la Massana", 6, 42.54, 1.51],
+    ["Encamp", 0, 42.53, 1.58],
+    ["Canillo", 1, 42.57, 1.6],
+    ["Arinsal", 6, 42.57, 1.48],
+    ["Anyós", 6, 42.53, 1.53],
+    ["Andorra la Vella", 3, 42.51, 1.52],
+    ["Aixirivall", 2, 42.46, 1.5]
+  ]
+}

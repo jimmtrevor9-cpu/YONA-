@@ -662,6 +662,21 @@ export type Database = {
           },
         ]
       }
+      geo_timezones: {
+        Row: {
+          country_codes: string[]
+          tz: string
+        }
+        Insert: {
+          country_codes: string[]
+          tz: string
+        }
+        Update: {
+          country_codes?: string[]
+          tz?: string
+        }
+        Relationships: []
+      }
       likes: {
         Row: {
           created_at: string
@@ -703,6 +718,51 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      location_history: {
+        Row: {
+          city: string | null
+          country: string | null
+          country_code: string | null
+          created_at: string
+          id: number
+          inconsistency: string[]
+          inconsistent: boolean
+          ip_country: string | null
+          retained_source: string
+          source: string
+          timezone: string | null
+          user_id: string
+        }
+        Insert: {
+          city?: string | null
+          country?: string | null
+          country_code?: string | null
+          created_at?: string
+          id?: number
+          inconsistency?: string[]
+          inconsistent?: boolean
+          ip_country?: string | null
+          retained_source: string
+          source: string
+          timezone?: string | null
+          user_id: string
+        }
+        Update: {
+          city?: string | null
+          country?: string | null
+          country_code?: string | null
+          created_at?: string
+          id?: number
+          inconsistency?: string[]
+          inconsistent?: boolean
+          ip_country?: string | null
+          retained_source?: string
+          source?: string
+          timezone?: string | null
+          user_id?: string
+        }
+        Relationships: []
       }
       matches: {
         Row: {
@@ -1102,20 +1162,59 @@ export type Database = {
       }
       profile_locations: {
         Row: {
+          accuracy_m: number | null
+          checked_at: string | null
+          city: string | null
+          country: string | null
+          country_code: string | null
+          inconsistency: string[]
+          inconsistent: boolean
+          ip_city: string | null
+          ip_country: string | null
+          language: string | null
           latitude: number
           longitude: number
+          region: string | null
+          source: string
+          timezone: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
+          accuracy_m?: number | null
+          checked_at?: string | null
+          city?: string | null
+          country?: string | null
+          country_code?: string | null
+          inconsistency?: string[]
+          inconsistent?: boolean
+          ip_city?: string | null
+          ip_country?: string | null
+          language?: string | null
           latitude: number
           longitude: number
+          region?: string | null
+          source?: string
+          timezone?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
+          accuracy_m?: number | null
+          checked_at?: string | null
+          city?: string | null
+          country?: string | null
+          country_code?: string | null
+          inconsistency?: string[]
+          inconsistent?: boolean
+          ip_city?: string | null
+          ip_country?: string | null
+          language?: string | null
           latitude?: number
           longitude?: number
+          region?: string | null
+          source?: string
+          timezone?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -1821,6 +1920,26 @@ export type Database = {
           status: Database["public"]["Enums"]["account_status"]
         }[]
       }
+      admin_location_flags: {
+        Args: { _limit?: number }
+        Returns: {
+          checked_at: string | null
+          city: string | null
+          country: string | null
+          declared_city: string | null
+          declared_country: string | null
+          email: string | null
+          first_name: string | null
+          inconsistency: string[]
+          ip_city: string | null
+          ip_country: string | null
+          language: string | null
+          region: string | null
+          source: string
+          timezone: string | null
+          user_id: string
+        }[]
+      }
       admin_log_action: {
         Args: { _action: string; _details?: Json; _target_id: string; _target_table: string }
         Returns: undefined
@@ -1885,6 +2004,10 @@ export type Database = {
       admin_stats: { Args: never; Returns: Json }
       admin_user_detail: { Args: { _user_id: string }; Returns: Json }
       admin_user_history: {
+        Args: { _user_id: string }
+        Returns: Json
+      }
+      admin_user_location: {
         Args: { _user_id: string }
         Returns: Json
       }
@@ -2082,6 +2205,10 @@ export type Database = {
           type: string
         }[]
       }
+      location_priority: {
+        Args: { _source: string }
+        Returns: number
+      }
       log_server_error: {
         Args: { _details?: Json; _message: string; _path?: string; _source: string; _user_id?: string }
         Returns: undefined
@@ -2211,6 +2338,23 @@ export type Database = {
           _duration_seconds: number
         }
         Returns: string
+      }
+      set_member_location: {
+        Args: {
+          _accuracy_m?: number
+          _city?: string
+          _country_code?: string
+          _ip_city?: string
+          _ip_country?: string
+          _language?: string
+          _latitude?: number
+          _longitude?: number
+          _region?: string
+          _source: string
+          _timezone?: string
+          _user_id: string
+        }
+        Returns: Json
       }
       set_primary_photo: { Args: { _photo_id: string }; Returns: undefined }
       start_conversation_unlock_payment: {

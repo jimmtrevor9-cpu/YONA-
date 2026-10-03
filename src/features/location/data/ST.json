@@ -1,0 +1,31 @@
+{
+  "r": ["São Tomé Island", "Príncipe"],
+  "c": [
+    ["Trindade", 0, 0.3, 6.68],
+    ["São Tomé", 0, 0.34, 6.73],
+    ["São João dos Angolares", 0, 0.13, 6.65],
+    ["Santo António", 1, 1.64, 7.42],
+    ["Santo Amaro", 0, 0.37, 6.69],
+    ["Rosema", 0, 0.35, 6.57],
+    ["Ribeira Afonso", 0, 0.2, 6.7],
+    ["Neves", 0, 0.36, 6.55],
+    ["Lemos", 0, 0.3, 6.7],
+    ["Guadalupe", 0, 0.38, 6.64],
+    ["Dona Eugénia", 0, 0.14, 6.61],
+    ["Bombom", 1, 0.31, 6.73],
+    ["Água Izé", 0, 0.22, 6.73],
+    ["Folha Fede", 0, 0.28, 6.68],
+    ["Almeirim", 0, 0.32, 6.72],
+    ["São Marçal", 0, 0.32, 6.73],
+    ["Agua Porca", 0, 0.33, 6.71],
+    ["Riboque", 0, 0.34, 6.72],
+    ["Micolo", 0, 0.4, 6.69],
+    ["Riboque Santana", 0, 0.25, 6.74],
+    ["Almas", 0, 0.3, 6.74],
+    ["Changra", 0, 0.35, 6.69],
+    ["Cova Barro", 0, 0.31, 6.74],
+    ["Micondo", 0, 0.17, 6.68],
+    ["Pantufo", 0, 0.32, 6.74],
+    ["Piedade", 0, 0.3, 6.66]
+  ]
+}

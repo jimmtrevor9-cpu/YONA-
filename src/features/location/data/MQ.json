@@ -1,0 +1,26 @@
+{
+  "r": ["Martinique"],
+  "c": [
+    ["Saint-Pierre", 0, 14.74, -61.18],
+    ["Saint-Joseph", 0, 14.67, -61.04],
+    ["Sainte-Marie", 0, 14.78, -60.99],
+    ["Sainte-Luce", 0, 14.47, -60.92],
+    ["Sainte-Anne", 0, 14.43, -60.88],
+    ["Rivière-Pilote", 0, 14.49, -60.9],
+    ["Le Vauclin", 0, 14.55, -60.84],
+    ["Les Trois-Îlets", 0, 14.54, -61.03],
+    ["Saint-Esprit", 0, 14.55, -60.93],
+    ["Le Robert", 0, 14.68, -60.94],
+    ["Le Morne-Rouge", 0, 14.78, -61.14],
+    ["Le Marin", 0, 14.47, -60.87],
+    ["Le Lorrain", 0, 14.83, -61.06],
+    ["Le Lamentin", 0, 14.61, -61],
+    ["Le François", 0, 14.62, -60.9],
+    ["La Trinité", 0, 14.74, -60.96],
+    ["L'Ajoupa-Bouillon", 0, 14.82, -61.12],
+    ["Le Gros-Morne", 0, 14.7, -61],
+    ["Fort-de-France", 0, 14.6, -61.07],
+    ["Ducos", 0, 14.58, -60.97],
+    ["Basse-Pointe", 0, 14.87, -61.12]
+  ]
+}

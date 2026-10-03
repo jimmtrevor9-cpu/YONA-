@@ -1,0 +1,29 @@
+{
+  "r": ["Lubombo Region", "Manzini Region", "Hhohho Region", "Shiselweni"],
+  "c": [
+    ["Thunzini", 0, -25.96, 31.73],
+    ["Siteki", 0, -26.45, 31.95],
+    ["Sidvokodvo", 1, -26.63, 31.42],
+    ["Piggs Peak", 2, -25.96, 31.25],
+    ["Nsoko", 0, -27.03, 31.94],
+    ["Nhlangano", 3, -27.11, 31.2],
+    ["Mhlume", 0, -26.03, 31.81],
+    ["Mhlambanyatsi", 1, -26.45, 31.05],
+    ["Mbabane", 2, -26.32, 31.13],
+    ["Manzini", 1, -26.5, 31.38],
+    ["Malkerns", 1, -26.53, 31.19],
+    ["Lobamba", 2, -26.47, 31.2],
+    ["Lavumisa", 3, -27.31, 31.89],
+    ["Kwaluseni", 1, -26.48, 31.33],
+    ["Kubuta", 3, -26.88, 31.48],
+    ["Hluti", 3, -27.22, 31.59],
+    ["Hlathikhulu", 3, -26.98, 31.33],
+    ["Ezulwini", 0, -26.4, 31.17],
+    ["Darkton", 2, -26.23, 31.03],
+    ["Bulembu", 2, -25.95, 31.13],
+    ["Bhunya", 1, -26.54, 31.01],
+    ["Vuvulane", 0, -26.07, 31.88],
+    ["Ntfonjeni", 2, -25.83, 31.33],
+    ["Big Bend", 0, -26.79, 31.94]
+  ]
+}

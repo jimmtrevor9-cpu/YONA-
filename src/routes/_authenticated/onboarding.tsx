@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -21,9 +22,11 @@ import {
   welcomeKey,
   type SignupDraft,
 } from "@/features/auth/signup-draft";
+import { recordDeclaredLocation } from "@/features/location/location.functions";
 import { FREE_MAX_PHOTOS } from "@/features/monetization/rules";
 import { personalInfoServerError } from "@/features/profiles/personal-info";
 import { preferencesServerError } from "@/features/profiles/preferences";
+import { browserHints } from "@/features/profiles/location";
 import { onboardingDataQuery } from "@/features/profiles/queries";
 import { supabase } from "@/integrations/supabase/client";
 import { APP_NAME } from "@/lib/config";
@@ -58,6 +61,7 @@ function saveErrorMessage(error: unknown): string {
  */
 function OnboardingPage() {
   const navigate = useNavigate();
+  const declareLocation = useServerFn(recordDeclaredLocation);
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const userId = user?.id ?? "";
@@ -86,6 +90,8 @@ function OnboardingPage() {
   const save = useCallback(
     async (draft: SignupDraft, photos: File[]) => {
       const result = await applySignupDraft(userId, draft, photos);
+      // Position de la ville déclarée (tâche E) : sans effet sur l'inscription si elle échoue.
+      void declareLocation({ data: browserHints() }).catch(() => undefined);
       clearLocalDraft();
       try {
         window.localStorage.setItem(welcomeKey(userId), "pending");
@@ -103,7 +109,7 @@ function OnboardingPage() {
       setPhase("done");
       window.setTimeout(() => navigate({ to: "/verification", replace: true }), 1200);
     },
-    [userId, queryClient, navigate],
+    [userId, queryClient, navigate, declareLocation],
   );
 
   useEffect(() => {

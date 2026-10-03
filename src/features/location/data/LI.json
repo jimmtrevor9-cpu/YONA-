@@ -1,0 +1,31 @@
+{
+  "r": [
+    "Vaduz",
+    "Triesenberg",
+    "Triesen",
+    "Schellenberg",
+    "Schaan",
+    "Ruggell",
+    "Planken",
+    "Eschen",
+    "Mauren",
+    "Gamprin",
+    "Balzers"
+  ],
+  "c": [
+    ["Vaduz", 0, 47.14, 9.52],
+    ["Triesenberg", 1, 47.12, 9.54],
+    ["Triesen", 2, 47.11, 9.53],
+    ["Schellenberg", 3, 47.23, 9.55],
+    ["Schaan", 4, 47.16, 9.51],
+    ["Ruggell", 5, 47.24, 9.53],
+    ["Planken", 6, 47.19, 9.54],
+    ["Nendeln", 7, 47.2, 9.54],
+    ["Mauren", 8, 47.22, 9.54],
+    ["Gamprin", 9, 47.22, 9.51],
+    ["Eschen", 7, 47.21, 9.52],
+    ["Bendern", 9, 47.21, 9.51],
+    ["Balzers", 10, 47.07, 9.5],
+    ["Mäls", 10, 47.06, 9.5]
+  ]
+}

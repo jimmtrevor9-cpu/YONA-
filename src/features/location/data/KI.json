@@ -1,0 +1,24 @@
+{
+  "r": ["Gilbert Islands", "Line Islands"],
+  "c": [
+    ["Teaoraereke Village", 0, 1.33, 173.01],
+    ["Rawannawi Village", 0, 2.05, 173.26],
+    ["Buota Village", 0, 1.39, 173.13],
+    ["Betio Village", 0, 1.36, 172.92],
+    ["Banraeaba Village", 0, 1.35, 173.03],
+    ["Tarawa", 0, 1.33, 172.98],
+    ["Napari Village", 1, 3.91, -159.39],
+    ["London Village", 1, 1.98, -157.48],
+    ["Tabwakea Village", 1, 2.02, -157.49],
+    ["Banana Village", 1, 1.98, -157.37],
+    ["Makin Village", 0, 3.36, 172.98],
+    ["Bairiki Village", 0, 1.33, 172.98],
+    ["Ambo Village", 0, 1.35, 173.04],
+    ["Bonriki Village", 0, 1.38, 173.14],
+    ["Temaiku Village", 0, 1.36, 173.16],
+    ["Nawerewere Village", 0, 1.36, 173.14],
+    ["Bikenibeu Village", 0, 1.37, 173.12],
+    ["Eita Village", 0, 1.36, 173.08],
+    ["Banana", 1, 1.97, -157.39]
+  ]
+}

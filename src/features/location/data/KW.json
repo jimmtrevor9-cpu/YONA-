@@ -1,0 +1,40 @@
+{
+  "r": [
+    "Al Farwaniyah",
+    "Hawalli",
+    "Al Asimah",
+    "Al Aḩmadī",
+    "Al Jahra Governorate",
+    "Mubārak al Kabīr"
+  ],
+  "c": [
+    ["Janūb as Surrah", 0, 29.27, 47.98],
+    ["Ḩawallī", 1, 29.33, 48.03],
+    ["Bayān", 1, 29.3, 48.05],
+    ["Az Zawr", 2, 29.44, 48.27],
+    ["As Sālimīyah", 1, 29.33, 48.08],
+    ["Ash Shāmīyah", 2, 29.35, 47.96],
+    ["Ar Rumaythīyah", 1, 29.31, 48.07],
+    ["Ar Riqqah", 3, 29.15, 48.09],
+    ["Al Wafrah", 3, 28.64, 47.93],
+    ["Al Manqaf", 3, 29.1, 48.13],
+    ["Al Mahbūlah", 3, 29.15, 48.13],
+    ["Kuwait City", 2, 29.37, 47.97],
+    ["Al Jahrā'", 4, 29.34, 47.66],
+    ["Al Funayţīs", 5, 29.23, 48.1],
+    ["Al Faḩāḩīl", 3, 29.08, 48.13],
+    ["Al Finţās", 3, 29.17, 48.12],
+    ["Al Farwānīyah", 0, 29.28, 47.96],
+    ["Al Aḩmadī", 3, 29.08, 48.08],
+    ["Ad Dasmah", 2, 29.37, 48],
+    ["Salwá", 1, 29.3, 48.08],
+    ["Al Murqāb", 2, 29.37, 47.98],
+    ["Ar Rābiyah", 2, 29.3, 47.93],
+    ["Şabāḩ as Sālim", 5, 29.26, 48.06],
+    ["Mubārak al Kabīr", 5, 29.19, 48.09],
+    ["Mazāri‘ al ‘Abdalī", 4, 30.04, 47.72],
+    ["Al-Masayel", 5, 29.24, 48.09],
+    ["Abu Fatira", 5, 29.2, 48.1],
+    ["Abu Al Hasaniya", 5, 29.19, 48.11]
+  ]
+}

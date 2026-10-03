@@ -34,6 +34,8 @@ SEED_MIG = "20261003100100_profils_demo_donnees.sql"
 SETTINGS_ROWS = [
     ("20261003150000_publicites.sql",
      r"^INSERT INTO public\.ad_settings \(id\) VALUES \(true\) ON CONFLICT \(id\) DO NOTHING;"),
+    ("20261003160000_localisation.sql",
+     r"^INSERT INTO public\.geo_timezones \(tz, country_codes\) VALUES\n.*?^ON CONFLICT \(tz\) DO UPDATE SET country_codes = EXCLUDED\.country_codes;"),
 ]
 CRON_MIGS = [
     ("20260928090000_phase7_expirer_deblocage.sql", "fin des déblocages de conversation"),
@@ -353,7 +355,7 @@ def seed_sql():
 def settings_sql():
     found = []
     for name, pattern in SETTINGS_ROWS:
-        rows_found = re.findall(pattern, read_mig(name), flags=re.M)
+        rows_found = re.findall(pattern, read_mig(name), flags=re.M | re.S)
         if len(rows_found) != 1:
             raise SystemExit(f"Ligne de réglages introuvable dans {name}")
         found.append(rows_found[0])
@@ -467,7 +469,7 @@ SET search_path = pg_catalog;""")
     out.section("Tâches automatiques (pg_cron, si Supabase le permet ; sinon les dates suffisent)")
     out.write(cron_sql())
 
-    out.section("Données de départ : réglages (fréquence des publicités)")
+    out.section("Données de départ : réglages (fréquence des publicités) et fuseaux horaires")
     out.write(settings_sql())
 
     out.section(f"Données de départ : {expected['countries']} pays (position, pour le pays le plus proche)")

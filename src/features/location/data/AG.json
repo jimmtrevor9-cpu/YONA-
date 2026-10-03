@@ -1,0 +1,33 @@
+{
+  "r": [
+    "Saint Philip Parish",
+    "Saint Paul Parish",
+    "Saint John Parish",
+    "Saint George Parish",
+    "Saint Peter Parish",
+    "Barbuda",
+    "Saint Mary Parish"
+  ],
+  "c": [
+    ["Willikies", 0, 17.09, -61.71],
+    ["Swetes", 1, 17.05, -61.8],
+    ["Saint John's", 2, 17.12, -61.84],
+    ["Potters Village", 2, 17.11, -61.82],
+    ["Piggotts", 3, 17.12, -61.8],
+    ["Parham", 4, 17.1, -61.77],
+    ["New Winthorpes", 3, 17.15, -61.81],
+    ["Liberta", 1, 17.04, -61.79],
+    ["Falmouth", 1, 17.03, -61.78],
+    ["Codrington", 5, 17.64, -61.82],
+    ["Bolands", 6, 17.07, -61.87],
+    ["All Saints", 4, 17.07, -61.79],
+    ["Sugar Factory", 2, 17.09, -61.82],
+    ["Jacks Hill", 2, 17.11, -61.86],
+    ["St. Paul Parish", 1, 17.02, -61.77],
+    ["Barbuda Parish", 5, 17.62, -61.78],
+    ["St. George Parish", 3, 17.12, -61.8],
+    ["St. Peter Parish", 0, 17.08, -61.71],
+    ["St. Mary Parish", 6, 17.07, -61.87],
+    ["St. Philip Parish", 0, 17.05, -61.73]
+  ]
+}
