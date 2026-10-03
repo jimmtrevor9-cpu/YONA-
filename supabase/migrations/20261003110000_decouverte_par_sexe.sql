@@ -7,6 +7,7 @@
 --    la suite est complétée par l'autre. Préférence réciproque : un vrai profil qui ne
 --    cherche pas le sexe du membre n'est pas montré (les profils de démonstration
 --    s'adaptent). Profils déjà likés / passés / bloqués exclus, comme avant.
+--    Les vrais membres passent avant les profils de démonstration.
 --    Renvoie aussi ce qu'affiche la nouvelle carte de découverte : région, profil de
 --    démonstration, identité vérifiée, objectif, photo principale validée (ou photo de
 --    démonstration) et distance approximative (km entiers).
@@ -80,7 +81,8 @@ BEGIN
   ), ranked AS (
     SELECT c.*,
            row_number() OVER (
-             PARTITION BY c.pgender ORDER BY c.boosted DESC, c.premium DESC, c.pupdated DESC
+             PARTITION BY c.pgender
+             ORDER BY c.virt, c.boosted DESC, c.premium DESC, c.pupdated DESC
            ) AS rn
     FROM candidates c
   )
@@ -382,13 +384,14 @@ BEGIN
     ))
     -- 20.3 : un membre qui masque son activité n'apparaît pas dans le filtre « actif depuis ».
     AND (_active_days IS NULL OR public.is_activity_visible(p.user_id))
-  -- 15.12 : profils boostés, puis Premium, puis les plus récents, rangés séparément pour
+  -- Vrais membres d'abord, puis (15.12) profils boostés, Premium, plus récents, rangés séparément pour
   -- chaque sexe ; quand les deux sexes sont recherchés, ils sont intercalés (un de chaque,
   -- en commençant par le sexe opposé à celui du membre), puis le reste du sexe le plus
   -- nombreux si l'autre vient à manquer.
   ORDER BY row_number() OVER (
              PARTITION BY p.gender
-             ORDER BY public.is_boosted(p.user_id) DESC, public.is_premium(p.user_id) DESC, p.updated_at DESC
+             ORDER BY p.is_virtual, public.is_boosted(p.user_id) DESC, public.is_premium(p.user_id) DESC,
+                      p.updated_at DESC
            ),
            (p.gender IS DISTINCT FROM _my_gender) DESC
   LIMIT least(greatest(coalesce(_limit, 30), 1), 50);

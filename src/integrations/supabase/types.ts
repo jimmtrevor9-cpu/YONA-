@@ -1778,6 +1778,10 @@ export type Database = {
       }
       touch_activity: { Args: never; Returns: boolean }
       unblock_user: { Args: { _user_id: string }; Returns: boolean }
+      undo_last_pass: {
+        Args: never
+        Returns: string
+      }
       utc_day_start: { Args: never; Returns: string }
     }
     Enums: {

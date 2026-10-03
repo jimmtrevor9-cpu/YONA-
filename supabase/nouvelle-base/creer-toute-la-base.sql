@@ -2,7 +2,7 @@
 -- YONA — CRÉER TOUTE LA BASE DE DONNÉES (projet Supabase neuf et vide)
 --
 -- Ce fichier installe en une seule fois tout ce dont le site a besoin :
---   32 tables, 126 fonctions, 88 règles d'accès, les droits de chaque rôle,
+--   32 tables, 127 fonctions, 88 règles d'accès, les droits de chaque rôle,
 --   la création automatique du profil à l'inscription (e-mail ou Google), 4 espaces de
 --   fichiers privés (photos, messages vocaux, vérifications), les messages en temps réel,
 --   les tâches automatiques, les 247 pays et les 40 profils virtuels.
@@ -20,7 +20,7 @@
 -- Le déclencheur de la section « Comptes » relie chaque nouveau compte à son profil.
 --
 -- Fichier généré par scripts/generate-base-complete.py à partir de supabase/migrations/
--- (90 migrations). Ne pas modifier à la main.
+-- (91 migrations). Ne pas modifier à la main.
 -- ============================================================================
 
 -- ============================================================================
@@ -1397,7 +1397,8 @@ BEGIN
   ), ranked AS (
     SELECT c.*,
            row_number() OVER (
-             PARTITION BY c.pgender ORDER BY c.boosted DESC, c.premium DESC, c.pupdated DESC
+             PARTITION BY c.pgender
+             ORDER BY c.virt, c.boosted DESC, c.premium DESC, c.pupdated DESC
            ) AS rn
     FROM candidates c
   )
@@ -3187,13 +3188,14 @@ BEGIN
     ))
     -- 20.3 : un membre qui masque son activité n'apparaît pas dans le filtre « actif depuis ».
     AND (_active_days IS NULL OR public.is_activity_visible(p.user_id))
-  -- 15.12 : profils boostés, puis Premium, puis les plus récents, rangés séparément pour
+  -- Vrais membres d'abord, puis (15.12) profils boostés, Premium, plus récents, rangés séparément pour
   -- chaque sexe ; quand les deux sexes sont recherchés, ils sont intercalés (un de chaque,
   -- en commençant par le sexe opposé à celui du membre), puis le reste du sexe le plus
   -- nombreux si l'autre vient à manquer.
   ORDER BY row_number() OVER (
              PARTITION BY p.gender
-             ORDER BY public.is_boosted(p.user_id) DESC, public.is_premium(p.user_id) DESC, p.updated_at DESC
+             ORDER BY p.is_virtual, public.is_boosted(p.user_id) DESC, public.is_premium(p.user_id) DESC,
+                      p.updated_at DESC
            ),
            (p.gender IS DISTINCT FROM _my_gender) DESC
   LIMIT least(greatest(coalesce(_limit, 30), 1), 50);
@@ -3597,6 +3599,36 @@ BEGIN
   END IF;
   DELETE FROM public.blocks b WHERE b.blocker_id = auth.uid() AND b.blocked_id = _user_id;
   RETURN FOUND;
+END;
+$$;
+
+CREATE FUNCTION public.undo_last_pass() RETURNS uuid
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE
+  _me uuid := auth.uid();
+  _target uuid;
+BEGIN
+  IF _me IS NULL THEN
+    RAISE EXCEPTION 'not_authenticated' USING ERRCODE = '42501';
+  END IF;
+  IF NOT public.is_premium(_me) THEN
+    RAISE EXCEPTION 'premium_required' USING ERRCODE = '42501';
+  END IF;
+  DELETE FROM public.likes l
+  WHERE l.id = (
+    SELECT p.id FROM public.likes p
+    WHERE p.sender_id = _me AND p.kind = 'pass' AND p.status = 'active'
+      AND p.created_at > now() - interval '24 hours'
+    ORDER BY p.created_at DESC
+    LIMIT 1
+  )
+  RETURNING l.receiver_id INTO _target;
+  IF _target IS NULL THEN
+    RAISE EXCEPTION 'nothing_to_undo' USING ERRCODE = 'P0002';
+  END IF;
+  RETURN _target;
 END;
 $$;
 
@@ -4865,7 +4897,7 @@ GRANT SELECT, INSERT, DELETE ON TABLE
   public.favorites
 TO authenticated;
 
--- 78 fonctions — membres connectés : exécution · serveur du site : exécution
+-- 79 fonctions — membres connectés : exécution · serveur du site : exécution
 REVOKE ALL ON FUNCTION
   public.activate_profile_boost(),
   public.admin_list_demo_profiles(),
@@ -4944,7 +4976,8 @@ REVOKE ALL ON FUNCTION
   public.start_conversation_unlock_payment(uuid,text),
   public.start_premium_payment(public.subscription_plan,text),
   public.touch_activity(),
-  public.unblock_user(uuid)
+  public.unblock_user(uuid),
+  public.undo_last_pass()
 FROM PUBLIC, anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION
   public.activate_profile_boost(),
@@ -5024,7 +5057,8 @@ GRANT EXECUTE ON FUNCTION
   public.start_conversation_unlock_payment(uuid,text),
   public.start_premium_payment(public.subscription_plan,text),
   public.touch_activity(),
-  public.unblock_user(uuid)
+  public.unblock_user(uuid),
+  public.undo_last_pass()
 TO authenticated, service_role;
 
 -- 42 fonctions — serveur du site : exécution
@@ -5664,7 +5698,7 @@ SELECT b.element AS "Élément", b.trouve AS "Dans la base", b.attendu AS "Atten
             ELSE '❌' END AS "État"
 FROM (VALUES
   (1, 'Tables', (SELECT count(*) FROM pg_catalog.pg_tables WHERE schemaname = 'public')::text, '32', false),
-  (2, 'Fonctions', (SELECT count(*) FROM pg_catalog.pg_proc WHERE pronamespace = 'public'::regnamespace)::text, '126', false),
+  (2, 'Fonctions', (SELECT count(*) FROM pg_catalog.pg_proc WHERE pronamespace = 'public'::regnamespace)::text, '127', false),
   (3, 'Règles d''accès des tables', (SELECT count(*) FROM pg_catalog.pg_policies WHERE schemaname = 'public')::text, '75', false),
   (4, 'Tables protégées (RLS)', (SELECT count(*) FROM pg_catalog.pg_class WHERE relnamespace = 'public'::regnamespace AND relkind = 'r' AND relrowsecurity)::text, '32', false),
   (5, 'Profil créé à l''inscription', (SELECT CASE WHEN count(*) > 0 THEN 'oui' ELSE 'non' END FROM pg_catalog.pg_trigger WHERE tgrelid = 'auth.users'::regclass AND tgname = 'on_auth_user_created'), 'oui', false),

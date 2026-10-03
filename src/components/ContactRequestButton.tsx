@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Send, Zap } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -34,13 +34,58 @@ export function ContactRequestButton({
   receiverId: string;
   receiverName: string;
 }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Button
+        type="button"
+        variant="secondary"
+        size="sm"
+        onClick={() => setOpen(true)}
+        aria-label={`Envoyer une demande de contact à ${receiverName}`}
+        data-testid="contact-request-button"
+      >
+        <Send aria-hidden />
+        Demande de contact
+      </Button>
+      <ContactRequestDialog
+        receiverId={receiverId}
+        receiverName={receiverName}
+        open={open}
+        onOpenChange={setOpen}
+      />
+    </>
+  );
+}
+
+/**
+ * Fenêtre d'envoi d'une demande de contact (ou d'un Message Flash, Premium). Ouverte par
+ * le bouton ci-dessus ou par les boutons de la carte de découverte (`initialFlash` coche
+ * directement le Message Flash quand il est disponible).
+ */
+export function ContactRequestDialog({
+  receiverId,
+  receiverName,
+  open,
+  onOpenChange,
+  initialFlash = false,
+}: {
+  receiverId: string;
+  receiverName: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  initialFlash?: boolean;
+}) {
   const { user } = useAuth();
   const userId = user?.id ?? "";
   const queryClient = useQueryClient();
-  const [open, setOpen] = useState(false);
+  const setOpen = onOpenChange;
   const [message, setMessage] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
-  const [flash, setFlash] = useState(false);
+  const [flash, setFlash] = useState(initialFlash);
+  useEffect(() => {
+    if (open) setFlash(initialFlash);
+  }, [open, initialFlash]);
   const tooLong = message.trim().length > CONTACT_MESSAGE_MAX_LENGTH;
   // Quota du jour (étape 12.4) : lu à l'ouverture de la fenêtre, recalculé par le serveur.
   const { data: quota } = useQuery({
@@ -50,7 +95,7 @@ export function ContactRequestButton({
   const exhausted = !!quota && !quota.unlimited && (quota.remaining ?? 0) <= 0;
   // Message Flash : proposé aux Premium (quota illimité = Premium), message obligatoire.
   const canFlash = !!quota?.unlimited;
-  const flashMissingMessage = flash && message.trim().length === 0;
+  const flashMissingMessage = flash && canFlash && message.trim().length === 0;
   const refreshQuota = () => queryClient.invalidateQueries({ queryKey: ["contact-requests"] });
 
   const send = useMutation({
@@ -60,7 +105,7 @@ export function ContactRequestButton({
         toast.info(`Vous avez déjà une demande de contact en attente pour ${receiverName}.`);
       } else {
         toast.success(
-          flash
+          flash && canFlash
             ? `Message Flash envoyé à ${receiverName} : il sera mis en avant.`
             : `Demande de contact envoyée à ${receiverName}.`,
         );
@@ -82,17 +127,6 @@ export function ContactRequestButton({
 
   return (
     <>
-      <Button
-        type="button"
-        variant="secondary"
-        size="sm"
-        onClick={() => setOpen(true)}
-        aria-label={`Envoyer une demande de contact à ${receiverName}`}
-        data-testid="contact-request-button"
-      >
-        <Send aria-hidden />
-        Demande de contact
-      </Button>
       <Dialog open={open} onOpenChange={(next) => !send.isPending && setOpen(next)}>
         <DialogContent className="max-w-md" data-testid="contact-request-dialog">
           <DialogHeader>
@@ -202,7 +236,11 @@ export function ContactRequestButton({
                 variant="gold"
                 disabled={tooLong || exhausted || flashMissingMessage || send.isPending}
               >
-                {send.isPending ? "Envoi…" : flash ? "Envoyer le Flash" : "Envoyer la demande"}
+                {send.isPending
+                  ? "Envoi…"
+                  : flash && canFlash
+                    ? "Envoyer le Flash"
+                    : "Envoyer la demande"}
               </Button>
             </DialogFooter>
           </form>

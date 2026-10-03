@@ -624,6 +624,13 @@
       "when": 1790845200000,
       "tag": "0088_decouverte_par_sexe",
       "breakpoints": true
+    },
+    {
+      "idx": 89,
+      "version": "7",
+      "when": 1790848800000,
+      "tag": "0089_page_decouvrir",
+      "breakpoints": true
     }
   ]
 }

@@ -1,11 +1,9 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { adminErrorMessage } from "@/features/admin/admin.functions";
+import { DEMO_BUCKET, demoPhotoUrl } from "@/features/profiles/demo";
 import { preparePhoto } from "@/features/profiles/photos";
 import { supabase } from "@/integrations/supabase/client";
-
-/** Espace de stockage public des photos des profils de démonstration. */
-export const DEMO_BUCKET = "demo-profils";
 
 /** Nature de l'image, attestée par l'administrateur avant la publication. */
 export const DEMO_PHOTO_SOURCES = [
@@ -28,11 +26,6 @@ export const DEMO_PHOTO_SOURCES = [
   },
 ] as const;
 export type DemoPhotoSource = (typeof DEMO_PHOTO_SOURCES)[number]["value"];
-
-/** Lien public d'une photo de profil de démonstration. */
-export function demoPhotoUrl(path: string): string {
-  return supabase.storage.from(DEMO_BUCKET).getPublicUrl(path).data.publicUrl;
-}
 
 export const adminDemoProfilesQuery = () =>
   queryOptions({
