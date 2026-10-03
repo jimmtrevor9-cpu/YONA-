@@ -15,6 +15,8 @@ import re
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MIG = os.path.join(ROOT, "supabase", "migrations")
 OUT = os.path.join(ROOT, "supabase", "rattrapage", "verifier-migrations.sql")
+COMBINED = os.path.join(ROOT, "supabase", "rattrapage", "50-profils-virtuels-et-verification.sql")
+DATA = "20261002110000_profils_virtuels_donnees.sql"
 
 IDENT = r'"?([A-Za-z_][A-Za-z0-9_]*)"?'
 QUAL = r'(?:"?(public|storage|auth)"?\.)?' + IDENT
@@ -175,6 +177,43 @@ ORDER BY 1;
     with open(OUT, "w", encoding="utf-8") as fh:
         fh.write(sql)
     print(f"{len(rows)} éléments, {len(files)} migrations -> {OUT} ({len(sql)} octets)")
+
+    # Variante : les 50 profils virtuels, puis la même vérification, avec en plus le
+    # nombre de profils virtuels présents (un seul fichier à coller).
+    data = open(os.path.join(MIG, DATA), encoding="utf-8").read()
+    check = sql.split("-- ============================================================\n", 2)[2]
+    check = check.replace(
+        "UNION ALL\nSELECT 'Tout est à jour', NULL, 0, NULL",
+        "UNION ALL\nSELECT '→ Profils virtuels dans la base', count(*), 0, NULL\n"
+        "FROM public.profiles WHERE is_virtual\n"
+        "UNION ALL\nSELECT 'Tout est à jour', NULL, 0, NULL",
+    )
+    combined = f"""-- ============================================================
+-- YONA — 50 PROFILS VIRTUELS + VÉRIFICATION des mises à jour de la base
+--
+-- À coller EN ENTIER dans Supabase → SQL Editor, puis « Run ».
+-- 1. Ajoute les 50 profils virtuels (contenu de {DATA}) :
+--    5 par pays pour Gabon, Cameroun, Côte d'Ivoire, Congo-Brazzaville, Togo, Bénin,
+--    Sénégal et Mali, et 10 pour la France. Rejouable sans risque.
+-- 2. Affiche le tableau de vérification (lecture seule) : la ligne
+--    « → Profils virtuels dans la base » donne le nombre de profils virtuels, les autres
+--    lignes listent les mises à jour (migrations) qui manquent encore dans la base.
+-- Supabase peut afficher « Potential issue detected » / « opérations destructives » :
+-- le fichier retire seulement d'anciens profils virtuels (jamais un vrai membre).
+-- Il faut alors confirmer avec « Run this query » / « Exécuter la requête ».
+-- ============================================================
+
+-- ############################################################
+-- PARTIE 1 : les 50 profils virtuels
+-- ############################################################
+{data}
+-- ############################################################
+-- PARTIE 2 : vérification (lecture seule)
+-- ############################################################
+{check}"""
+    with open(COMBINED, "w", encoding="utf-8") as fh:
+        fh.write(combined)
+    print(f"-> {COMBINED} ({len(combined)} octets)")
 
 
 if __name__ == "__main__":
