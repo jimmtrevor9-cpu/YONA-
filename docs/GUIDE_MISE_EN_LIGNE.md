@@ -10,12 +10,11 @@ ville du monde entier, 50 profils virtuels et page « Vérifie ton profil ». Au
 variable d'environnement n'est nécessaire.
 
 1. **Fusionner** la Pull Request de la branche `claude/admiring-ride-05jon2` (étape 1 ci-dessous).
-2. **Base de données** : dans Supabase → **SQL Editor**, exécute ces deux fichiers, **dans cet ordre**
-   (copie tout le contenu du fichier, colle, puis **Run**) :
-   1. `supabase/migrations/20261002100000_profils_virtuels_et_verification.sql`
-   2. `supabase/migrations/20261002110000_profils_virtuels_donnees.sql` (50 profils
-      virtuels : 40 en Afrique francophone, 10 en France). Il ne crée aucune table : l'avertissement « RLS »
-      n'apparaît pas. Il peut être relancé sans risque.
+2. **Base de données** : dans Supabase → **SQL Editor**, colle **en entier** le fichier
+   `supabase/rattrapage/rattrapage-et-50-profils-virtuels.sql`, puis **Run**. Il applique dans
+   l'ordre les migrations du 1er octobre (inscription) et du 2 octobre (profils virtuels,
+   vérification), puis ajoute les 50 profils virtuels, et affiche un bilan. Il est rejouable
+   sans risque et ne crée aucune table temporaire (pas d'avertissement « RLS »).
 3. **Adresses de retour** : Supabase → **Authentication → URL Configuration** :
    - *Site URL* : l'adresse de ton site (par exemple `https://yona-xxx.vercel.app`) ;
    - *Redirect URLs* : `https://yona-xxx.vercel.app/**` (et la même chose pour ton nom de domaine).

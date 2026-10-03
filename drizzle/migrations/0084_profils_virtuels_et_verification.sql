@@ -171,8 +171,10 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
   ORDER BY p.created_at DESC
   LIMIT 8;
 $$;
-REVOKE ALL ON FUNCTION public.recent_signups() FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.recent_signups() TO anon, authenticated;
+-- Règle 24.12 : fonction SECURITY DEFINER réservée au rôle service (l'application
+-- l'appelle côté serveur, voir recent-signups.functions.ts).
+REVOKE ALL ON FUNCTION public.recent_signups() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.recent_signups() TO service_role;
 
 -- ------------------------------------------------------------
 -- 5. Vérification du profil (selfie ou pièce d'identité)
