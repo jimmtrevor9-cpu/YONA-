@@ -218,13 +218,21 @@ function SearchPage() {
             <select
               id="gender"
               value={form.gender}
+              disabled={!!defaults?.gender}
+              aria-describedby={defaults?.gender ? "gender-hint" : undefined}
               onChange={(e) => update("gender", e.target.value as Gender | "")}
-              className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm text-foreground"
+              className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm text-foreground disabled:opacity-70"
             >
               <option value="">Indifférent</option>
               <option value="female">Une femme</option>
               <option value="male">Un homme</option>
             </select>
+            {defaults?.gender ? (
+              // Règle du serveur : la recherche suit le sexe choisi dans les préférences.
+              <p id="gender-hint" className="text-xs text-muted-foreground">
+                Selon vos préférences (modifiables dans votre profil).
+              </p>
+            ) : null}
           </div>
           <div className="space-y-2">
             <Label htmlFor="distance">Distance</Label>

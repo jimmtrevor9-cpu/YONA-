@@ -20,7 +20,7 @@
 -- Le déclencheur de la section « Comptes » relie chaque nouveau compte à son profil.
 --
 -- Fichier généré par scripts/generate-base-complete.py à partir de supabase/migrations/
--- (89 migrations). Ne pas modifier à la main.
+-- (90 migrations). Ne pas modifier à la main.
 -- ============================================================================
 
 -- ============================================================================
@@ -1339,29 +1339,86 @@ BEGIN
 END;
 $$;
 
-CREATE FUNCTION public.discover_profiles(_limit integer DEFAULT 30) RETURNS TABLE(user_id uuid, first_name text, birth_date date, city text, country text, bio text, gender public.gender, interests text[])
-    LANGUAGE sql STABLE
+CREATE FUNCTION public.discover_profiles(_limit integer DEFAULT 30) RETURNS TABLE(user_id uuid, first_name text, birth_date date, city text, region text, country text, bio text, gender public.gender, interests text[], is_virtual boolean, is_verified boolean, relationship_goal text, photo_path text, demo_photo_path text, distance_km integer)
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
-  SELECT p.user_id, p.first_name, p.birth_date, p.city, p.country, p.bio, p.gender, p.interests
-  FROM public.profiles p
-  LEFT JOIN public.preferences pr ON pr.user_id = auth.uid()
-  WHERE p.user_id <> auth.uid()
-    AND p.status = 'active' AND p.visibility = 'visible'
-    AND (pr.preferred_gender IS NULL OR p.gender = pr.preferred_gender)
-    AND (
-      pr.user_id IS NULL OR (
-        p.birth_date <= (current_date - make_interval(years => pr.min_age))::date
-        AND p.birth_date > (current_date - make_interval(years => pr.max_age + 1))::date
+#variable_conflict use_column
+DECLARE
+  _me uuid := auth.uid();
+  _my_gender public.gender;
+  _sought public.gender;
+  _min smallint;
+  _max smallint;
+  _lat double precision;
+  _lng double precision;
+BEGIN
+  IF _me IS NULL THEN
+    RAISE EXCEPTION 'not_authenticated' USING ERRCODE = '42501';
+  END IF;
+  -- Même règle d'accès qu'avant : profil finalisé, compte actif.
+  IF NOT public.can_browse_profiles() THEN
+    RETURN;
+  END IF;
+  SELECT p.gender INTO _my_gender FROM public.profiles p WHERE p.user_id = _me;
+  SELECT pr.preferred_gender, pr.min_age, pr.max_age INTO _sought, _min, _max
+  FROM public.preferences pr WHERE pr.user_id = _me;
+  SELECT l.latitude, l.longitude INTO _lat, _lng FROM public.profile_locations l WHERE l.user_id = _me;
+
+  RETURN QUERY
+  WITH candidates AS (
+    SELECT p.user_id AS uid, p.first_name AS fname, p.birth_date AS bdate, p.city AS pcity,
+           p.region AS pregion, p.country AS pcountry, p.bio AS pbio, p.gender AS pgender,
+           p.interests AS pinterests, p.is_virtual AS virt, p.verified_at, p.updated_at AS pupdated,
+           p.demo_photo_path AS demo_path,
+           public.is_boosted(p.user_id) AS boosted, public.is_premium(p.user_id) AS premium
+    FROM public.profiles p
+    WHERE p.user_id <> _me
+      AND p.gender IS NOT NULL
+      AND public.is_discoverable_profile(p.user_id)
+      AND NOT public.is_blocked_between(_me, p.user_id)
+      -- Sexe recherché par le membre.
+      AND (_sought IS NULL OR p.gender = _sought)
+      -- Préférence réciproque (vrais profils seulement).
+      AND (p.is_virtual OR _my_gender IS NULL OR NOT EXISTS (
+        SELECT 1 FROM public.preferences o
+        WHERE o.user_id = p.user_id AND o.preferred_gender IS NOT NULL AND o.preferred_gender <> _my_gender
+      ))
+      -- Tranche d'âge recherchée.
+      AND (_min IS NULL OR (
+        p.birth_date <= (current_date - make_interval(years => _min))::date
+        AND p.birth_date > (current_date - make_interval(years => _max + 1))::date
+      ))
+      -- Déjà liké ou passé.
+      AND NOT EXISTS (
+        SELECT 1 FROM public.likes l
+        WHERE l.sender_id = _me AND l.receiver_id = p.user_id AND l.status = 'active'
       )
-    )
-    AND NOT EXISTS (
-      SELECT 1 FROM public.likes l
-      WHERE l.sender_id = auth.uid() AND l.receiver_id = p.user_id AND l.status = 'active'
-    )
-  -- 15.12 : profils boostés, puis Premium, puis les plus récents.
-  ORDER BY public.is_boosted(p.user_id) DESC, public.is_premium(p.user_id) DESC, p.updated_at DESC
-  LIMIT least(greatest(coalesce(_limit, 30), 1), 50)
+  ), ranked AS (
+    SELECT c.*,
+           row_number() OVER (
+             PARTITION BY c.pgender ORDER BY c.boosted DESC, c.premium DESC, c.pupdated DESC
+           ) AS rn
+    FROM candidates c
+  )
+  SELECT r.uid, r.fname, r.bdate, r.pcity, r.pregion, r.pcountry, r.pbio, r.pgender, r.pinterests,
+         r.virt, (NOT r.virt AND r.verified_at IS NOT NULL),
+         (SELECT o.relationship_goal FROM public.preferences o WHERE o.user_id = r.uid),
+         CASE WHEN r.virt THEN NULL ELSE (
+           SELECT ph.storage_path FROM public.photos ph
+           WHERE ph.user_id = r.uid AND ph.is_primary AND ph.status = 'approved'
+           LIMIT 1
+         ) END,
+         CASE WHEN r.virt THEN r.demo_path END,
+         (SELECT greatest(1, round(public.distance_km(_lat, _lng, l.latitude, l.longitude)))::integer
+          FROM public.profile_locations l
+          WHERE _lat IS NOT NULL AND l.user_id = r.uid)
+  FROM ranked r
+  -- Un de chaque sexe à tour de rôle (sexe opposé au membre d'abord) quand les deux sont
+  -- recherchés ; sinon l'ordre habituel : boostés, Premium, plus récents.
+  ORDER BY r.rn, (r.pgender IS DISTINCT FROM _my_gender) DESC
+  LIMIT least(greatest(coalesce(_limit, 30), 1), 50);
+END;
 $$;
 
 CREATE FUNCTION public.distance_km(_lat1 double precision, _lng1 double precision, _lat2 double precision, _lng2 double precision) RETURNS double precision
@@ -2881,6 +2938,8 @@ DECLARE
   _family text;
   _interests text[];
   _active_days int;
+  _my_gender public.gender;
+  _sought public.gender;
 BEGIN
   IF _me IS NULL THEN
     RAISE EXCEPTION 'not_authenticated' USING ERRCODE = '42501';
@@ -3061,6 +3120,18 @@ BEGIN
     RETURN;
   END IF;
 
+  -- Sexe recherché par le membre (préférences) : la recherche ne montre que ce sexe ; un
+  -- filtre peut seulement le confirmer, jamais le contourner (filtre contraire = aucun
+  -- résultat). Sans préférence (« les deux »), le filtre « gender » peut restreindre.
+  SELECT p.gender INTO _my_gender FROM public.profiles p WHERE p.user_id = _me;
+  SELECT pr.preferred_gender INTO _sought FROM public.preferences pr WHERE pr.user_id = _me;
+  IF _sought IS NOT NULL THEN
+    IF _gender IS NOT NULL AND _gender <> _sought THEN
+      RETURN;
+    END IF;
+    _gender := _sought;
+  END IF;
+
   RETURN QUERY
   SELECT p.user_id, p.first_name, p.birth_date, p.city, p.country, p.bio, p.gender, p.interests
   FROM public.profiles p
@@ -3070,6 +3141,13 @@ BEGIN
     AND (_min IS NULL OR p.birth_date <= (current_date - make_interval(years => _min))::date)
     AND (_max IS NULL OR p.birth_date > (current_date - make_interval(years => _max + 1))::date)
     AND (_gender IS NULL OR p.gender = _gender)
+    AND p.gender IS NOT NULL
+    -- Préférence réciproque : un vrai profil qui ne cherche pas le sexe du membre n'est
+    -- pas montré (les profils de démonstration s'adaptent au membre).
+    AND (p.is_virtual OR _my_gender IS NULL OR NOT EXISTS (
+      SELECT 1 FROM public.preferences o
+      WHERE o.user_id = p.user_id AND o.preferred_gender IS NOT NULL AND o.preferred_gender <> _my_gender
+    ))
     AND (_country IS NULL OR public.normalize_place(p.country) = _country)
     AND (_city IS NULL OR strpos(coalesce(public.normalize_place(p.city), ''), _city) > 0)
     AND (_marital IS NULL OR p.marital_status = ANY (_marital))
@@ -3109,8 +3187,15 @@ BEGIN
     ))
     -- 20.3 : un membre qui masque son activité n'apparaît pas dans le filtre « actif depuis ».
     AND (_active_days IS NULL OR public.is_activity_visible(p.user_id))
-  -- 15.12 : profils boostés, puis Premium, puis les plus récents.
-  ORDER BY public.is_boosted(p.user_id) DESC, public.is_premium(p.user_id) DESC, p.updated_at DESC
+  -- 15.12 : profils boostés, puis Premium, puis les plus récents, rangés séparément pour
+  -- chaque sexe ; quand les deux sexes sont recherchés, ils sont intercalés (un de chaque,
+  -- en commençant par le sexe opposé à celui du membre), puis le reste du sexe le plus
+  -- nombreux si l'autre vient à manquer.
+  ORDER BY row_number() OVER (
+             PARTITION BY p.gender
+             ORDER BY public.is_boosted(p.user_id) DESC, public.is_premium(p.user_id) DESC, p.updated_at DESC
+           ),
+           (p.gender IS DISTINCT FROM _my_gender) DESC
   LIMIT least(greatest(coalesce(_limit, 30), 1), 50);
 END;
 $_$;
@@ -4573,7 +4658,7 @@ CREATE POLICY profiles_select_admin ON public.profiles FOR SELECT TO authenticat
 
 CREATE POLICY profiles_select_own ON public.profiles FOR SELECT TO authenticated USING ((user_id = auth.uid()));
 
-CREATE POLICY profiles_select_visible ON public.profiles FOR SELECT TO authenticated USING (((user_id <> auth.uid()) AND (status = 'active'::public.profile_status) AND (visibility = 'visible'::public.profile_visibility) AND public.can_browse_profiles() AND (NOT public.is_blocked_between(auth.uid(), user_id)) AND public.is_active_account(user_id)));
+CREATE POLICY profiles_select_visible ON public.profiles FOR SELECT TO authenticated USING (((user_id <> auth.uid()) AND (status = 'active'::public.profile_status) AND (visibility = 'visible'::public.profile_visibility) AND ((NOT is_virtual) OR (demo_photo_path IS NOT NULL)) AND public.can_browse_profiles() AND (NOT public.is_blocked_between(auth.uid(), user_id)) AND public.is_active_account(user_id)));
 
 CREATE POLICY profiles_update_admin ON public.profiles FOR UPDATE TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
 

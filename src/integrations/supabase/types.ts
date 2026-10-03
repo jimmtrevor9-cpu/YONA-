@@ -1522,9 +1522,16 @@ export type Database = {
           birth_date: string | null
           city: string | null
           country: string | null
+          demo_photo_path: string | null
+          distance_km: number | null
           first_name: string | null
-          gender: Database["public"]["Enums"]["gender"] | null
+          gender: Database["public"]["Enums"]["gender"]
           interests: string[]
+          is_verified: boolean
+          is_virtual: boolean
+          photo_path: string | null
+          region: string | null
+          relationship_goal: string | null
           user_id: string
         }[]
       }
