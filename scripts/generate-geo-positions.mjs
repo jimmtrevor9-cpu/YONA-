@@ -26,7 +26,9 @@ const regionNames = new Map(admin1.map((a) => [a.code, REGION_FIXES[a.code] ?? c
 const round = (n) => Math.round(Number(n) * 100) / 100;
 
 // Noms français des pays : ceux de la liste de l'étape « Où es-tu ? ».
-const countries = JSON.parse(readFileSync(new URL("../public/geo/countries.json", import.meta.url), "utf8"));
+const countries = JSON.parse(
+  readFileSync(new URL("../public/geo/countries.json", import.meta.url), "utf8"),
+);
 const names = Object.fromEntries(countries.map((c) => [c.code, c.name]));
 
 const byCountry = new Map();

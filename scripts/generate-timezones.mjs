@@ -34,7 +34,13 @@ add("UTC", []);
 const rows = [...map]
   .filter(([, set]) => set.size)
   .sort(([a], [b]) => a.localeCompare(b))
-  .map(([tz, set]) => `  ('${tz}', ARRAY[${[...set].sort().map((c) => `'${c}'`).join(", ")}])`);
+  .map(
+    ([tz, set]) =>
+      `  ('${tz}', ARRAY[${[...set]
+        .sort()
+        .map((c) => `'${c}'`)
+        .join(", ")}])`,
+  );
 console.log(
   `INSERT INTO public.geo_timezones (tz, country_codes) VALUES\n${rows.join(",\n")}\n` +
     "ON CONFLICT (tz) DO UPDATE SET country_codes = EXCLUDED.country_codes;",
