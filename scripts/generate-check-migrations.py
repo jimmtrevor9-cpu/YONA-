@@ -17,6 +17,7 @@ MIG = os.path.join(ROOT, "supabase", "migrations")
 OUT = os.path.join(ROOT, "supabase", "rattrapage", "verifier-migrations.sql")
 COMBINED = os.path.join(ROOT, "supabase", "rattrapage", "50-profils-virtuels-et-verification.sql")
 DATA = "20261002110000_profils_virtuels_donnees.sql"
+INV = os.path.join(ROOT, "supabase", "rattrapage", "inventaire-base.sql")
 AUTO = os.path.join(ROOT, "supabase", "rattrapage", "tout-mettre-a-jour-et-50-profils.sql")
 # Première migration embarquée dans le rattrapage automatique (phase 12).
 AUTO_START = "20260929110000_phase12_creer_demande.sql"
@@ -295,6 +296,77 @@ $auto$;
     with open(AUTO, "w", encoding="utf-8") as fh:
         fh.write(auto)
     print(f"-> {AUTO} ({len(auto)} octets, {len(replay)} migrations embarquées)")
+
+    # Inventaire (lecture seule, un seul écran) : état réel de la base.
+    inv = f"""-- ============================================================
+-- YONA — INVENTAIRE DE LA BASE (lecture seule : ne modifie rien)
+--
+-- À coller dans Supabase → SQL Editor (page non traduite), puis « Run ».
+-- Envoyer une capture du tableau affiché (une quinzaine de lignes).
+-- Généré par scripts/generate-check-migrations.py.
+-- ============================================================
+{cte},
+bilan AS (
+  SELECT migration,
+         count(*) FILTER (WHERE present) AS presents,
+         count(*) AS total
+  FROM controle GROUP BY migration
+),
+lignes(ordre, element, valeur) AS (
+  SELECT 1, 'Comptes (auth.users)', (SELECT count(*) FROM auth.users)::text
+  UNION ALL SELECT 2, 'Profils (public.profiles)',
+    CASE WHEN to_regclass('public.profiles') IS NULL THEN 'table absente'
+         ELSE (xpath('/row/n/text()', query_to_xml(
+           'select count(*) as n from public.profiles', false, true, '')))[1]::text END
+  UNION ALL SELECT 3, 'Tables (schéma public)',
+    (SELECT count(*) || ' : ' || string_agg(tablename, ', ' ORDER BY tablename)
+       FROM pg_tables WHERE schemaname = 'public')
+  UNION ALL SELECT 4, 'Fonctions (schéma public)',
+    (SELECT count(*)::text FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+      WHERE n.nspname = 'public')
+  UNION ALL SELECT 5, 'Règles d''accès RLS (schéma public)',
+    (SELECT count(*)::text FROM pg_policies WHERE schemaname = 'public')
+  UNION ALL SELECT 6, 'Tables SANS protection RLS',
+    coalesce((SELECT string_agg(c.relname, ', ' ORDER BY c.relname) FROM pg_class c
+               JOIN pg_namespace n ON n.oid = c.relnamespace
+              WHERE n.nspname = 'public' AND c.relkind = 'r' AND NOT c.relrowsecurity), 'aucune')
+  UNION ALL SELECT 7, 'Déclencheurs sur auth.users',
+    coalesce((SELECT string_agg(t.tgname || ' → ' || p.proname, ', ') FROM pg_trigger t
+               JOIN pg_class c ON c.oid = t.tgrelid JOIN pg_namespace n ON n.oid = c.relnamespace
+               JOIN pg_proc p ON p.oid = t.tgfoid
+              WHERE n.nspname = 'auth' AND c.relname = 'users' AND NOT t.tgisinternal), 'aucun')
+  UNION ALL SELECT 8, 'Déclencheurs sur public.profiles',
+    coalesce((SELECT string_agg(t.tgname, ', ' ORDER BY t.tgname) FROM pg_trigger t
+               JOIN pg_class c ON c.oid = t.tgrelid JOIN pg_namespace n ON n.oid = c.relnamespace
+              WHERE n.nspname = 'public' AND c.relname = 'profiles' AND NOT t.tgisinternal), 'aucun')
+  UNION ALL SELECT 9, 'Espaces de stockage (buckets)',
+    coalesce((SELECT string_agg(id, ', ' ORDER BY id) FROM storage.buckets), 'aucun')
+  UNION ALL SELECT 10, 'Historique Supabase CLI (migrations enregistrées)',
+    CASE WHEN to_regclass('supabase_migrations.schema_migrations') IS NULL THEN 'absent'
+         ELSE (xpath('/row/v/text()', query_to_xml(
+           'select count(*) || '' : '' || coalesce(min(version), ''-'') || '' → '' || coalesce(max(version), ''-'') as v
+              from supabase_migrations.schema_migrations', false, true, '')))[1]::text END
+  UNION ALL SELECT 11, 'Mises à jour complètes',
+    (SELECT count(*) || ' / ' || (SELECT count(*) FROM bilan) FROM bilan WHERE presents = total)
+  UNION ALL SELECT 12, 'Mises à jour partielles (présents/attendus)',
+    coalesce((SELECT string_agg(left(migration, 14) || ' ' || presents || '/' || total, ', ' ORDER BY migration)
+                FROM bilan WHERE presents > 0 AND presents < total), 'aucune')
+  UNION ALL SELECT 13, 'Mises à jour absentes',
+    coalesce((SELECT string_agg(left(migration, 14), ', ' ORDER BY migration)
+                FROM bilan WHERE presents = 0), 'aucune')
+  UNION ALL SELECT 14, 'Fonctions de la 1re mise à jour présentes',
+    (SELECT count(*) FILTER (WHERE present) || '/' || count(*) || ' (manquent : ' ||
+            coalesce(string_agg(b, ', ' ORDER BY b) FILTER (WHERE NOT present), '-') || ')'
+       FROM controle WHERE migration LIKE '20260908214236%' AND nature = 'function')
+  UNION ALL SELECT 15, 'Règles d''accès de la 1re mise à jour présentes',
+    (SELECT count(*) FILTER (WHERE present) || '/' || count(*)
+       FROM controle WHERE migration LIKE '20260908214236%' AND nature = 'policy')
+)
+SELECT element, valeur FROM lignes ORDER BY ordre;
+"""
+    with open(INV, "w", encoding="utf-8") as fh:
+        fh.write(inv)
+    print(f"-> {INV} ({len(inv)} octets)")
 
 
 if __name__ == "__main__":
