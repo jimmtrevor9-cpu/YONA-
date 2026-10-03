@@ -1,4 +1,4 @@
--- Parcours réels sur une base créée par creer-toute-la-base.sql (inscription, profil, vérification d'identité, like, Match, messages, photo, admin, visiteur, serveur, suppression de compte).
+-- Parcours réels sur une base créée par YONA_base_de_donnees_complete.sql (inscription, profil, vérification d'identité, like, Match, messages, photo, admin, visiteur, serveur, suppression de compte).
 \set ON_ERROR_STOP 1
 \set QUIET 1
 \pset tuples_only on

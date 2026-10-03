@@ -30,4 +30,5 @@ export const PREMIUM_FEATURES = [
   "Boosts de profil inclus",
   "Badge Premium vérifié",
   "Support prioritaire 7j/7",
+  "Sans annonces sponsorisées",
 ];

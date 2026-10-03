@@ -1,20 +1,27 @@
 -- ============================================================================
--- YONA — CRÉER TOUTE LA BASE DE DONNÉES (projet Supabase neuf et vide)
+-- YONA — BASE DE DONNÉES COMPLÈTE (projet Supabase neuf et vide)
 --
 -- Ce fichier installe en une seule fois tout ce dont le site a besoin :
 --   44 tables, 169 fonctions, 107 règles d'accès, les droits de chaque rôle,
 --   la création automatique du profil à l'inscription (e-mail ou Google), 5 espaces de
 --   fichiers (privés : photos, messages vocaux, vérifications ; publics : images des profils
---   de démonstration, publicités), les messages en temps réel,
---   les tâches automatiques, les 247 pays et les 40 profils virtuels.
+--   de démonstration, publicités), les messages en temps réel, les tâches automatiques,
+--   les réglages par défaut (publicités, vérification d'identité), les 247 pays et
+--   les 40 profils de démonstration.
 --
 -- Mode d'emploi : Supabase → SQL Editor → New query → coller TOUT le fichier → Run.
 -- Si Supabase affiche un avertissement (« destructive operation »), choisir
--- « Run this query » : rien n'est supprimé, ce sont des mots présents dans les fonctions.
+-- « Run this query » : rien n'est supprimé, ce sont des mots présents dans les fonctions
+-- (et les « DROP POLICY IF EXISTS » qui remplacent une règle par elle-même).
 -- Le tableau affiché à la fin doit indiquer ✅ sur chaque ligne.
+-- Si l'éditeur refuse un fichier aussi long : utiliser les parties numérotées de
+-- supabase/nouvelle-base/parties/ (même contenu), à exécuter dans l'ordre.
 --
--- Tout ou rien : en cas d'erreur, rien n'est enregistré. Le fichier refuse de s'exécuter
--- dans une base qui contient déjà des tables.
+-- Tout ou rien : en cas d'erreur, rien n'est enregistré.
+-- Rejouable : relancer ce fichier ne casse rien et ne crée aucun doublon (IF NOT EXISTS,
+-- OR REPLACE, contrôle avant chaque contrainte ; profils de démonstration ajoutés une
+-- seule fois). Après l'installation, ajoutez le premier administrateur (avant-dernière
+-- section).
 --
 -- Les comptes, mots de passe, connexions et e-mails « mot de passe oublié » sont gérés par
 -- Supabase Auth (schéma auth, mots de passe chiffrés) : aucune table à créer pour eux.
@@ -25,27 +32,52 @@
 -- ============================================================================
 
 -- ============================================================================
--- 1. Vérification : la base doit être vide
+-- 1. Vérification : base neuve, ou YONA déjà installé par ce même fichier
 -- ============================================================================
 
+-- Le fichier accepte :
+--   - une base neuve et vide (cas normal) ;
+--   - une base où ce même fichier a déjà été exécuté (il est alors rejoué sans rien
+--     supprimer ni dupliquer).
+-- Il refuse, sans rien modifier :
+--   - une base qui contient des tables étrangères à YONA ;
+--   - une base YONA d'une version plus ancienne (colonnes manquantes) : pour la mettre à
+--     jour, appliquer les migrations de supabase/migrations/ dans l'ordre.
 DO $garde$
 DECLARE
-  _tables text;
+  -- Tables de YONA et leurs colonnes (état final des migrations).
+  _attendu jsonb := $json${"activity_events":["id","user_id","event","target_user_id","ref_id","ip","country","user_agent","created_at"],"ad_events":["id","ad_id","user_id","event","placement","country","created_at"],"ad_settings":["id","discover_every","list_every","updated_at"],"admin_audit_log":["id","admin_id","action","target_table","target_id","changes","ip","user_agent","created_at"],"ads":["id","title","body","advertiser","media_type","media_path","poster_path","cta_label","cta_url","cta_icon","placements","status","starts_at","ends_at","target_countries","target_gender","min_age","max_age","priority","daily_cap","created_by","created_at","updated_at"],"ai_usage":["id","user_id","feature","usage_date","usage_count","created_at","updated_at"],"auth_events":["id","user_id","email","event","method","ip","country","city","user_agent","timezone","created_at"],"blocks":["id","blocker_id","blocked_id","created_at"],"christian_profiles":["user_id","denomination","faith_commitment","church_attendance","prayer_practice","faith_importance","marriage_vision","couple_vision","christian_values","extra","created_at","updated_at"],"contact_requests":["id","sender_id","receiver_id","message","status","created_at","responded_at","is_flash"],"conversation_reads":["conversation_id","user_id","last_read_at"],"conversation_unlocks":["id","conversation_id","paid_by_user_id","amount","currency","starts_at","expires_at","status","payment_id","created_at"],"conversation_user_usage":["id","conversation_id","user_id","free_messages_used","created_at","updated_at"],"conversations":["id","match_id","user_1_id","user_2_id","status","free_messages_used","last_message_at","created_at","updated_at"],"favorites":["id","user_id","favorite_user_id","created_at"],"geo_countries":["code","name","lat","lng"],"geo_timezones":["tz","country_codes"],"likes":["id","sender_id","receiver_id","kind","status","created_at"],"location_history":["id","user_id","source","retained_source","country_code","country","city","ip_country","timezone","inconsistent","inconsistency","created_at"],"matches":["id","user_1_id","user_2_id","status","created_at"],"messages":["id","conversation_id","sender_id","content","status","moderation_status","moderation_flags","contains_phone_number","blocked_reason","created_at","kind","audio_path","audio_duration_seconds"],"moderation_actions":["id","admin_id","target_user_id","action","reason","metadata","created_at"],"notifications":["id","user_id","type","actor_id","data","read_at","created_at"],"payment_events":["id","payment_id","user_id","event","product","amount","currency","provider","provider_ref","reason","ip","country","user_agent","created_at"],"payments":["id","user_id","type","amount","currency","provider","provider_transaction_id","status","metadata","created_at","updated_at"],"photos":["id","user_id","storage_path","is_primary","position","status","created_at"],"preferences":["user_id","min_age","max_age","preferred_gender","city","country","max_distance_km","relationship_goal","family_project","christian_criteria","extra","created_at","updated_at"],"profile_boosts":["id","user_id","starts_at","expires_at","created_at"],"profile_locations":["user_id","latitude","longitude","updated_at","source","country_code","country","region","city","accuracy_m","ip_country","ip_city","timezone","language","inconsistent","inconsistency","checked_at"],"profile_verifications":["id","user_id","method","storage_path","status","created_at","reviewed_at","reviewed_by","document_type","challenge","challenge_path","document_path","consent_at","automatic","engine","reason","profile_similarity","document_similarity","liveness_similarity","liveness_shift","details","decided_at","files_deleted_at"],"profile_visits":["id","visitor_id","visited_user_id","visited_at"],"profiles":["user_id","first_name","birth_date","gender","city","country","latitude","longitude","profession","education_level","marital_status","has_children","children_count","bio","personality","interests","status","visibility","onboarding_step","onboarding_completed_at","created_at","updated_at","region","origin","terms_accepted_at","is_virtual","verified_at","demo_photo_path","demo_photo_source"],"reports":["id","reporter_id","reported_user_id","conversation_id","message_id","reason","description","status","created_at"],"server_errors":["id","source","message","user_id","path","details","created_at"],"signup_events":["id","user_id","step","method","country","created_at"],"storage_cleanup_queue":["id","bucket_id","path","reason","created_at","done_at"],"subscriptions":["id","user_id","plan","amount","currency","status","starts_at","expires_at","payment_id","created_at","updated_at"],"support_tickets":["id","user_id","subject","message","priority","status","admin_reply","answered_at","created_at","updated_at"],"user_activity":["user_id","last_login_at","last_seen_at","is_online","login_count","events","updated_at"],"user_roles":["id","user_id","role","created_at"],"user_settings":["user_id","activity_visible","notify_email","notify_messages","notify_matches","notify_likes","created_at","updated_at","marketing_emails"],"users":["id","email","status","last_active_at","created_at","updated_at"],"verification_settings":["id","accept_similarity","reject_similarity","aws_accept_similarity","aws_reject_similarity","liveness_min_shift","min_sharpness","max_attempts_per_day","file_retention_hours","updated_at"],"virtual_profile_removals":["user_id","removed_user_id","created_at","reason"]}$json$;
+  _etrangeres text;
+  _manquantes text;
 BEGIN
-  IF to_regclass('public.profiles') IS NOT NULL THEN
-    RAISE EXCEPTION 'YONA est déjà installé dans cette base : rien n''a été modifié.'
-      USING HINT = 'Ce fichier sert uniquement à remplir un projet Supabase neuf et vide.';
-  END IF;
-  SELECT string_agg(relname, ', ' ORDER BY relname) INTO _tables
-  FROM pg_catalog.pg_class
-  WHERE relnamespace = 'public'::regnamespace AND relkind IN ('r', 'p', 'v', 'm');
-  IF _tables IS NOT NULL THEN
-    RAISE EXCEPTION 'Cette base n''est pas vide (tables : %) : rien n''a été modifié.', _tables
+  SELECT string_agg(c.relname, ', ' ORDER BY c.relname) INTO _etrangeres
+  FROM pg_catalog.pg_class c
+  WHERE c.relnamespace = 'public'::regnamespace AND c.relkind IN ('r', 'p', 'v', 'm', 'f')
+    AND NOT _attendu ? c.relname;
+  IF _etrangeres IS NOT NULL THEN
+    RAISE EXCEPTION 'Cette base contient des tables qui ne viennent pas de YONA (%) : rien n''a été modifié.', _etrangeres
       USING HINT = 'Ce fichier est prévu pour un projet Supabase neuf et vide.';
+  END IF;
+
+  SELECT string_agg(t.key || '.' || col, ', ' ORDER BY t.key, col) INTO _manquantes
+  FROM jsonb_each(_attendu) t
+  CROSS JOIN LATERAL jsonb_array_elements_text(t.value) col
+  WHERE pg_catalog.to_regclass('public.' || quote_ident(t.key)) IS NOT NULL
+    AND NOT EXISTS (
+      SELECT 1 FROM pg_catalog.pg_attribute a
+      WHERE a.attrelid = pg_catalog.to_regclass('public.' || quote_ident(t.key))
+        AND a.attname = col AND a.attnum > 0 AND NOT a.attisdropped);
+  IF _manquantes IS NOT NULL THEN
+    RAISE EXCEPTION 'Une version plus ancienne de YONA est installée ici (colonnes absentes : %) : rien n''a été modifié.',
+      left(_manquantes, 500)
+      USING HINT = 'Pour mettre à jour une base existante, appliquer les migrations de supabase/migrations/ dans l''ordre.';
+  END IF;
+
+  IF pg_catalog.to_regclass('public.profiles') IS NOT NULL THEN
+    RAISE NOTICE 'YONA est déjà installé dans cette base : le fichier est rejoué sans rien supprimer.';
   END IF;
 END
 $garde$;
-
 SET check_function_bodies = false;
 SET client_min_messages = warning;
 -- Pendant la création de la structure, tous les noms sont écrits en entier (public.…).
@@ -62,52 +94,95 @@ CREATE EXTENSION IF NOT EXISTS unaccent WITH SCHEMA extensions;
 -- 3. Types : listes de valeurs fixes (rôles, statuts, motifs…)
 -- ============================================================================
 
-CREATE TYPE public.account_status AS ENUM (
+DO $type$
+BEGIN
+  IF pg_catalog.to_regtype('public.account_status') IS NULL THEN
+    CREATE TYPE public.account_status AS ENUM (
     'active',
     'suspended',
     'disabled',
     'deleted'
 );
-
-CREATE TYPE public.app_role AS ENUM (
+  END IF;
+END
+$type$;
+DO $type$
+BEGIN
+  IF pg_catalog.to_regtype('public.app_role') IS NULL THEN
+    CREATE TYPE public.app_role AS ENUM (
     'user',
     'admin'
 );
-
-CREATE TYPE public.conversation_status AS ENUM (
+  END IF;
+END
+$type$;
+DO $type$
+BEGIN
+  IF pg_catalog.to_regtype('public.conversation_status') IS NULL THEN
+    CREATE TYPE public.conversation_status AS ENUM (
     'open',
     'locked',
     'closed'
 );
-
-CREATE TYPE public.gender AS ENUM (
+  END IF;
+END
+$type$;
+DO $type$
+BEGIN
+  IF pg_catalog.to_regtype('public.gender') IS NULL THEN
+    CREATE TYPE public.gender AS ENUM (
     'male',
     'female'
 );
-
-CREATE TYPE public.like_kind AS ENUM (
+  END IF;
+END
+$type$;
+DO $type$
+BEGIN
+  IF pg_catalog.to_regtype('public.like_kind') IS NULL THEN
+    CREATE TYPE public.like_kind AS ENUM (
     'like',
     'pass'
 );
-
-CREATE TYPE public.like_status AS ENUM (
+  END IF;
+END
+$type$;
+DO $type$
+BEGIN
+  IF pg_catalog.to_regtype('public.like_status') IS NULL THEN
+    CREATE TYPE public.like_status AS ENUM (
     'active',
     'withdrawn'
 );
-
-CREATE TYPE public.match_status AS ENUM (
+  END IF;
+END
+$type$;
+DO $type$
+BEGIN
+  IF pg_catalog.to_regtype('public.match_status') IS NULL THEN
+    CREATE TYPE public.match_status AS ENUM (
     'active',
     'unmatched',
     'blocked'
 );
-
-CREATE TYPE public.message_status AS ENUM (
+  END IF;
+END
+$type$;
+DO $type$
+BEGIN
+  IF pg_catalog.to_regtype('public.message_status') IS NULL THEN
+    CREATE TYPE public.message_status AS ENUM (
     'delivered',
     'blocked',
     'deleted'
 );
-
-CREATE TYPE public.moderation_action_type AS ENUM (
+  END IF;
+END
+$type$;
+DO $type$
+BEGIN
+  IF pg_catalog.to_regtype('public.moderation_action_type') IS NULL THEN
+    CREATE TYPE public.moderation_action_type AS ENUM (
     'warn',
     'suspend',
     'unsuspend',
@@ -116,45 +191,80 @@ CREATE TYPE public.moderation_action_type AS ENUM (
     'hide_profile',
     'note'
 );
-
-CREATE TYPE public.moderation_status AS ENUM (
+  END IF;
+END
+$type$;
+DO $type$
+BEGIN
+  IF pg_catalog.to_regtype('public.moderation_status') IS NULL THEN
+    CREATE TYPE public.moderation_status AS ENUM (
     'clean',
     'flagged',
     'rejected'
 );
-
-CREATE TYPE public.payment_status AS ENUM (
+  END IF;
+END
+$type$;
+DO $type$
+BEGIN
+  IF pg_catalog.to_regtype('public.payment_status') IS NULL THEN
+    CREATE TYPE public.payment_status AS ENUM (
     'pending',
     'succeeded',
     'failed',
     'cancelled',
     'refunded'
 );
-
-CREATE TYPE public.payment_type AS ENUM (
+  END IF;
+END
+$type$;
+DO $type$
+BEGIN
+  IF pg_catalog.to_regtype('public.payment_type') IS NULL THEN
+    CREATE TYPE public.payment_type AS ENUM (
     'conversation_unlock',
     'subscription'
 );
-
-CREATE TYPE public.photo_status AS ENUM (
+  END IF;
+END
+$type$;
+DO $type$
+BEGIN
+  IF pg_catalog.to_regtype('public.photo_status') IS NULL THEN
+    CREATE TYPE public.photo_status AS ENUM (
     'pending',
     'approved',
     'rejected'
 );
-
-CREATE TYPE public.profile_status AS ENUM (
+  END IF;
+END
+$type$;
+DO $type$
+BEGIN
+  IF pg_catalog.to_regtype('public.profile_status') IS NULL THEN
+    CREATE TYPE public.profile_status AS ENUM (
     'incomplete',
     'active',
     'hidden',
     'suspended'
 );
-
-CREATE TYPE public.profile_visibility AS ENUM (
+  END IF;
+END
+$type$;
+DO $type$
+BEGIN
+  IF pg_catalog.to_regtype('public.profile_visibility') IS NULL THEN
+    CREATE TYPE public.profile_visibility AS ENUM (
     'visible',
     'hidden'
 );
-
-CREATE TYPE public.report_reason AS ENUM (
+  END IF;
+END
+$type$;
+DO $type$
+BEGIN
+  IF pg_catalog.to_regtype('public.report_reason') IS NULL THEN
+    CREATE TYPE public.report_reason AS ENUM (
     'fake_profile',
     'harassment',
     'inappropriate_content',
@@ -162,38 +272,61 @@ CREATE TYPE public.report_reason AS ENUM (
     'suspicious_behavior',
     'other'
 );
-
-CREATE TYPE public.report_status AS ENUM (
+  END IF;
+END
+$type$;
+DO $type$
+BEGIN
+  IF pg_catalog.to_regtype('public.report_status') IS NULL THEN
+    CREATE TYPE public.report_status AS ENUM (
     'open',
     'reviewing',
     'resolved',
     'dismissed'
 );
-
-CREATE TYPE public.subscription_plan AS ENUM (
+  END IF;
+END
+$type$;
+DO $type$
+BEGIN
+  IF pg_catalog.to_regtype('public.subscription_plan') IS NULL THEN
+    CREATE TYPE public.subscription_plan AS ENUM (
     'premium_monthly',
     'premium_yearly'
 );
-
-CREATE TYPE public.subscription_status AS ENUM (
+  END IF;
+END
+$type$;
+DO $type$
+BEGIN
+  IF pg_catalog.to_regtype('public.subscription_status') IS NULL THEN
+    CREATE TYPE public.subscription_status AS ENUM (
     'pending',
     'active',
     'expired',
     'cancelled'
 );
-
-CREATE TYPE public.unlock_status AS ENUM (
+  END IF;
+END
+$type$;
+DO $type$
+BEGIN
+  IF pg_catalog.to_regtype('public.unlock_status') IS NULL THEN
+    CREATE TYPE public.unlock_status AS ENUM (
     'pending',
     'active',
     'expired',
     'cancelled'
 );
+  END IF;
+END
+$type$;
 
 -- ============================================================================
 -- 4. Fonctions : les règles du site exécutées par la base
 -- ============================================================================
 
-CREATE FUNCTION public.activate_conversation_unlock() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.activate_conversation_unlock() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -229,8 +362,7 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-
-CREATE FUNCTION public.activate_premium_subscription() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.activate_premium_subscription() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -267,8 +399,7 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-
-CREATE FUNCTION public.activate_profile_boost() RETURNS timestamp with time zone
+CREATE OR REPLACE FUNCTION public.activate_profile_boost() RETURNS timestamp with time zone
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -298,8 +429,7 @@ BEGIN
   RETURN _end;
 END;
 $$;
-
-CREATE FUNCTION public.admin_ad_stats(_ad_id uuid, _from timestamp with time zone, _to timestamp with time zone, _bucket text DEFAULT 'day'::text, _tz text DEFAULT 'UTC'::text) RETURNS jsonb
+CREATE OR REPLACE FUNCTION public.admin_ad_stats(_ad_id uuid, _from timestamp with time zone, _to timestamp with time zone, _bucket text DEFAULT 'day'::text, _tz text DEFAULT 'UTC'::text) RETURNS jsonb
     LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -371,8 +501,7 @@ BEGIN
   );
 END;
 $$;
-
-CREATE FUNCTION public.admin_dashboard(_from timestamp with time zone, _to timestamp with time zone, _bucket text DEFAULT 'day'::text, _tz text DEFAULT 'UTC'::text) RETURNS jsonb
+CREATE OR REPLACE FUNCTION public.admin_dashboard(_from timestamp with time zone, _to timestamp with time zone, _bucket text DEFAULT 'day'::text, _tz text DEFAULT 'UTC'::text) RETURNS jsonb
     LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -560,8 +689,7 @@ BEGIN
   );
 END;
 $$;
-
-CREATE FUNCTION public.admin_list_demo_profiles() RETURNS TABLE(user_id uuid, first_name text, gender public.gender, birth_date date, city text, country text, demo_photo_path text, demo_photo_source text, created_at timestamp with time zone)
+CREATE OR REPLACE FUNCTION public.admin_list_demo_profiles() RETURNS TABLE(user_id uuid, first_name text, gender public.gender, birth_date date, city text, country text, demo_photo_path text, demo_photo_source text, created_at timestamp with time zone)
     LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -574,8 +702,7 @@ BEGIN
   WHERE p.is_virtual
   ORDER BY p.gender DESC, p.country, p.first_name;
 END; $$;
-
-CREATE FUNCTION public.admin_list_payments() RETURNS TABLE(id uuid, user_id uuid, email text, type public.payment_type, amount integer, currency text, provider text, status public.payment_status, provider_transaction_id text, created_at timestamp with time zone)
+CREATE OR REPLACE FUNCTION public.admin_list_payments() RETURNS TABLE(id uuid, user_id uuid, email text, type public.payment_type, amount integer, currency text, provider text, status public.payment_status, provider_transaction_id text, created_at timestamp with time zone)
     LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -589,8 +716,7 @@ BEGIN
   LIMIT 200;
 END;
 $$;
-
-CREATE FUNCTION public.admin_list_pending_photos() RETURNS TABLE(id uuid, user_id uuid, first_name text, storage_path text, created_at timestamp with time zone)
+CREATE OR REPLACE FUNCTION public.admin_list_pending_photos() RETURNS TABLE(id uuid, user_id uuid, first_name text, storage_path text, created_at timestamp with time zone)
     LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -604,8 +730,7 @@ BEGIN
   LIMIT 200;
 END;
 $$;
-
-CREATE FUNCTION public.admin_list_pending_verifications() RETURNS TABLE(id uuid, user_id uuid, first_name text, method text, storage_path text, created_at timestamp with time zone)
+CREATE OR REPLACE FUNCTION public.admin_list_pending_verifications() RETURNS TABLE(id uuid, user_id uuid, first_name text, method text, storage_path text, created_at timestamp with time zone)
     LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -619,8 +744,7 @@ BEGIN
   LIMIT 200;
 END;
 $$;
-
-CREATE FUNCTION public.admin_list_reports(_status text DEFAULT NULL::text) RETURNS TABLE(id uuid, reason public.report_reason, description text, status public.report_status, created_at timestamp with time zone, reporter_id uuid, reporter_name text, reported_user_id uuid, reported_name text, reported_status public.account_status, message_id uuid, message_content text)
+CREATE OR REPLACE FUNCTION public.admin_list_reports(_status text DEFAULT NULL::text) RETURNS TABLE(id uuid, reason public.report_reason, description text, status public.report_status, created_at timestamp with time zone, reporter_id uuid, reporter_name text, reported_user_id uuid, reported_name text, reported_status public.account_status, message_id uuid, message_content text)
     LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -640,8 +764,7 @@ BEGIN
   LIMIT 200;
 END;
 $$;
-
-CREATE FUNCTION public.admin_list_subscriptions() RETURNS TABLE(id uuid, user_id uuid, email text, plan public.subscription_plan, status public.subscription_status, starts_at timestamp with time zone, expires_at timestamp with time zone, active_now boolean)
+CREATE OR REPLACE FUNCTION public.admin_list_subscriptions() RETURNS TABLE(id uuid, user_id uuid, email text, plan public.subscription_plan, status public.subscription_status, starts_at timestamp with time zone, expires_at timestamp with time zone, active_now boolean)
     LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -655,8 +778,7 @@ BEGIN
   LIMIT 200;
 END;
 $$;
-
-CREATE FUNCTION public.admin_list_support_tickets() RETURNS TABLE(id uuid, user_id uuid, email text, first_name text, subject text, message text, priority text, status text, admin_reply text, created_at timestamp with time zone)
+CREATE OR REPLACE FUNCTION public.admin_list_support_tickets() RETURNS TABLE(id uuid, user_id uuid, email text, first_name text, subject text, message text, priority text, status text, admin_reply text, created_at timestamp with time zone)
     LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -672,8 +794,7 @@ BEGIN
   LIMIT 200;
 END;
 $$;
-
-CREATE FUNCTION public.admin_list_unlocks() RETURNS TABLE(id uuid, conversation_id uuid, paid_by uuid, email text, status public.unlock_status, starts_at timestamp with time zone, expires_at timestamp with time zone, active_now boolean)
+CREATE OR REPLACE FUNCTION public.admin_list_unlocks() RETURNS TABLE(id uuid, conversation_id uuid, paid_by uuid, email text, status public.unlock_status, starts_at timestamp with time zone, expires_at timestamp with time zone, active_now boolean)
     LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -687,8 +808,7 @@ BEGIN
   LIMIT 200;
 END;
 $$;
-
-CREATE FUNCTION public.admin_list_users(_search text DEFAULT NULL::text, _status text DEFAULT NULL::text, _limit integer DEFAULT 50, _offset integer DEFAULT 0) RETURNS TABLE(id uuid, email text, first_name text, status public.account_status, profile_status public.profile_status, created_at timestamp with time zone, premium boolean, is_admin boolean, reports_count bigint)
+CREATE OR REPLACE FUNCTION public.admin_list_users(_search text DEFAULT NULL::text, _status text DEFAULT NULL::text, _limit integer DEFAULT 50, _offset integer DEFAULT 0) RETURNS TABLE(id uuid, email text, first_name text, status public.account_status, profile_status public.profile_status, created_at timestamp with time zone, premium boolean, is_admin boolean, reports_count bigint)
     LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -708,8 +828,7 @@ BEGIN
   LIMIT least(greatest(coalesce(_limit, 50), 1), 200) OFFSET greatest(coalesce(_offset, 0), 0);
 END;
 $$;
-
-CREATE FUNCTION public.admin_location_flags(_limit integer DEFAULT 100) RETURNS TABLE(user_id uuid, email text, first_name text, source text, country text, region text, city text, declared_country text, declared_city text, ip_country text, ip_city text, timezone text, language text, inconsistency text[], checked_at timestamp with time zone)
+CREATE OR REPLACE FUNCTION public.admin_location_flags(_limit integer DEFAULT 100) RETURNS TABLE(user_id uuid, email text, first_name text, source text, country text, region text, city text, declared_country text, declared_city text, ip_country text, ip_city text, timezone text, language text, inconsistency text[], checked_at timestamp with time zone)
     LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -727,8 +846,7 @@ BEGIN
   LIMIT least(greatest(coalesce(_limit, 100), 1), 1000);
 END;
 $$;
-
-CREATE FUNCTION public.admin_log_action(_action text, _target_table text, _target_id text, _details jsonb DEFAULT '{}'::jsonb) RETURNS void
+CREATE OR REPLACE FUNCTION public.admin_log_action(_action text, _target_table text, _target_id text, _details jsonb DEFAULT '{}'::jsonb) RETURNS void
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -740,8 +858,7 @@ BEGIN
   VALUES (auth.uid(), left(_action, 100), _target_table, _target_id, coalesce(_details, '{}'::jsonb),
           _ctx ->> 'ip', _ctx ->> 'user_agent');
 END; $$;
-
-CREATE FUNCTION public.admin_members(_search text DEFAULT NULL::text, _status text DEFAULT NULL::text, _kind text DEFAULT 'real'::text, _sort text DEFAULT 'created_at'::text, _desc boolean DEFAULT true, _limit integer DEFAULT 25, _offset integer DEFAULT 0) RETURNS TABLE(user_id uuid, email text, first_name text, gender public.gender, birth_date date, country text, city text, status public.account_status, verified boolean, premium boolean, is_virtual boolean, created_at timestamp with time zone, last_login_at timestamp with time zone, login_count integer, reports_received bigint, total_count bigint)
+CREATE OR REPLACE FUNCTION public.admin_members(_search text DEFAULT NULL::text, _status text DEFAULT NULL::text, _kind text DEFAULT 'real'::text, _sort text DEFAULT 'created_at'::text, _desc boolean DEFAULT true, _limit integer DEFAULT 25, _offset integer DEFAULT 0) RETURNS TABLE(user_id uuid, email text, first_name text, gender public.gender, birth_date date, country text, city text, status public.account_status, verified boolean, premium boolean, is_virtual boolean, created_at timestamp with time zone, last_login_at timestamp with time zone, login_count integer, reports_received bigint, total_count bigint)
     LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $_$
@@ -776,8 +893,7 @@ BEGIN
         least(greatest(coalesce(_limit, 25), 1), 5000), greatest(coalesce(_offset, 0), 0);
 END;
 $_$;
-
-CREATE FUNCTION public.admin_moderate_photo(_photo_id uuid, _approve boolean, _reason text DEFAULT NULL::text) RETURNS public.photo_status
+CREATE OR REPLACE FUNCTION public.admin_moderate_photo(_photo_id uuid, _approve boolean, _reason text DEFAULT NULL::text) RETURNS public.photo_status
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -798,8 +914,7 @@ BEGIN
   RETURN _new;
 END;
 $$;
-
-CREATE FUNCTION public.admin_period_kpis(_from timestamp with time zone, _to timestamp with time zone) RETURNS jsonb
+CREATE OR REPLACE FUNCTION public.admin_period_kpis(_from timestamp with time zone, _to timestamp with time zone) RETURNS jsonb
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -849,8 +964,7 @@ CREATE FUNCTION public.admin_period_kpis(_from timestamp with time zone, _to tim
     'accounts_deleted', coalesce((SELECT n FROM act WHERE event = 'account_deleted'), 0)
   )
 $$;
-
-CREATE FUNCTION public.admin_reply_support_ticket(_ticket_id uuid, _reply text, _close boolean DEFAULT false) RETURNS void
+CREATE OR REPLACE FUNCTION public.admin_reply_support_ticket(_ticket_id uuid, _reply text, _close boolean DEFAULT false) RETURNS void
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -870,8 +984,7 @@ BEGIN
   END IF;
 END;
 $$;
-
-CREATE FUNCTION public.admin_resolve_report(_report_id uuid, _status text, _note text DEFAULT NULL::text) RETURNS void
+CREATE OR REPLACE FUNCTION public.admin_resolve_report(_report_id uuid, _status text, _note text DEFAULT NULL::text) RETURNS void
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -892,8 +1005,7 @@ BEGIN
           jsonb_build_object('report_id', _report_id, 'report_status', _status));
 END;
 $$;
-
-CREATE FUNCTION public.admin_review_verification(_verification_id uuid, _approve boolean) RETURNS text
+CREATE OR REPLACE FUNCTION public.admin_review_verification(_verification_id uuid, _approve boolean) RETURNS text
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -920,8 +1032,7 @@ BEGIN
   RETURN _path;
 END;
 $$;
-
-CREATE FUNCTION public.admin_set_demo_photo(_user_id uuid, _path text, _source text DEFAULT NULL::text) RETURNS text
+CREATE OR REPLACE FUNCTION public.admin_set_demo_photo(_user_id uuid, _path text, _source text DEFAULT NULL::text) RETURNS text
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -948,8 +1059,7 @@ BEGIN
   WHERE user_id = _user_id;
   RETURN CASE WHEN _old IS DISTINCT FROM _path THEN _old END;
 END; $$;
-
-CREATE FUNCTION public.admin_set_user_status(_user_id uuid, _action text, _reason text DEFAULT NULL::text) RETURNS public.account_status
+CREATE OR REPLACE FUNCTION public.admin_set_user_status(_user_id uuid, _action text, _reason text DEFAULT NULL::text) RETURNS public.account_status
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -980,8 +1090,7 @@ BEGIN
   RETURN _new;
 END;
 $$;
-
-CREATE FUNCTION public.admin_stats() RETURNS jsonb
+CREATE OR REPLACE FUNCTION public.admin_stats() RETURNS jsonb
     LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -1016,8 +1125,7 @@ BEGIN
   );
 END;
 $$;
-
-CREATE FUNCTION public.admin_user_detail(_user_id uuid) RETURNS jsonb
+CREATE OR REPLACE FUNCTION public.admin_user_detail(_user_id uuid) RETURNS jsonb
     LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -1061,8 +1169,7 @@ BEGIN
   );
 END;
 $$;
-
-CREATE FUNCTION public.admin_user_history(_user_id uuid) RETURNS jsonb
+CREATE OR REPLACE FUNCTION public.admin_user_history(_user_id uuid) RETURNS jsonb
     LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -1095,8 +1202,7 @@ BEGIN
   );
 END;
 $$;
-
-CREATE FUNCTION public.admin_user_location(_user_id uuid) RETURNS jsonb
+CREATE OR REPLACE FUNCTION public.admin_user_location(_user_id uuid) RETURNS jsonb
     LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -1112,8 +1218,7 @@ BEGIN
   );
 END;
 $$;
-
-CREATE FUNCTION public.admin_verification_queue() RETURNS TABLE(id uuid, user_id uuid, first_name text, method text, document_type text, reason text, engine text, profile_similarity numeric, document_similarity numeric, liveness_similarity numeric, liveness_shift numeric, challenge text, storage_path text, challenge_path text, document_path text, details jsonb, created_at timestamp with time zone)
+CREATE OR REPLACE FUNCTION public.admin_verification_queue() RETURNS TABLE(id uuid, user_id uuid, first_name text, method text, document_type text, reason text, engine text, profile_similarity numeric, document_similarity numeric, liveness_similarity numeric, liveness_shift numeric, challenge text, storage_path text, challenge_path text, document_path text, details jsonb, created_at timestamp with time zone)
     LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -1130,15 +1235,13 @@ BEGIN
   LIMIT 200;
 END;
 $$;
-
-CREATE FUNCTION public.ai_usage_day() RETURNS date
+CREATE OR REPLACE FUNCTION public.ai_usage_day() RETURNS date
     LANGUAGE sql STABLE
     SET search_path TO 'public'
     AS $$
   SELECT (now() AT TIME ZONE 'UTC')::date
 $$;
-
-CREATE FUNCTION public.assert_admin() RETURNS void
+CREATE OR REPLACE FUNCTION public.assert_admin() RETURNS void
     LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -1148,8 +1251,7 @@ BEGIN
   END IF;
 END;
 $$;
-
-CREATE FUNCTION public.audit_admin_change() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.audit_admin_change() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -1184,16 +1286,14 @@ EXCEPTION WHEN OTHERS THEN
   RAISE WARNING 'audit_admin_change (%): %', TG_TABLE_NAME, SQLERRM;
   RETURN NULL;
 END; $$;
-
-CREATE FUNCTION public.auth_method(_provider text) RETURNS text
+CREATE OR REPLACE FUNCTION public.auth_method(_provider text) RETURNS text
     LANGUAGE sql IMMUTABLE
     SET search_path TO 'public'
     AS $$
   SELECT CASE lower(coalesce(_provider, '')) WHEN 'email' THEN 'email' WHEN 'google' THEN 'google'
               ELSE 'other' END
 $$;
-
-CREATE FUNCTION public.block_user(_user_id uuid) RETURNS boolean
+CREATE OR REPLACE FUNCTION public.block_user(_user_id uuid) RETURNS boolean
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -1229,8 +1329,7 @@ BEGIN
   RETURN true;
 END;
 $$;
-
-CREATE FUNCTION public.can_browse_profiles() RETURNS boolean
+CREATE OR REPLACE FUNCTION public.can_browse_profiles() RETURNS boolean
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -1240,8 +1339,7 @@ CREATE FUNCTION public.can_browse_profiles() RETURNS boolean
       AND p.verified_at IS NOT NULL
   )
 $$;
-
-CREATE FUNCTION public.can_view_profile(_other uuid) RETURNS boolean
+CREATE OR REPLACE FUNCTION public.can_view_profile(_other uuid) RETURNS boolean
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -1250,8 +1348,7 @@ CREATE FUNCTION public.can_view_profile(_other uuid) RETURNS boolean
     AND public.is_discoverable_profile(_other)
     AND NOT public.is_blocked_between(auth.uid(), _other)
 $$;
-
-CREATE FUNCTION public.cancel_contact_request(_request_id uuid) RETURNS jsonb
+CREATE OR REPLACE FUNCTION public.cancel_contact_request(_request_id uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -1274,8 +1371,7 @@ BEGIN
   RETURN jsonb_build_object('status', 'cancelled');
 END;
 $$;
-
-CREATE FUNCTION public.check_profile_personal_info() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.check_profile_personal_info() RETURNS trigger
     LANGUAGE plpgsql
     SET search_path TO 'public'
     AS $$
@@ -1291,8 +1387,7 @@ BEGIN
   END IF;
   RETURN NEW;
 END; $$;
-
-CREATE FUNCTION public.check_profile_visibility() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.check_profile_visibility() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -1313,8 +1408,7 @@ BEGIN
 
   RETURN NEW;
 END; $$;
-
-CREATE FUNCTION public.clear_my_location() RETURNS void
+CREATE OR REPLACE FUNCTION public.clear_my_location() RETURNS void
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -1325,8 +1419,7 @@ BEGIN
   DELETE FROM public.profile_locations WHERE user_id = auth.uid();
 END;
 $$;
-
-CREATE FUNCTION public.clear_profile_coordinates() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.clear_profile_coordinates() RETURNS trigger
     LANGUAGE plpgsql
     SET search_path TO 'public'
     AS $$
@@ -1336,8 +1429,7 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-
-CREATE FUNCTION public.compatibility_breakdown(_me uuid, _other uuid) RETURNS jsonb
+CREATE OR REPLACE FUNCTION public.compatibility_breakdown(_me uuid, _other uuid) RETURNS jsonb
     LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -1472,8 +1564,7 @@ BEGIN
   RETURN jsonb_build_object('score', _score, 'details', _details);
 END;
 $$;
-
-CREATE FUNCTION public.confirm_payment(_payment_id uuid, _provider text, _provider_transaction_id text, _amount integer, _currency text) RETURNS public.payment_status
+CREATE OR REPLACE FUNCTION public.confirm_payment(_payment_id uuid, _provider text, _provider_transaction_id text, _amount integer, _currency text) RETURNS public.payment_status
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -1520,8 +1611,7 @@ BEGIN
   RETURN 'succeeded';
 END;
 $$;
-
-CREATE FUNCTION public.consume_ai_quota(_feature text DEFAULT 'roi_salomon'::text) RETURNS jsonb
+CREATE OR REPLACE FUNCTION public.consume_ai_quota(_feature text DEFAULT 'roi_salomon'::text) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -1561,13 +1651,11 @@ BEGIN
     'unlimited', _premium);
 END;
 $$;
-
-CREATE FUNCTION public.consume_free_message(_conversation_id uuid) RETURNS jsonb
+CREATE OR REPLACE FUNCTION public.consume_free_message(_conversation_id uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$ DECLARE _uid uuid := auth.uid(); _used smallint; _premium boolean; _unlocked boolean; _status public.conversation_status; BEGIN IF _uid IS NULL THEN RETURN jsonb_build_object('allowed', false, 'reason', 'unauthenticated'); END IF; IF NOT public.is_conversation_participant(_conversation_id, _uid) THEN RETURN jsonb_build_object('allowed', false, 'reason', 'not_participant'); END IF; SELECT status INTO _status FROM public.conversations WHERE id = _conversation_id; IF _status = 'closed' THEN RETURN jsonb_build_object('allowed', false, 'reason', 'conversation_closed'); END IF; _premium := public.is_premium(_uid); _unlocked := public.has_active_conversation_unlock(_conversation_id); IF _premium OR _unlocked THEN RETURN jsonb_build_object('allowed', true, 'unlimited', true, 'premium', _premium, 'unlocked', _unlocked); END IF; INSERT INTO public.conversation_user_usage (conversation_id, user_id, free_messages_used) VALUES (_conversation_id, _uid, 0) ON CONFLICT (conversation_id, user_id) DO NOTHING; SELECT free_messages_used INTO _used FROM public.conversation_user_usage WHERE conversation_id = _conversation_id AND user_id = _uid FOR UPDATE; IF _used >= 3 THEN RETURN jsonb_build_object('allowed', false, 'reason', 'free_limit_reached', 'used', _used, 'limit', 3); END IF; UPDATE public.conversation_user_usage SET free_messages_used = free_messages_used + 1 WHERE conversation_id = _conversation_id AND user_id = _uid RETURNING free_messages_used INTO _used; UPDATE public.conversations SET free_messages_used = LEAST(free_messages_used + 1, 32767) WHERE id = _conversation_id; RETURN jsonb_build_object('allowed', true, 'used', _used, 'limit', 3, 'unlimited', false); END; $$;
-
-CREATE FUNCTION public.contains_phone_number(_text text) RETURNS boolean
+CREATE OR REPLACE FUNCTION public.contains_phone_number(_text text) RETURNS boolean
     LANGUAGE plpgsql IMMUTABLE
     SET search_path TO 'public'
     AS $_$
@@ -1726,8 +1814,7 @@ BEGIN
   RETURN false;
 END;
 $_$;
-
-CREATE FUNCTION public.count_member_login() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.count_member_login() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -1740,8 +1827,7 @@ BEGIN
         last_login_at = greatest(a.last_login_at, EXCLUDED.last_login_at);
   RETURN NULL;
 END; $$;
-
-CREATE FUNCTION public.create_conversation_for_match() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.create_conversation_for_match() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -1759,8 +1845,7 @@ BEGIN
     WHERE public.conversations.status = 'closed';
   RETURN NEW;
 END; $$;
-
-CREATE FUNCTION public.create_match_on_mutual_like() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.create_match_on_mutual_like() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -1794,8 +1879,7 @@ BEGIN
   END IF;
   RETURN NEW;
 END; $$;
-
-CREATE FUNCTION public.create_notification(_user_id uuid, _type text, _actor_id uuid, _data jsonb, _group_key text DEFAULT NULL::text) RETURNS void
+CREATE OR REPLACE FUNCTION public.create_notification(_user_id uuid, _type text, _actor_id uuid, _data jsonb, _group_key text DEFAULT NULL::text) RETURNS void
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -1826,8 +1910,7 @@ BEGIN
                                                ELSE jsonb_build_object('group', _group_key, 'count', 1) END);
 END;
 $$;
-
-CREATE FUNCTION public.create_support_ticket(_subject text, _message text) RETURNS uuid
+CREATE OR REPLACE FUNCTION public.create_support_ticket(_subject text, _message text) RETURNS uuid
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -1858,8 +1941,7 @@ BEGIN
   RETURN _id;
 END;
 $$;
-
-CREATE FUNCTION public.discover_profiles(_limit integer DEFAULT 30) RETURNS TABLE(user_id uuid, first_name text, birth_date date, city text, region text, country text, bio text, gender public.gender, interests text[], is_virtual boolean, is_verified boolean, relationship_goal text, photo_path text, demo_photo_path text, distance_km integer)
+CREATE OR REPLACE FUNCTION public.discover_profiles(_limit integer DEFAULT 30) RETURNS TABLE(user_id uuid, first_name text, birth_date date, city text, region text, country text, bio text, gender public.gender, interests text[], is_virtual boolean, is_verified boolean, relationship_goal text, photo_path text, demo_photo_path text, distance_km integer)
     LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -1941,8 +2023,7 @@ BEGIN
   LIMIT least(greatest(coalesce(_limit, 30), 1), 50);
 END;
 $$;
-
-CREATE FUNCTION public.distance_km(_lat1 double precision, _lng1 double precision, _lat2 double precision, _lng2 double precision) RETURNS double precision
+CREATE OR REPLACE FUNCTION public.distance_km(_lat1 double precision, _lng1 double precision, _lat2 double precision, _lng2 double precision) RETURNS double precision
     LANGUAGE sql IMMUTABLE
     SET search_path TO 'public'
     AS $$
@@ -1951,8 +2032,7 @@ CREATE FUNCTION public.distance_km(_lat1 double precision, _lng1 double precisio
     + cos(radians(_lat1)) * cos(radians(_lat2)) * sin(radians(_lng2 - _lng1) / 2) ^ 2
   )))
 $$;
-
-CREATE FUNCTION public.enforce_photo_limit() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.enforce_photo_limit() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -1979,8 +2059,7 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-
-CREATE FUNCTION public.expire_conversation_unlocks() RETURNS integer
+CREATE OR REPLACE FUNCTION public.expire_conversation_unlocks() RETURNS integer
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -1994,8 +2073,7 @@ BEGIN
   RETURN _count;
 END;
 $$;
-
-CREATE FUNCTION public.expire_subscriptions() RETURNS integer
+CREATE OR REPLACE FUNCTION public.expire_subscriptions() RETURNS integer
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -2008,8 +2086,7 @@ BEGIN
   RETURN _count;
 END;
 $$;
-
-CREATE FUNCTION public.expire_verification_attempts(_user_id uuid DEFAULT NULL::uuid) RETURNS integer
+CREATE OR REPLACE FUNCTION public.expire_verification_attempts(_user_id uuid DEFAULT NULL::uuid) RETURNS integer
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -2029,8 +2106,7 @@ BEGIN
   END LOOP;
   RETURN _n;
 END; $$;
-
-CREATE FUNCTION public.get_ads_for_me(_placement text DEFAULT 'discover'::text, _limit integer DEFAULT 3) RETURNS TABLE(id uuid, title text, body text, advertiser text, media_type text, media_path text, poster_path text, cta_label text, cta_url text, cta_icon text, every_n integer)
+CREATE OR REPLACE FUNCTION public.get_ads_for_me(_placement text DEFAULT 'discover'::text, _limit integer DEFAULT 3) RETURNS TABLE(id uuid, title text, body text, advertiser text, media_type text, media_path text, poster_path text, cta_label text, cta_url text, cta_icon text, every_n integer)
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -2080,8 +2156,7 @@ BEGIN
   LIMIT least(greatest(coalesce(_limit, 3), 1), 10);
 END;
 $$;
-
-CREATE FUNCTION public.get_ai_quota(_feature text DEFAULT 'roi_salomon'::text) RETURNS jsonb
+CREATE OR REPLACE FUNCTION public.get_ai_quota(_feature text DEFAULT 'roi_salomon'::text) RETURNS jsonb
     LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -2104,8 +2179,7 @@ BEGIN
     'unlimited', _premium);
 END;
 $$;
-
-CREATE FUNCTION public.get_compatibility(_other uuid) RETURNS jsonb
+CREATE OR REPLACE FUNCTION public.get_compatibility(_other uuid) RETURNS jsonb
     LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -2146,8 +2220,7 @@ BEGIN
   );
 END;
 $$;
-
-CREATE FUNCTION public.get_compatibility_scores(_user_ids uuid[]) RETURNS TABLE(user_id uuid, score integer)
+CREATE OR REPLACE FUNCTION public.get_compatibility_scores(_user_ids uuid[]) RETURNS TABLE(user_id uuid, score integer)
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -2155,8 +2228,7 @@ CREATE FUNCTION public.get_compatibility_scores(_user_ids uuid[]) RETURNS TABLE(
   FROM (SELECT DISTINCT unnest(_user_ids[1:60]) AS u) ids
   WHERE public.can_view_profile(u)
 $$;
-
-CREATE FUNCTION public.get_contact_request_quota() RETURNS jsonb
+CREATE OR REPLACE FUNCTION public.get_contact_request_quota() RETURNS jsonb
     LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -2180,13 +2252,11 @@ BEGIN
   );
 END;
 $$;
-
-CREATE FUNCTION public.get_conversation_quota(_conversation_id uuid) RETURNS jsonb
+CREATE OR REPLACE FUNCTION public.get_conversation_quota(_conversation_id uuid) RETURNS jsonb
     LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$ DECLARE _uid uuid := auth.uid(); _used smallint := 0; _premium boolean; _unlocked boolean; BEGIN IF _uid IS NULL OR NOT public.is_conversation_participant(_conversation_id, _uid) THEN RETURN jsonb_build_object('allowed', false, 'reason', 'not_participant'); END IF; _premium := public.is_premium(_uid); _unlocked := public.has_active_conversation_unlock(_conversation_id); SELECT COALESCE(free_messages_used, 0) INTO _used FROM public.conversation_user_usage WHERE conversation_id = _conversation_id AND user_id = _uid; _used := COALESCE(_used, 0); RETURN jsonb_build_object('allowed', _premium OR _unlocked OR _used < 3, 'used', _used, 'limit', CASE WHEN _premium OR _unlocked THEN NULL ELSE 3 END, 'premium', _premium, 'unlocked', _unlocked); END; $$;
-
-CREATE FUNCTION public.get_favorited_by() RETURNS TABLE(user_id uuid, first_name text, birth_date date, city text, country text, favorited_at timestamp with time zone)
+CREATE OR REPLACE FUNCTION public.get_favorited_by() RETURNS TABLE(user_id uuid, first_name text, birth_date date, city text, country text, favorited_at timestamp with time zone)
     LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -2209,8 +2279,7 @@ BEGIN
   ORDER BY f.created_at DESC;
 END;
 $$;
-
-CREATE FUNCTION public.get_message_quota(_conversation_id uuid) RETURNS TABLE(used integer, quota_limit integer, remaining integer, exhausted boolean, unlocked boolean, unlocked_by uuid, unlock_expires_at timestamp with time zone, last_unlock_expired_at timestamp with time zone, premium boolean)
+CREATE OR REPLACE FUNCTION public.get_message_quota(_conversation_id uuid) RETURNS TABLE(used integer, quota_limit integer, remaining integer, exhausted boolean, unlocked boolean, unlocked_by uuid, unlock_expires_at timestamp with time zone, last_unlock_expired_at timestamp with time zone, premium boolean)
     LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -2273,8 +2342,7 @@ BEGIN
     CASE WHEN _unlocked THEN _end END, _last_end, _premium;
 END;
 $$;
-
-CREATE FUNCTION public.get_my_boost() RETURNS jsonb
+CREATE OR REPLACE FUNCTION public.get_my_boost() RETURNS jsonb
     LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -2295,8 +2363,7 @@ BEGIN
   );
 END;
 $$;
-
-CREATE FUNCTION public.get_my_premium() RETURNS jsonb
+CREATE OR REPLACE FUNCTION public.get_my_premium() RETURNS jsonb
     LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -2329,8 +2396,7 @@ BEGIN
   RETURN jsonb_build_object('premium', true, 'plan', _plan, 'expires_at', _end);
 END;
 $$;
-
-CREATE FUNCTION public.get_premium_badges(_user_ids uuid[]) RETURNS SETOF uuid
+CREATE OR REPLACE FUNCTION public.get_premium_badges(_user_ids uuid[]) RETURNS SETOF uuid
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -2345,8 +2411,7 @@ CREATE FUNCTION public.get_premium_badges(_user_ids uuid[]) RETURNS SETOF uuid
           AND NOT public.is_blocked_between(auth.uid(), u))
     )
 $$;
-
-CREATE FUNCTION public.get_presence(_user_id uuid) RETURNS text
+CREATE OR REPLACE FUNCTION public.get_presence(_user_id uuid) RETURNS text
     LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -2385,8 +2450,7 @@ BEGIN
   END;
 END;
 $$;
-
-CREATE FUNCTION public.get_profile_visitors() RETURNS TABLE(visitor_id uuid, first_name text, birth_date date, city text, country text, visited_at timestamp with time zone, visit_count integer)
+CREATE OR REPLACE FUNCTION public.get_profile_visitors() RETURNS TABLE(visitor_id uuid, first_name text, birth_date date, city text, country text, visited_at timestamp with time zone, visit_count integer)
     LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -2412,8 +2476,7 @@ BEGIN
   LIMIT 100;
 END;
 $$;
-
-CREATE FUNCTION public.get_unread_counts() RETURNS TABLE(conversation_id uuid, unread integer)
+CREATE OR REPLACE FUNCTION public.get_unread_counts() RETURNS TABLE(conversation_id uuid, unread integer)
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -2438,8 +2501,7 @@ CREATE FUNCTION public.get_unread_counts() RETURNS TABLE(conversation_id uuid, u
     )
   GROUP BY c.id
 $$;
-
-CREATE FUNCTION public.get_unread_notification_count() RETURNS integer
+CREATE OR REPLACE FUNCTION public.get_unread_notification_count() RETURNS integer
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -2447,8 +2509,7 @@ CREATE FUNCTION public.get_unread_notification_count() RETURNS integer
   WHERE n.user_id = auth.uid() AND n.read_at IS NULL
     AND (n.actor_id IS NULL OR NOT public.is_blocked_between(auth.uid(), n.actor_id))
 $$;
-
-CREATE FUNCTION public.handle_new_user() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.handle_new_user() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -2471,8 +2532,7 @@ BEGIN
   INSERT INTO public.user_activity (user_id, last_login_at, last_seen_at) VALUES (NEW.id, now(), now());
   RETURN NEW;
 END; $$;
-
-CREATE FUNCTION public.has_active_conversation_unlock(_conversation_id uuid) RETURNS boolean
+CREATE OR REPLACE FUNCTION public.has_active_conversation_unlock(_conversation_id uuid) RETURNS boolean
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -2488,8 +2548,7 @@ CREATE FUNCTION public.has_active_conversation_unlock(_conversation_id uuid) RET
         AND u.expires_at IS NOT NULL AND u.expires_at > now()
     )
 $$;
-
-CREATE FUNCTION public.has_mutual_like(_other uuid) RETURNS boolean
+CREATE OR REPLACE FUNCTION public.has_mutual_like(_other uuid) RETURNS boolean
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -2506,8 +2565,7 @@ CREATE FUNCTION public.has_mutual_like(_other uuid) RETURNS boolean
       WHERE sender_id = _other AND receiver_id = auth.uid() AND kind = 'like' AND status = 'active'
     )
 $$;
-
-CREATE FUNCTION public.has_role(_user_id uuid, _role public.app_role) RETURNS boolean
+CREATE OR REPLACE FUNCTION public.has_role(_user_id uuid, _role public.app_role) RETURNS boolean
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -2518,8 +2576,7 @@ CREATE FUNCTION public.has_role(_user_id uuid, _role public.app_role) RETURNS bo
     )
     AND EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = _user_id AND role = _role)
 $$;
-
-CREATE FUNCTION public.init_conversation_usage() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.init_conversation_usage() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -2530,29 +2587,25 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-
-CREATE FUNCTION public.is_active_account(_user_id uuid) RETURNS boolean
+CREATE OR REPLACE FUNCTION public.is_active_account(_user_id uuid) RETURNS boolean
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
   SELECT EXISTS (SELECT 1 FROM public.users u WHERE u.id = _user_id AND u.status = 'active')
 $$;
-
-CREATE FUNCTION public.is_activity_visible(_user_id uuid) RETURNS boolean
+CREATE OR REPLACE FUNCTION public.is_activity_visible(_user_id uuid) RETURNS boolean
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
   SELECT coalesce((SELECT s.activity_visible FROM public.user_settings s WHERE s.user_id = _user_id), true)
 $$;
-
-CREATE FUNCTION public.is_admin() RETURNS boolean
+CREATE OR REPLACE FUNCTION public.is_admin() RETURNS boolean
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
   SELECT public.has_role(auth.uid(), 'admin')
 $$;
-
-CREATE FUNCTION public.is_blocked_between(_a uuid, _b uuid) RETURNS boolean
+CREATE OR REPLACE FUNCTION public.is_blocked_between(_a uuid, _b uuid) RETURNS boolean
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -2562,8 +2615,7 @@ CREATE FUNCTION public.is_blocked_between(_a uuid, _b uuid) RETURNS boolean
       WHERE (blocker_id = _a AND blocked_id = _b) OR (blocker_id = _b AND blocked_id = _a)
     )
 $$;
-
-CREATE FUNCTION public.is_boosted(_user_id uuid) RETURNS boolean
+CREATE OR REPLACE FUNCTION public.is_boosted(_user_id uuid) RETURNS boolean
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -2572,8 +2624,7 @@ CREATE FUNCTION public.is_boosted(_user_id uuid) RETURNS boolean
     WHERE b.user_id = _user_id AND b.starts_at <= now() AND b.expires_at > now()
   ) AND public.is_premium(_user_id)
 $$;
-
-CREATE FUNCTION public.is_conversation_folder_participant(_folder text) RETURNS boolean
+CREATE OR REPLACE FUNCTION public.is_conversation_folder_participant(_folder text) RETURNS boolean
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -2582,8 +2633,7 @@ CREATE FUNCTION public.is_conversation_folder_participant(_folder text) RETURNS 
     WHERE c.id::text = _folder AND auth.uid() IN (c.user_1_id, c.user_2_id)
   )
 $$;
-
-CREATE FUNCTION public.is_conversation_participant(_conversation_id uuid, _user_id uuid) RETURNS boolean
+CREATE OR REPLACE FUNCTION public.is_conversation_participant(_conversation_id uuid, _user_id uuid) RETURNS boolean
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -2593,8 +2643,7 @@ CREATE FUNCTION public.is_conversation_participant(_conversation_id uuid, _user_
       WHERE id = _conversation_id AND (_user_id = user_1_id OR _user_id = user_2_id)
     )
 $$;
-
-CREATE FUNCTION public.is_discoverable_profile(_user_id uuid) RETURNS boolean
+CREATE OR REPLACE FUNCTION public.is_discoverable_profile(_user_id uuid) RETURNS boolean
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -2604,8 +2653,7 @@ CREATE FUNCTION public.is_discoverable_profile(_user_id uuid) RETURNS boolean
       AND (NOT p.is_virtual OR p.demo_photo_path IS NOT NULL)
   )
 $$;
-
-CREATE FUNCTION public.is_identity_verified(_user_id uuid) RETURNS boolean
+CREATE OR REPLACE FUNCTION public.is_identity_verified(_user_id uuid) RETURNS boolean
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -2613,8 +2661,7 @@ CREATE FUNCTION public.is_identity_verified(_user_id uuid) RETURNS boolean
                  WHERE p.user_id = _user_id AND (p.verified_at IS NOT NULL OR p.is_virtual))
          OR public.has_role(_user_id, 'admin')
 $$;
-
-CREATE FUNCTION public.is_premium(_user_id uuid) RETURNS boolean
+CREATE OR REPLACE FUNCTION public.is_premium(_user_id uuid) RETURNS boolean
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -2623,15 +2670,13 @@ CREATE FUNCTION public.is_premium(_user_id uuid) RETURNS boolean
     WHERE user_id = _user_id AND status = 'active' AND starts_at <= now() AND expires_at > now()
   )
 $$;
-
-CREATE FUNCTION public.is_real_member(_user_id uuid) RETURNS boolean
+CREATE OR REPLACE FUNCTION public.is_real_member(_user_id uuid) RETURNS boolean
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
   SELECT NOT EXISTS (SELECT 1 FROM public.profiles p WHERE p.user_id = _user_id AND p.is_virtual)
 $$;
-
-CREATE FUNCTION public.list_blocked_users() RETURNS TABLE(user_id uuid, first_name text, blocked_at timestamp with time zone)
+CREATE OR REPLACE FUNCTION public.list_blocked_users() RETURNS TABLE(user_id uuid, first_name text, blocked_at timestamp with time zone)
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -2641,8 +2686,7 @@ CREATE FUNCTION public.list_blocked_users() RETURNS TABLE(user_id uuid, first_na
   WHERE b.blocker_id = auth.uid()
   ORDER BY b.created_at DESC
 $$;
-
-CREATE FUNCTION public.list_contact_requests(_direction text DEFAULT 'received'::text) RETURNS TABLE(id uuid, other_user_id uuid, first_name text, birth_date date, city text, country text, message text, status text, created_at timestamp with time zone, responded_at timestamp with time zone, is_flash boolean)
+CREATE OR REPLACE FUNCTION public.list_contact_requests(_direction text DEFAULT 'received'::text) RETURNS TABLE(id uuid, other_user_id uuid, first_name text, birth_date date, city text, country text, message text, status text, created_at timestamp with time zone, responded_at timestamp with time zone, is_flash boolean)
     LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -2669,8 +2713,7 @@ BEGIN
   LIMIT 100;
 END;
 $$;
-
-CREATE FUNCTION public.list_notifications(_limit integer DEFAULT 50) RETURNS TABLE(id uuid, type text, actor_id uuid, actor_first_name text, data jsonb, read_at timestamp with time zone, created_at timestamp with time zone)
+CREATE OR REPLACE FUNCTION public.list_notifications(_limit integer DEFAULT 50) RETURNS TABLE(id uuid, type text, actor_id uuid, actor_first_name text, data jsonb, read_at timestamp with time zone, created_at timestamp with time zone)
     LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -2699,8 +2742,7 @@ BEGIN
   LIMIT least(greatest(coalesce(_limit, 50), 1), 100);
 END;
 $$;
-
-CREATE FUNCTION public.list_search_cities(_country text DEFAULT NULL::text) RETURNS TABLE(city text, profiles integer)
+CREATE OR REPLACE FUNCTION public.list_search_cities(_country text DEFAULT NULL::text) RETURNS TABLE(city text, profiles integer)
     LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -2747,8 +2789,7 @@ BEGIN
   LIMIT 300;
 END;
 $$;
-
-CREATE FUNCTION public.list_search_countries() RETURNS TABLE(country text, profiles integer)
+CREATE OR REPLACE FUNCTION public.list_search_countries() RETURNS TABLE(country text, profiles integer)
     LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -2792,8 +2833,7 @@ BEGIN
   LIMIT 300;
 END;
 $$;
-
-CREATE FUNCTION public.list_search_values(_field text) RETURNS TABLE(value text, profiles integer)
+CREATE OR REPLACE FUNCTION public.list_search_values(_field text) RETURNS TABLE(value text, profiles integer)
     LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -2853,8 +2893,7 @@ BEGIN
   LIMIT 300;
 END;
 $$;
-
-CREATE FUNCTION public.location_priority(_source text) RETURNS integer
+CREATE OR REPLACE FUNCTION public.location_priority(_source text) RETURNS integer
     LANGUAGE sql IMMUTABLE
     SET search_path TO 'public'
     AS $$
@@ -2865,7 +2904,7 @@ $$;
 -- 5. Table utilisée par les fonctions qui suivent
 -- ============================================================================
 
-CREATE TABLE public.conversations (
+CREATE TABLE IF NOT EXISTS public.conversations (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     match_id uuid NOT NULL,
     user_1_id uuid NOT NULL,
@@ -2882,7 +2921,7 @@ CREATE TABLE public.conversations (
 -- 6. Fonctions : les règles du site exécutées par la base (suite)
 -- ============================================================================
 
-CREATE FUNCTION public.lock_conversation_for_sending(_uid uuid, _conversation_id uuid) RETURNS public.conversations
+CREATE OR REPLACE FUNCTION public.lock_conversation_for_sending(_uid uuid, _conversation_id uuid) RETURNS public.conversations
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -2918,8 +2957,7 @@ BEGIN
   RETURN _conv;
 END;
 $$;
-
-CREATE FUNCTION public.log_account_change() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.log_account_change() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -2946,8 +2984,7 @@ EXCEPTION WHEN OTHERS THEN
   RAISE WARNING 'log_account_change: %', SQLERRM;
   RETURN NULL;
 END; $$;
-
-CREATE FUNCTION public.log_activity(_user uuid, _event text, _target uuid, _ref uuid) RETURNS void
+CREATE OR REPLACE FUNCTION public.log_activity(_user uuid, _event text, _target uuid, _ref uuid) RETURNS void
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -2959,8 +2996,7 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   RAISE WARNING 'log_activity: %', SQLERRM;
 END; $$;
-
-CREATE FUNCTION public.log_auth_user_change() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.log_auth_user_change() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -3002,8 +3038,7 @@ BEGIN
   END;
   RETURN NULL;
 END; $$;
-
-CREATE FUNCTION public.log_member_action() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.log_member_action() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -3044,8 +3079,7 @@ EXCEPTION WHEN OTHERS THEN
   RAISE WARNING 'log_member_action (%): %', TG_TABLE_NAME, SQLERRM;
   RETURN NULL;
 END; $$;
-
-CREATE FUNCTION public.log_payment_change() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.log_payment_change() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -3067,8 +3101,7 @@ EXCEPTION WHEN OTHERS THEN
   RAISE WARNING 'log_payment_change: %', SQLERRM;
   RETURN NULL;
 END; $$;
-
-CREATE FUNCTION public.log_server_error(_source text, _message text, _user_id uuid DEFAULT NULL::uuid, _path text DEFAULT NULL::text, _details jsonb DEFAULT '{}'::jsonb) RETURNS void
+CREATE OR REPLACE FUNCTION public.log_server_error(_source text, _message text, _user_id uuid DEFAULT NULL::uuid, _path text DEFAULT NULL::text, _details jsonb DEFAULT '{}'::jsonb) RETURNS void
     LANGUAGE sql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -3076,8 +3109,7 @@ CREATE FUNCTION public.log_server_error(_source text, _message text, _user_id uu
   VALUES (left(coalesce(_source, 'serveur'), 100), left(coalesce(_message, '?'), 2000), _user_id,
           left(_path, 300), coalesce(_details, '{}'::jsonb));
 $$;
-
-CREATE FUNCTION public.log_signup_milestone() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.log_signup_milestone() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -3107,8 +3139,7 @@ EXCEPTION WHEN OTHERS THEN
   RAISE WARNING 'log_signup_milestone: %', SQLERRM;
   RETURN NULL;
 END; $$;
-
-CREATE FUNCTION public.mark_all_notifications_read() RETURNS integer
+CREATE OR REPLACE FUNCTION public.mark_all_notifications_read() RETURNS integer
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -3124,8 +3155,7 @@ BEGIN
   RETURN _n;
 END;
 $$;
-
-CREATE FUNCTION public.mark_conversation_read(_conversation_id uuid) RETURNS timestamp with time zone
+CREATE OR REPLACE FUNCTION public.mark_conversation_read(_conversation_id uuid) RETURNS timestamp with time zone
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -3151,8 +3181,7 @@ BEGIN
   RETURN _at;
 END;
 $$;
-
-CREATE FUNCTION public.mark_notification_read(_id uuid) RETURNS boolean
+CREATE OR REPLACE FUNCTION public.mark_notification_read(_id uuid) RETURNS boolean
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -3165,8 +3194,7 @@ BEGIN
   RETURN FOUND;
 END;
 $$;
-
-CREATE FUNCTION public.mark_offline() RETURNS void
+CREATE OR REPLACE FUNCTION public.mark_offline() RETURNS void
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -3177,8 +3205,7 @@ BEGIN
   UPDATE public.user_activity SET is_online = false WHERE user_id = auth.uid();
 END;
 $$;
-
-CREATE FUNCTION public.member_country(_user_id uuid) RETURNS text
+CREATE OR REPLACE FUNCTION public.member_country(_user_id uuid) RETURNS text
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -3186,8 +3213,7 @@ CREATE FUNCTION public.member_country(_user_id uuid) RETURNS text
     (SELECT l.country FROM public.profile_locations l WHERE l.user_id = _user_id AND l.country IS NOT NULL),
     (SELECT p.country FROM public.profiles p WHERE p.user_id = _user_id))
 $$;
-
-CREATE FUNCTION public.messages_block_phone_numbers() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.messages_block_phone_numbers() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -3199,8 +3225,7 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-
-CREATE FUNCTION public.my_verification_status() RETURNS jsonb
+CREATE OR REPLACE FUNCTION public.my_verification_status() RETURNS jsonb
     LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -3228,8 +3253,7 @@ BEGIN
   );
 END;
 $$;
-
-CREATE FUNCTION public.normalize_place(_value text) RETURNS text
+CREATE OR REPLACE FUNCTION public.normalize_place(_value text) RETURNS text
     LANGUAGE sql STABLE
     SET search_path TO 'public', 'extensions'
     AS $$
@@ -3238,8 +3262,7 @@ CREATE FUNCTION public.normalize_place(_value text) RETURNS text
     ''
   )
 $$;
-
-CREATE FUNCTION public.notify_contact_request() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.notify_contact_request() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -3248,8 +3271,7 @@ BEGIN
     jsonb_build_object('request_id', NEW.id, 'is_flash', NEW.is_flash));
   RETURN NEW;
 END $$;
-
-CREATE FUNCTION public.notify_favorite() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.notify_favorite() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -3258,8 +3280,7 @@ BEGIN
     'favorite:' || NEW.user_id::text);
   RETURN NEW;
 END $$;
-
-CREATE FUNCTION public.notify_like() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.notify_like() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -3270,8 +3291,7 @@ BEGIN
   END IF;
   RETURN NEW;
 END $$;
-
-CREATE FUNCTION public.notify_match() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.notify_match() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -3284,8 +3304,7 @@ BEGIN
   END IF;
   RETURN NEW;
 END $$;
-
-CREATE FUNCTION public.notify_message() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.notify_message() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -3302,8 +3321,7 @@ BEGIN
     'message:' || NEW.conversation_id::text);
   RETURN NEW;
 END $$;
-
-CREATE FUNCTION public.notify_visit() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.notify_visit() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -3312,16 +3330,14 @@ BEGIN
     'visit:' || NEW.visitor_id::text);
   RETURN NEW;
 END $$;
-
-CREATE FUNCTION public.payment_product(_type public.payment_type, _metadata jsonb) RETURNS text
+CREATE OR REPLACE FUNCTION public.payment_product(_type public.payment_type, _metadata jsonb) RETURNS text
     LANGUAGE sql IMMUTABLE
     SET search_path TO 'public'
     AS $$
   SELECT CASE _type WHEN 'conversation_unlock' THEN 'conversation_unlock'
                     ELSE coalesce(_metadata ->> 'plan', 'premium') END
 $$;
-
-CREATE FUNCTION public.photos_after_delete() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.photos_after_delete() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -3334,8 +3350,7 @@ BEGIN
   END IF;
   RETURN NULL;
 END; $$;
-
-CREATE FUNCTION public.photos_before_insert() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.photos_before_insert() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -3348,15 +3363,13 @@ BEGIN
   );
   RETURN NEW;
 END; $$;
-
-CREATE FUNCTION public.premium_plan_amount(_plan public.subscription_plan) RETURNS integer
+CREATE OR REPLACE FUNCTION public.premium_plan_amount(_plan public.subscription_plan) RETURNS integer
     LANGUAGE sql IMMUTABLE
     SET search_path TO 'public'
     AS $$
   SELECT CASE _plan WHEN 'premium_monthly' THEN 500 WHEN 'premium_yearly' THEN 3500 END
 $$;
-
-CREATE FUNCTION public.protect_like_parties() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.protect_like_parties() RETURNS trigger
     LANGUAGE plpgsql
     SET search_path TO 'public'
     AS $$
@@ -3366,8 +3379,7 @@ BEGIN
   END IF;
   RETURN NEW;
 END; $$;
-
-CREATE FUNCTION public.protect_photo_status() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.protect_photo_status() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -3378,8 +3390,7 @@ BEGIN
   END IF;
   RETURN NEW;
 END; $$;
-
-CREATE FUNCTION public.protect_profile_status() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.protect_profile_status() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -3389,8 +3400,7 @@ BEGIN
   END IF;
   RETURN NEW;
 END; $$;
-
-CREATE FUNCTION public.protect_server_profile_fields() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.protect_server_profile_fields() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -3412,8 +3422,7 @@ BEGIN
   END IF;
   RETURN NEW;
 END; $$;
-
-CREATE FUNCTION public.protect_terms_accepted_at() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.protect_terms_accepted_at() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -3425,8 +3434,7 @@ BEGIN
   END IF;
   RETURN NEW;
 END; $$;
-
-CREATE FUNCTION public.protect_user_columns() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.protect_user_columns() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -3437,8 +3445,7 @@ BEGIN
   END IF;
   RETURN NEW;
 END; $$;
-
-CREATE FUNCTION public.purge_old_logs() RETURNS integer
+CREATE OR REPLACE FUNCTION public.purge_old_logs() RETURNS integer
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -3464,8 +3471,7 @@ BEGIN
   GET DIAGNOSTICS _c = ROW_COUNT; _n := _n + _c;
   RETURN _n;
 END; $$;
-
-CREATE FUNCTION public.purge_verification_files() RETURNS integer
+CREATE OR REPLACE FUNCTION public.purge_verification_files() RETURNS integer
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -3486,8 +3492,7 @@ BEGIN
   END LOOP;
   RETURN _n;
 END; $$;
-
-CREATE FUNCTION public.queue_ad_media_cleanup() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.queue_ad_media_cleanup() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -3506,8 +3511,7 @@ BEGIN
   WHERE p IS NOT NULL;
   RETURN NEW;
 END; $$;
-
-CREATE FUNCTION public.queue_verification_files(_id uuid, _reason text) RETURNS integer
+CREATE OR REPLACE FUNCTION public.queue_verification_files(_id uuid, _reason text) RETURNS integer
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -3523,8 +3527,7 @@ BEGIN
   UPDATE public.profile_verifications SET files_deleted_at = now() WHERE id = _id AND files_deleted_at IS NULL;
   RETURN _n;
 END; $$;
-
-CREATE FUNCTION public.recent_signups() RETURNS TABLE(first_name text, country text, created_at timestamp with time zone)
+CREATE OR REPLACE FUNCTION public.recent_signups() RETURNS TABLE(first_name text, country text, created_at timestamp with time zone)
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -3539,8 +3542,7 @@ CREATE FUNCTION public.recent_signups() RETURNS TABLE(first_name text, country t
   ORDER BY p.created_at DESC
   LIMIT 8;
 $$;
-
-CREATE FUNCTION public.record_ad_event(_ad_id uuid, _event text, _placement text DEFAULT 'discover'::text) RETURNS boolean
+CREATE OR REPLACE FUNCTION public.record_ad_event(_ad_id uuid, _event text, _placement text DEFAULT 'discover'::text) RETURNS boolean
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -3575,8 +3577,7 @@ BEGIN
   RETURN true;
 END;
 $$;
-
-CREATE FUNCTION public.record_login_failure(_email text, _method text DEFAULT 'email'::text) RETURNS void
+CREATE OR REPLACE FUNCTION public.record_login_failure(_email text, _method text DEFAULT 'email'::text) RETURNS void
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -3595,8 +3596,7 @@ BEGIN
           CASE WHEN _method IN ('email', 'google') THEN _method ELSE 'other' END,
           _ctx ->> 'ip', _ctx ->> 'country', _ctx ->> 'city', _ctx ->> 'user_agent');
 END; $$;
-
-CREATE FUNCTION public.record_logout() RETURNS void
+CREATE OR REPLACE FUNCTION public.record_logout() RETURNS void
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -3611,8 +3611,7 @@ BEGIN
   SELECT _me, u.email, 'logout', _ctx ->> 'ip', _ctx ->> 'country', _ctx ->> 'city', _ctx ->> 'user_agent'
   FROM public.users u WHERE u.id = _me;
 END; $$;
-
-CREATE FUNCTION public.record_payment_webhook(_event_type text, _payment_id uuid DEFAULT NULL::uuid, _reason text DEFAULT NULL::text, _provider_ref text DEFAULT NULL::text) RETURNS void
+CREATE OR REPLACE FUNCTION public.record_payment_webhook(_event_type text, _payment_id uuid DEFAULT NULL::uuid, _reason text DEFAULT NULL::text, _provider_ref text DEFAULT NULL::text) RETURNS void
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -3635,8 +3634,7 @@ BEGIN
     WHERE id = _pay.id;
   END IF;
 END; $$;
-
-CREATE FUNCTION public.record_profile_visit(_visited_user_id uuid) RETURNS boolean
+CREATE OR REPLACE FUNCTION public.record_profile_visit(_visited_user_id uuid) RETURNS boolean
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -3683,8 +3681,7 @@ BEGIN
   RETURN true;
 END;
 $$;
-
-CREATE FUNCTION public.record_session_context(_timezone text DEFAULT NULL::text) RETURNS void
+CREATE OR REPLACE FUNCTION public.record_session_context(_timezone text DEFAULT NULL::text) RETURNS void
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -3701,8 +3698,7 @@ BEGIN
   WHERE e.user_id = _me AND e.event IN ('login', 'signup')
     AND e.created_at > now() - interval '15 minutes' AND e.user_agent IS NULL;
 END; $$;
-
-CREATE FUNCTION public.record_signup_step(_step integer) RETURNS void
+CREATE OR REPLACE FUNCTION public.record_signup_step(_step integer) RETURNS void
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -3719,8 +3715,7 @@ BEGIN
   VALUES (_me, 'step_' || _step, public.request_context() ->> 'country')
   ON CONFLICT ON CONSTRAINT signup_events_once DO NOTHING;
 END; $$;
-
-CREATE FUNCTION public.record_verification_result(_id uuid, _status text, _reason text, _engine text, _profile_similarity numeric DEFAULT NULL::numeric, _document_similarity numeric DEFAULT NULL::numeric, _liveness_similarity numeric DEFAULT NULL::numeric, _liveness_shift numeric DEFAULT NULL::numeric, _details jsonb DEFAULT '{}'::jsonb) RETURNS jsonb
+CREATE OR REPLACE FUNCTION public.record_verification_result(_id uuid, _status text, _reason text, _engine text, _profile_similarity numeric DEFAULT NULL::numeric, _document_similarity numeric DEFAULT NULL::numeric, _liveness_similarity numeric DEFAULT NULL::numeric, _liveness_shift numeric DEFAULT NULL::numeric, _details jsonb DEFAULT '{}'::jsonb) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -3753,8 +3748,7 @@ BEGIN
                             'verified', _status = 'approved');
 END;
 $$;
-
-CREATE FUNCTION public.refund_ai_quota(_user_id uuid, _feature text) RETURNS void
+CREATE OR REPLACE FUNCTION public.refund_ai_quota(_user_id uuid, _feature text) RETURNS void
     LANGUAGE sql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -3762,8 +3756,7 @@ CREATE FUNCTION public.refund_ai_quota(_user_id uuid, _feature text) RETURNS voi
   WHERE user_id = _user_id AND feature = _feature AND usage_date = public.ai_usage_day()
     AND usage_count > 0
 $$;
-
-CREATE FUNCTION public.refuse_blocked_interaction() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.refuse_blocked_interaction() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -3784,8 +3777,7 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-
-CREATE FUNCTION public.refuse_contact_to_demo_profile() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.refuse_contact_to_demo_profile() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -3796,8 +3788,7 @@ BEGIN
   END IF;
   RETURN NEW;
 END; $$;
-
-CREATE FUNCTION public.remove_one_virtual_profile(_country text, _gender public.gender) RETURNS uuid
+CREATE OR REPLACE FUNCTION public.remove_one_virtual_profile(_country text, _gender public.gender) RETURNS uuid
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -3858,8 +3849,7 @@ BEGIN
   END IF;
   RETURN _target;
 END; $$;
-
-CREATE FUNCTION public.replace_virtual_profile_on_signup() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.replace_virtual_profile_on_signup() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -3889,8 +3879,7 @@ BEGIN
   END;
   RETURN NULL;
 END; $$;
-
-CREATE FUNCTION public.report_user(_user_id uuid, _reason public.report_reason, _description text DEFAULT NULL::text, _message_id uuid DEFAULT NULL::uuid) RETURNS uuid
+CREATE OR REPLACE FUNCTION public.report_user(_user_id uuid, _reason public.report_reason, _description text DEFAULT NULL::text, _message_id uuid DEFAULT NULL::uuid) RETURNS uuid
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -3944,8 +3933,7 @@ BEGIN
   RETURN _id;
 END;
 $$;
-
-CREATE FUNCTION public.request_context() RETURNS jsonb
+CREATE OR REPLACE FUNCTION public.request_context() RETURNS jsonb
     LANGUAGE sql STABLE
     SET search_path TO 'public'
     AS $$
@@ -3959,8 +3947,7 @@ CREATE FUNCTION public.request_context() RETURNS jsonb
   )
   FROM (SELECT coalesce(nullif(current_setting('request.headers', true), ''), '{}')::jsonb AS h) x
 $$;
-
-CREATE FUNCTION public.require_verified_sender() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.require_verified_sender() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -3971,8 +3958,7 @@ BEGIN
   END IF;
   RETURN NEW;
 END; $$;
-
-CREATE FUNCTION public.respond_contact_request(_request_id uuid, _accept boolean) RETURNS jsonb
+CREATE OR REPLACE FUNCTION public.respond_contact_request(_request_id uuid, _accept boolean) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -4038,8 +4024,7 @@ BEGIN
     'conversation_id', _conversation);
 END;
 $$;
-
-CREATE FUNCTION public.search_profiles(_filters jsonb DEFAULT '{}'::jsonb, _limit integer DEFAULT 30) RETURNS TABLE(user_id uuid, first_name text, birth_date date, city text, country text, bio text, gender public.gender, interests text[])
+CREATE OR REPLACE FUNCTION public.search_profiles(_filters jsonb DEFAULT '{}'::jsonb, _limit integer DEFAULT 30) RETURNS TABLE(user_id uuid, first_name text, birth_date date, city text, country text, bio text, gender public.gender, interests text[])
     LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $_$
@@ -4325,8 +4310,7 @@ BEGIN
   LIMIT least(greatest(coalesce(_limit, 30), 1), 50);
 END;
 $_$;
-
-CREATE FUNCTION public.send_contact_request(_receiver_id uuid, _message text DEFAULT NULL::text, _flash boolean DEFAULT false) RETURNS jsonb
+CREATE OR REPLACE FUNCTION public.send_contact_request(_receiver_id uuid, _message text DEFAULT NULL::text, _flash boolean DEFAULT false) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -4417,8 +4401,7 @@ BEGIN
   RETURN jsonb_build_object('id', _id, 'status', 'sent');
 END;
 $$;
-
-CREATE FUNCTION public.send_message(_conversation_id uuid, _content text) RETURNS TABLE(id uuid, conversation_id uuid, sender_id uuid, content text, status public.message_status, created_at timestamp with time zone)
+CREATE OR REPLACE FUNCTION public.send_message(_conversation_id uuid, _content text) RETURNS TABLE(id uuid, conversation_id uuid, sender_id uuid, content text, status public.message_status, created_at timestamp with time zone)
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $_$
@@ -4476,8 +4459,7 @@ BEGIN
   RETURN QUERY SELECT _msg.id, _msg.conversation_id, _msg.sender_id, _msg.content, _msg.status, _msg.created_at;
 END;
 $_$;
-
-CREATE FUNCTION public.send_voice_message(_conversation_id uuid, _audio_path text, _duration_seconds integer) RETURNS uuid
+CREATE OR REPLACE FUNCTION public.send_voice_message(_conversation_id uuid, _audio_path text, _duration_seconds integer) RETURNS uuid
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -4520,8 +4502,7 @@ BEGIN
   RETURN _id;
 END;
 $$;
-
-CREATE FUNCTION public.set_favorite_created_at() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.set_favorite_created_at() RETURNS trigger
     LANGUAGE plpgsql
     SET search_path TO 'public'
     AS $$
@@ -4530,8 +4511,7 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-
-CREATE FUNCTION public.set_like_created_at() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.set_like_created_at() RETURNS trigger
     LANGUAGE plpgsql
     SET search_path TO 'public'
     AS $$
@@ -4541,8 +4521,7 @@ BEGIN
   END IF;
   RETURN NEW;
 END; $$;
-
-CREATE FUNCTION public.set_member_location(_user_id uuid, _source text, _latitude double precision DEFAULT NULL::double precision, _longitude double precision DEFAULT NULL::double precision, _country_code text DEFAULT NULL::text, _region text DEFAULT NULL::text, _city text DEFAULT NULL::text, _accuracy_m integer DEFAULT NULL::integer, _timezone text DEFAULT NULL::text, _language text DEFAULT NULL::text, _ip_country text DEFAULT NULL::text, _ip_city text DEFAULT NULL::text) RETURNS jsonb
+CREATE OR REPLACE FUNCTION public.set_member_location(_user_id uuid, _source text, _latitude double precision DEFAULT NULL::double precision, _longitude double precision DEFAULT NULL::double precision, _country_code text DEFAULT NULL::text, _region text DEFAULT NULL::text, _city text DEFAULT NULL::text, _accuracy_m integer DEFAULT NULL::integer, _timezone text DEFAULT NULL::text, _language text DEFAULT NULL::text, _ip_country text DEFAULT NULL::text, _ip_city text DEFAULT NULL::text) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $_$
@@ -4640,8 +4619,7 @@ BEGIN
     'city', _row.city, 'inconsistent', _row.inconsistent, 'inconsistency', to_jsonb(_row.inconsistency));
 END;
 $_$;
-
-CREATE FUNCTION public.set_my_location(_latitude double precision, _longitude double precision) RETURNS void
+CREATE OR REPLACE FUNCTION public.set_my_location(_latitude double precision, _longitude double precision) RETURNS void
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -4663,8 +4641,7 @@ BEGIN
         accuracy_m = NULL;
 END;
 $$;
-
-CREATE FUNCTION public.set_primary_photo(_photo_id uuid) RETURNS void
+CREATE OR REPLACE FUNCTION public.set_primary_photo(_photo_id uuid) RETURNS void
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -4677,14 +4654,12 @@ BEGIN
   UPDATE public.photos SET is_primary = false WHERE user_id = _uid AND is_primary AND id <> _photo_id;
   UPDATE public.photos SET is_primary = true WHERE id = _photo_id;
 END; $$;
-
-CREATE FUNCTION public.set_updated_at() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.set_updated_at() RETURNS trigger
     LANGUAGE plpgsql
     SET search_path TO 'public'
     AS $$
 BEGIN NEW.updated_at = now(); RETURN NEW; END; $$;
-
-CREATE FUNCTION public.start_conversation_unlock_payment(_conversation_id uuid, _provider text) RETURNS uuid
+CREATE OR REPLACE FUNCTION public.start_conversation_unlock_payment(_conversation_id uuid, _provider text) RETURNS uuid
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -4735,8 +4710,7 @@ BEGIN
   RETURN _payment;
 END;
 $$;
-
-CREATE FUNCTION public.start_identity_verification(_user_id uuid, _with_selfie boolean, _document_type text DEFAULT NULL::text, _consent boolean DEFAULT false) RETURNS jsonb
+CREATE OR REPLACE FUNCTION public.start_identity_verification(_user_id uuid, _with_selfie boolean, _document_type text DEFAULT NULL::text, _consent boolean DEFAULT false) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -4801,8 +4775,7 @@ BEGIN
     'attempts_left', greatest(coalesce(_s.max_attempts_per_day, 5) - _used - 1, 0));
 END;
 $$;
-
-CREATE FUNCTION public.start_premium_payment(_plan public.subscription_plan, _provider text) RETURNS uuid
+CREATE OR REPLACE FUNCTION public.start_premium_payment(_plan public.subscription_plan, _provider text) RETURNS uuid
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -4841,15 +4814,13 @@ BEGIN
   RETURN _payment;
 END;
 $$;
-
-CREATE FUNCTION public.text_items_max_length(_items text[], _max integer) RETURNS boolean
+CREATE OR REPLACE FUNCTION public.text_items_max_length(_items text[], _max integer) RETURNS boolean
     LANGUAGE sql IMMUTABLE
     SET search_path TO 'public'
     AS $$
   SELECT coalesce(bool_and(char_length(item) BETWEEN 1 AND _max), true) FROM unnest(_items) AS item
 $$;
-
-CREATE FUNCTION public.touch_activity() RETURNS boolean
+CREATE OR REPLACE FUNCTION public.touch_activity() RETURNS boolean
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -4879,8 +4850,7 @@ BEGIN
   RETURN true;
 END;
 $$;
-
-CREATE FUNCTION public.unblock_user(_user_id uuid) RETURNS boolean
+CREATE OR REPLACE FUNCTION public.unblock_user(_user_id uuid) RETURNS boolean
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -4892,8 +4862,7 @@ BEGIN
   RETURN FOUND;
 END;
 $$;
-
-CREATE FUNCTION public.undo_last_pass() RETURNS uuid
+CREATE OR REPLACE FUNCTION public.undo_last_pass() RETURNS uuid
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -4922,8 +4891,7 @@ BEGIN
   RETURN _target;
 END;
 $$;
-
-CREATE FUNCTION public.url_decode(_s text) RETURNS text
+CREATE OR REPLACE FUNCTION public.url_decode(_s text) RETURNS text
     LANGUAGE plpgsql IMMUTABLE
     SET search_path TO 'public'
     AS $_$
@@ -4949,15 +4917,13 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   RETURN NULL;
 END; $_$;
-
-CREATE FUNCTION public.utc_day_start() RETURNS timestamp with time zone
+CREATE OR REPLACE FUNCTION public.utc_day_start() RETURNS timestamp with time zone
     LANGUAGE sql STABLE
     SET search_path TO 'public'
     AS $$
   SELECT date_trunc('day', now(), 'UTC')
 $$;
-
-CREATE FUNCTION public.wants_notification(_user_id uuid, _type text) RETURNS boolean
+CREATE OR REPLACE FUNCTION public.wants_notification(_user_id uuid, _type text) RETURNS boolean
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -4975,7 +4941,7 @@ $$;
 -- 7. Tables
 -- ============================================================================
 
-CREATE TABLE public.activity_events (
+CREATE TABLE IF NOT EXISTS public.activity_events (
     id bigint NOT NULL,
     user_id uuid,
     event text NOT NULL,
@@ -4987,16 +4953,23 @@ CREATE TABLE public.activity_events (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT activity_events_event_check CHECK ((event = ANY (ARRAY['like'::text, 'pass'::text, 'match'::text, 'message'::text, 'voice_message'::text, 'block'::text, 'report'::text, 'contact_request'::text, 'flash_message'::text, 'favorite'::text, 'visit'::text, 'account_suspended'::text, 'account_banned'::text, 'account_reactivated'::text, 'account_deleted'::text])))
 );
-ALTER TABLE public.activity_events ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
-    SEQUENCE NAME public.activity_events_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1
-);
-
-CREATE TABLE public.ad_events (
+DO $identity$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_attribute
+                 WHERE attrelid = 'public.activity_events'::pg_catalog.regclass
+                   AND attname = 'id' AND attidentity <> '') THEN
+    ALTER TABLE public.activity_events ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+        SEQUENCE NAME public.activity_events_id_seq
+        START WITH 1
+        INCREMENT BY 1
+        NO MINVALUE
+        NO MAXVALUE
+        CACHE 1
+    );
+  END IF;
+END
+$identity$;
+CREATE TABLE IF NOT EXISTS public.ad_events (
     id bigint NOT NULL,
     ad_id uuid NOT NULL,
     user_id uuid,
@@ -5009,16 +4982,23 @@ CREATE TABLE public.ad_events (
     CONSTRAINT ad_events_placement_check CHECK ((placement = ANY (ARRAY['discover'::text, 'matches'::text, 'messages'::text])))
 );
 COMMENT ON TABLE public.ad_events IS 'Journal des publicités : vues, clics et « Passer ».';
-ALTER TABLE public.ad_events ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
-    SEQUENCE NAME public.ad_events_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1
-);
-
-CREATE TABLE public.ad_settings (
+DO $identity$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_attribute
+                 WHERE attrelid = 'public.ad_events'::pg_catalog.regclass
+                   AND attname = 'id' AND attidentity <> '') THEN
+    ALTER TABLE public.ad_events ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+        SEQUENCE NAME public.ad_events_id_seq
+        START WITH 1
+        INCREMENT BY 1
+        NO MINVALUE
+        NO MAXVALUE
+        CACHE 1
+    );
+  END IF;
+END
+$identity$;
+CREATE TABLE IF NOT EXISTS public.ad_settings (
     id boolean DEFAULT true NOT NULL,
     discover_every integer DEFAULT 5 NOT NULL,
     list_every integer DEFAULT 6 NOT NULL,
@@ -5028,8 +5008,7 @@ CREATE TABLE public.ad_settings (
     CONSTRAINT ad_settings_list_every_check CHECK (((list_every >= 2) AND (list_every <= 50)))
 );
 COMMENT ON TABLE public.ad_settings IS 'Publicités : une toutes les N cartes de Découvrir (discover_every), une toutes les N lignes des listes (list_every).';
-
-CREATE TABLE public.admin_audit_log (
+CREATE TABLE IF NOT EXISTS public.admin_audit_log (
     id bigint NOT NULL,
     admin_id uuid,
     action text NOT NULL,
@@ -5041,16 +5020,23 @@ CREATE TABLE public.admin_audit_log (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT admin_audit_log_action_length CHECK ((char_length(action) <= 100))
 );
-ALTER TABLE public.admin_audit_log ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
-    SEQUENCE NAME public.admin_audit_log_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1
-);
-
-CREATE TABLE public.ads (
+DO $identity$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_attribute
+                 WHERE attrelid = 'public.admin_audit_log'::pg_catalog.regclass
+                   AND attname = 'id' AND attidentity <> '') THEN
+    ALTER TABLE public.admin_audit_log ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+        SEQUENCE NAME public.admin_audit_log_id_seq
+        START WITH 1
+        INCREMENT BY 1
+        NO MINVALUE
+        NO MAXVALUE
+        CACHE 1
+    );
+  END IF;
+END
+$identity$;
+CREATE TABLE IF NOT EXISTS public.ads (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     title text NOT NULL,
     body text,
@@ -5094,8 +5080,7 @@ CREATE TABLE public.ads (
     CONSTRAINT ads_title_check CHECK (((char_length(btrim(title)) >= 1) AND (char_length(btrim(title)) <= 90)))
 );
 COMMENT ON TABLE public.ads IS 'Publicités sponsorisées, montrées uniquement aux membres gratuits (get_ads_for_me).';
-
-CREATE TABLE public.ai_usage (
+CREATE TABLE IF NOT EXISTS public.ai_usage (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     user_id uuid NOT NULL,
     feature text DEFAULT 'roi_salomon'::text NOT NULL,
@@ -5105,8 +5090,7 @@ CREATE TABLE public.ai_usage (
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT ai_usage_count_positive CHECK ((usage_count >= 0))
 );
-
-CREATE TABLE public.auth_events (
+CREATE TABLE IF NOT EXISTS public.auth_events (
     id bigint NOT NULL,
     user_id uuid,
     email text,
@@ -5123,24 +5107,30 @@ CREATE TABLE public.auth_events (
     CONSTRAINT auth_events_method_check CHECK (((method IS NULL) OR (method = ANY (ARRAY['email'::text, 'google'::text, 'other'::text])))),
     CONSTRAINT auth_events_timezone_length CHECK (((timezone IS NULL) OR (char_length(timezone) <= 64)))
 );
-ALTER TABLE public.auth_events ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
-    SEQUENCE NAME public.auth_events_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1
-);
-
-CREATE TABLE public.blocks (
+DO $identity$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_attribute
+                 WHERE attrelid = 'public.auth_events'::pg_catalog.regclass
+                   AND attname = 'id' AND attidentity <> '') THEN
+    ALTER TABLE public.auth_events ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+        SEQUENCE NAME public.auth_events_id_seq
+        START WITH 1
+        INCREMENT BY 1
+        NO MINVALUE
+        NO MAXVALUE
+        CACHE 1
+    );
+  END IF;
+END
+$identity$;
+CREATE TABLE IF NOT EXISTS public.blocks (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     blocker_id uuid NOT NULL,
     blocked_id uuid NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT blocks_no_self CHECK ((blocker_id <> blocked_id))
 );
-
-CREATE TABLE public.christian_profiles (
+CREATE TABLE IF NOT EXISTS public.christian_profiles (
     user_id uuid NOT NULL,
     denomination text,
     faith_commitment text,
@@ -5163,8 +5153,7 @@ CREATE TABLE public.christian_profiles (
     CONSTRAINT christian_values_count CHECK ((cardinality(christian_values) <= 10)),
     CONSTRAINT christian_values_item_length CHECK (public.text_items_max_length(christian_values, 40))
 );
-
-CREATE TABLE public.contact_requests (
+CREATE TABLE IF NOT EXISTS public.contact_requests (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     sender_id uuid NOT NULL,
     receiver_id uuid NOT NULL,
@@ -5177,14 +5166,12 @@ CREATE TABLE public.contact_requests (
     CONSTRAINT contact_requests_no_self CHECK ((sender_id <> receiver_id)),
     CONSTRAINT contact_requests_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'accepted'::text, 'declined'::text, 'cancelled'::text])))
 );
-
-CREATE TABLE public.conversation_reads (
+CREATE TABLE IF NOT EXISTS public.conversation_reads (
     conversation_id uuid NOT NULL,
     user_id uuid NOT NULL,
     last_read_at timestamp with time zone DEFAULT now() NOT NULL
 );
-
-CREATE TABLE public.conversation_unlocks (
+CREATE TABLE IF NOT EXISTS public.conversation_unlocks (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     conversation_id uuid NOT NULL,
     paid_by_user_id uuid NOT NULL,
@@ -5197,8 +5184,7 @@ CREATE TABLE public.conversation_unlocks (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT unlocks_period CHECK (((expires_at IS NULL) OR (starts_at IS NULL) OR (expires_at > starts_at)))
 );
-
-CREATE TABLE public.conversation_user_usage (
+CREATE TABLE IF NOT EXISTS public.conversation_user_usage (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     conversation_id uuid NOT NULL,
     user_id uuid NOT NULL,
@@ -5207,29 +5193,25 @@ CREATE TABLE public.conversation_user_usage (
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT conversation_user_usage_range CHECK (((free_messages_used >= 0) AND (free_messages_used <= 3)))
 );
-
-CREATE TABLE public.favorites (
+CREATE TABLE IF NOT EXISTS public.favorites (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     user_id uuid NOT NULL,
     favorite_user_id uuid NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT favorites_no_self CHECK ((user_id <> favorite_user_id))
 );
-
-CREATE TABLE public.geo_countries (
+CREATE TABLE IF NOT EXISTS public.geo_countries (
     code text NOT NULL,
     name text NOT NULL,
     lat double precision NOT NULL,
     lng double precision NOT NULL
 );
-
-CREATE TABLE public.geo_timezones (
+CREATE TABLE IF NOT EXISTS public.geo_timezones (
     tz text NOT NULL,
     country_codes text[] NOT NULL
 );
 COMMENT ON TABLE public.geo_timezones IS 'Fuseau horaire IANA → pays où il est utilisé (indice de localisation).';
-
-CREATE TABLE public.likes (
+CREATE TABLE IF NOT EXISTS public.likes (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     sender_id uuid NOT NULL,
     receiver_id uuid NOT NULL,
@@ -5238,8 +5220,7 @@ CREATE TABLE public.likes (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT likes_no_self CHECK ((sender_id <> receiver_id))
 );
-
-CREATE TABLE public.location_history (
+CREATE TABLE IF NOT EXISTS public.location_history (
     id bigint NOT NULL,
     user_id uuid NOT NULL,
     source text NOT NULL,
@@ -5256,16 +5237,23 @@ CREATE TABLE public.location_history (
     CONSTRAINT location_history_source_check CHECK ((source = ANY (ARRAY['device'::text, 'declared'::text, 'ip'::text])))
 );
 COMMENT ON TABLE public.location_history IS 'Positions reçues (appareil, déclarée, IP) et position retenue ; indices d''incohérence. Administration seulement.';
-ALTER TABLE public.location_history ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
-    SEQUENCE NAME public.location_history_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1
-);
-
-CREATE TABLE public.matches (
+DO $identity$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_attribute
+                 WHERE attrelid = 'public.location_history'::pg_catalog.regclass
+                   AND attname = 'id' AND attidentity <> '') THEN
+    ALTER TABLE public.location_history ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+        SEQUENCE NAME public.location_history_id_seq
+        START WITH 1
+        INCREMENT BY 1
+        NO MINVALUE
+        NO MAXVALUE
+        CACHE 1
+    );
+  END IF;
+END
+$identity$;
+CREATE TABLE IF NOT EXISTS public.matches (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     user_1_id uuid NOT NULL,
     user_2_id uuid NOT NULL,
@@ -5273,8 +5261,7 @@ CREATE TABLE public.matches (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT matches_ordered_pair CHECK ((user_1_id < user_2_id))
 );
-
-CREATE TABLE public.messages (
+CREATE TABLE IF NOT EXISTS public.messages (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     conversation_id uuid NOT NULL,
     sender_id uuid NOT NULL,
@@ -5292,8 +5279,7 @@ CREATE TABLE public.messages (
     CONSTRAINT messages_kind_valid CHECK ((((kind = 'text'::text) AND (audio_path IS NULL) AND (audio_duration_seconds IS NULL)) OR ((kind = 'voice'::text) AND (audio_path IS NOT NULL) AND ((audio_duration_seconds >= 1) AND (audio_duration_seconds <= 120))))),
     CONSTRAINT messages_no_phone_number_delivered CHECK ((NOT ((status = 'delivered'::public.message_status) AND contains_phone_number)))
 );
-
-CREATE TABLE public.moderation_actions (
+CREATE TABLE IF NOT EXISTS public.moderation_actions (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     admin_id uuid NOT NULL,
     target_user_id uuid NOT NULL,
@@ -5302,8 +5288,7 @@ CREATE TABLE public.moderation_actions (
     metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL
 );
-
-CREATE TABLE public.notifications (
+CREATE TABLE IF NOT EXISTS public.notifications (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     user_id uuid NOT NULL,
     type text NOT NULL,
@@ -5313,8 +5298,7 @@ CREATE TABLE public.notifications (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT notifications_type_check CHECK ((type = ANY (ARRAY['like'::text, 'match'::text, 'message'::text, 'favorite'::text, 'visit'::text, 'contact_request'::text])))
 );
-
-CREATE TABLE public.payment_events (
+CREATE TABLE IF NOT EXISTS public.payment_events (
     id bigint NOT NULL,
     payment_id uuid,
     user_id uuid,
@@ -5332,16 +5316,23 @@ CREATE TABLE public.payment_events (
     CONSTRAINT payment_events_event_check CHECK ((event = ANY (ARRAY['created'::text, 'pending'::text, 'succeeded'::text, 'failed'::text, 'cancelled'::text, 'refunded'::text, 'abandoned'::text, 'webhook'::text]))),
     CONSTRAINT payment_events_reason_length CHECK (((reason IS NULL) OR (char_length(reason) <= 300)))
 );
-ALTER TABLE public.payment_events ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
-    SEQUENCE NAME public.payment_events_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1
-);
-
-CREATE TABLE public.payments (
+DO $identity$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_attribute
+                 WHERE attrelid = 'public.payment_events'::pg_catalog.regclass
+                   AND attname = 'id' AND attidentity <> '') THEN
+    ALTER TABLE public.payment_events ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+        SEQUENCE NAME public.payment_events_id_seq
+        START WITH 1
+        INCREMENT BY 1
+        NO MINVALUE
+        NO MAXVALUE
+        CACHE 1
+    );
+  END IF;
+END
+$identity$;
+CREATE TABLE IF NOT EXISTS public.payments (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     user_id uuid NOT NULL,
     type public.payment_type NOT NULL,
@@ -5355,8 +5346,7 @@ CREATE TABLE public.payments (
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT payments_amount_positive CHECK ((amount > 0))
 );
-
-CREATE TABLE public.photos (
+CREATE TABLE IF NOT EXISTS public.photos (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     user_id uuid NOT NULL,
     storage_path text NOT NULL,
@@ -5366,8 +5356,7 @@ CREATE TABLE public.photos (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT photos_path_in_owner_folder CHECK ((split_part(storage_path, '/'::text, 1) = (user_id)::text))
 );
-
-CREATE TABLE public.preferences (
+CREATE TABLE IF NOT EXISTS public.preferences (
     user_id uuid NOT NULL,
     min_age smallint DEFAULT 18 NOT NULL,
     max_age smallint DEFAULT 60 NOT NULL,
@@ -5385,8 +5374,7 @@ CREATE TABLE public.preferences (
     CONSTRAINT preferences_family_project_length CHECK (((family_project IS NULL) OR (char_length(family_project) <= 200))),
     CONSTRAINT preferences_relationship_goal_length CHECK (((relationship_goal IS NULL) OR (char_length(relationship_goal) <= 100)))
 );
-
-CREATE TABLE public.profile_boosts (
+CREATE TABLE IF NOT EXISTS public.profile_boosts (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     user_id uuid NOT NULL,
     starts_at timestamp with time zone DEFAULT now() NOT NULL,
@@ -5394,8 +5382,7 @@ CREATE TABLE public.profile_boosts (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT profile_boosts_period CHECK ((expires_at > starts_at))
 );
-
-CREATE TABLE public.profile_locations (
+CREATE TABLE IF NOT EXISTS public.profile_locations (
     user_id uuid NOT NULL,
     latitude double precision NOT NULL,
     longitude double precision NOT NULL,
@@ -5420,8 +5407,7 @@ CREATE TABLE public.profile_locations (
 );
 COMMENT ON COLUMN public.profile_locations.source IS 'Origine de la position retenue : device (appareil), declared (ville choisie), ip (adresse IP, dernier recours).';
 COMMENT ON COLUMN public.profile_locations.inconsistency IS 'Indices qui contredisent la position retenue (ip_country:FR, timezone:Europe/Paris, declared_country:France) : VPN possible.';
-
-CREATE TABLE public.profile_verifications (
+CREATE TABLE IF NOT EXISTS public.profile_verifications (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     user_id uuid NOT NULL,
     method text NOT NULL,
@@ -5453,16 +5439,14 @@ CREATE TABLE public.profile_verifications (
     CONSTRAINT profile_verifications_status_check CHECK ((status = ANY (ARRAY['processing'::text, 'pending'::text, 'approved'::text, 'rejected'::text])))
 );
 COMMENT ON COLUMN public.profile_verifications.reason IS 'Motif de la décision : match, no_face, multiple_faces, blurry, not_frontal, liveness_failed, wrong_direction, no_profile_face, document_no_face, mismatch, gray_zone, engine_unavailable, files_missing, abandoned, manual.';
-
-CREATE TABLE public.profile_visits (
+CREATE TABLE IF NOT EXISTS public.profile_visits (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     visitor_id uuid NOT NULL,
     visited_user_id uuid NOT NULL,
     visited_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT profile_visits_no_self CHECK ((visitor_id <> visited_user_id))
 );
-
-CREATE TABLE public.profiles (
+CREATE TABLE IF NOT EXISTS public.profiles (
     user_id uuid NOT NULL,
     first_name text,
     birth_date date,
@@ -5507,8 +5491,7 @@ CREATE TABLE public.profiles (
 );
 COMMENT ON COLUMN public.profiles.demo_photo_path IS 'Profil de démonstration : chemin de la photo dans le stockage public « demo-profils ».';
 COMMENT ON COLUMN public.profiles.demo_photo_source IS 'Nature attestée par l''administrateur : generated (personne qui n''existe pas), licensed (licence), consent (accord écrit).';
-
-CREATE TABLE public.reports (
+CREATE TABLE IF NOT EXISTS public.reports (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     reporter_id uuid NOT NULL,
     reported_user_id uuid NOT NULL,
@@ -5521,8 +5504,7 @@ CREATE TABLE public.reports (
     CONSTRAINT reports_description_length CHECK (((description IS NULL) OR (char_length(description) <= 2000))),
     CONSTRAINT reports_no_self CHECK ((reporter_id <> reported_user_id))
 );
-
-CREATE TABLE public.server_errors (
+CREATE TABLE IF NOT EXISTS public.server_errors (
     id bigint NOT NULL,
     source text NOT NULL,
     message text NOT NULL,
@@ -5534,16 +5516,23 @@ CREATE TABLE public.server_errors (
     CONSTRAINT server_errors_path_length CHECK (((path IS NULL) OR (char_length(path) <= 300))),
     CONSTRAINT server_errors_source_length CHECK ((char_length(source) <= 100))
 );
-ALTER TABLE public.server_errors ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
-    SEQUENCE NAME public.server_errors_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1
-);
-
-CREATE TABLE public.signup_events (
+DO $identity$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_attribute
+                 WHERE attrelid = 'public.server_errors'::pg_catalog.regclass
+                   AND attname = 'id' AND attidentity <> '') THEN
+    ALTER TABLE public.server_errors ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+        SEQUENCE NAME public.server_errors_id_seq
+        START WITH 1
+        INCREMENT BY 1
+        NO MINVALUE
+        NO MAXVALUE
+        CACHE 1
+    );
+  END IF;
+END
+$identity$;
+CREATE TABLE IF NOT EXISTS public.signup_events (
     id bigint NOT NULL,
     user_id uuid NOT NULL,
     step text NOT NULL,
@@ -5552,16 +5541,23 @@ CREATE TABLE public.signup_events (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT signup_events_step_check CHECK ((step = ANY (ARRAY['account_created'::text, 'step_1'::text, 'step_2'::text, 'step_3'::text, 'step_4'::text, 'profile_completed'::text, 'verification_requested'::text, 'verification_approved'::text, 'verification_rejected'::text])))
 );
-ALTER TABLE public.signup_events ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
-    SEQUENCE NAME public.signup_events_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1
-);
-
-CREATE TABLE public.storage_cleanup_queue (
+DO $identity$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_attribute
+                 WHERE attrelid = 'public.signup_events'::pg_catalog.regclass
+                   AND attname = 'id' AND attidentity <> '') THEN
+    ALTER TABLE public.signup_events ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+        SEQUENCE NAME public.signup_events_id_seq
+        START WITH 1
+        INCREMENT BY 1
+        NO MINVALUE
+        NO MAXVALUE
+        CACHE 1
+    );
+  END IF;
+END
+$identity$;
+CREATE TABLE IF NOT EXISTS public.storage_cleanup_queue (
     id bigint NOT NULL,
     bucket_id text NOT NULL,
     path text NOT NULL,
@@ -5570,16 +5566,23 @@ CREATE TABLE public.storage_cleanup_queue (
     done_at timestamp with time zone,
     CONSTRAINT storage_cleanup_queue_reason_length CHECK ((char_length(reason) <= 100))
 );
-ALTER TABLE public.storage_cleanup_queue ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
-    SEQUENCE NAME public.storage_cleanup_queue_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1
-);
-
-CREATE TABLE public.subscriptions (
+DO $identity$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_attribute
+                 WHERE attrelid = 'public.storage_cleanup_queue'::pg_catalog.regclass
+                   AND attname = 'id' AND attidentity <> '') THEN
+    ALTER TABLE public.storage_cleanup_queue ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+        SEQUENCE NAME public.storage_cleanup_queue_id_seq
+        START WITH 1
+        INCREMENT BY 1
+        NO MINVALUE
+        NO MAXVALUE
+        CACHE 1
+    );
+  END IF;
+END
+$identity$;
+CREATE TABLE IF NOT EXISTS public.subscriptions (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     user_id uuid NOT NULL,
     plan public.subscription_plan DEFAULT 'premium_monthly'::public.subscription_plan NOT NULL,
@@ -5593,8 +5596,7 @@ CREATE TABLE public.subscriptions (
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT subscriptions_period CHECK (((expires_at IS NULL) OR (starts_at IS NULL) OR (expires_at > starts_at)))
 );
-
-CREATE TABLE public.support_tickets (
+CREATE TABLE IF NOT EXISTS public.support_tickets (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     user_id uuid NOT NULL,
     subject text NOT NULL,
@@ -5611,8 +5613,7 @@ CREATE TABLE public.support_tickets (
     CONSTRAINT support_tickets_status_check CHECK ((status = ANY (ARRAY['open'::text, 'answered'::text, 'closed'::text]))),
     CONSTRAINT support_tickets_subject_check CHECK (((char_length(subject) >= 3) AND (char_length(subject) <= 120)))
 );
-
-CREATE TABLE public.user_activity (
+CREATE TABLE IF NOT EXISTS public.user_activity (
     user_id uuid NOT NULL,
     last_login_at timestamp with time zone,
     last_seen_at timestamp with time zone,
@@ -5621,15 +5622,13 @@ CREATE TABLE public.user_activity (
     events jsonb DEFAULT '[]'::jsonb NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
-
-CREATE TABLE public.user_roles (
+CREATE TABLE IF NOT EXISTS public.user_roles (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     user_id uuid NOT NULL,
     role public.app_role NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL
 );
-
-CREATE TABLE public.user_settings (
+CREATE TABLE IF NOT EXISTS public.user_settings (
     user_id uuid NOT NULL,
     activity_visible boolean DEFAULT true NOT NULL,
     notify_email boolean DEFAULT true NOT NULL,
@@ -5640,8 +5639,7 @@ CREATE TABLE public.user_settings (
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     marketing_emails boolean DEFAULT false NOT NULL
 );
-
-CREATE TABLE public.users (
+CREATE TABLE IF NOT EXISTS public.users (
     id uuid NOT NULL,
     email text NOT NULL,
     status public.account_status DEFAULT 'active'::public.account_status NOT NULL,
@@ -5649,8 +5647,7 @@ CREATE TABLE public.users (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
-
-CREATE TABLE public.verification_settings (
+CREATE TABLE IF NOT EXISTS public.verification_settings (
     id boolean DEFAULT true NOT NULL,
     accept_similarity numeric(4,3) DEFAULT 0.550 NOT NULL,
     reject_similarity numeric(4,3) DEFAULT 0.400 NOT NULL,
@@ -5674,8 +5671,7 @@ CREATE TABLE public.verification_settings (
     CONSTRAINT verification_settings_reject_similarity_check CHECK (((reject_similarity >= (0)::numeric) AND (reject_similarity <= (1)::numeric)))
 );
 COMMENT ON TABLE public.verification_settings IS 'Vérification d''identité automatique : seuils de ressemblance, vivacité, netteté, essais par jour, conservation des images.';
-
-CREATE TABLE public.virtual_profile_removals (
+CREATE TABLE IF NOT EXISTS public.virtual_profile_removals (
     user_id uuid NOT NULL,
     removed_user_id uuid,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
@@ -5686,616 +5682,1138 @@ CREATE TABLE public.virtual_profile_removals (
 -- 8. Clés primaires et valeurs uniques
 -- ============================================================================
 
-ALTER TABLE ONLY public.activity_events
-    ADD CONSTRAINT activity_events_pkey PRIMARY KEY (id);
-
-ALTER TABLE ONLY public.ad_events
-    ADD CONSTRAINT ad_events_pkey PRIMARY KEY (id);
-
-ALTER TABLE ONLY public.ad_settings
-    ADD CONSTRAINT ad_settings_pkey PRIMARY KEY (id);
-
-ALTER TABLE ONLY public.admin_audit_log
-    ADD CONSTRAINT admin_audit_log_pkey PRIMARY KEY (id);
-
-ALTER TABLE ONLY public.ads
-    ADD CONSTRAINT ads_pkey PRIMARY KEY (id);
-
-ALTER TABLE ONLY public.ai_usage
-    ADD CONSTRAINT ai_usage_pkey PRIMARY KEY (id);
-
-ALTER TABLE ONLY public.ai_usage
-    ADD CONSTRAINT ai_usage_user_id_feature_usage_date_key UNIQUE (user_id, feature, usage_date);
-
-ALTER TABLE ONLY public.auth_events
-    ADD CONSTRAINT auth_events_pkey PRIMARY KEY (id);
-
-ALTER TABLE ONLY public.blocks
-    ADD CONSTRAINT blocks_blocker_id_blocked_id_key UNIQUE (blocker_id, blocked_id);
-
-ALTER TABLE ONLY public.blocks
-    ADD CONSTRAINT blocks_pkey PRIMARY KEY (id);
-
-ALTER TABLE ONLY public.christian_profiles
-    ADD CONSTRAINT christian_profiles_pkey PRIMARY KEY (user_id);
-
-ALTER TABLE ONLY public.contact_requests
-    ADD CONSTRAINT contact_requests_pkey PRIMARY KEY (id);
-
-ALTER TABLE ONLY public.conversation_reads
-    ADD CONSTRAINT conversation_reads_pkey PRIMARY KEY (conversation_id, user_id);
-
-ALTER TABLE ONLY public.conversation_unlocks
-    ADD CONSTRAINT conversation_unlocks_pkey PRIMARY KEY (id);
-
-ALTER TABLE ONLY public.conversation_user_usage
-    ADD CONSTRAINT conversation_user_usage_conversation_id_user_id_key UNIQUE (conversation_id, user_id);
-
-ALTER TABLE ONLY public.conversation_user_usage
-    ADD CONSTRAINT conversation_user_usage_pkey PRIMARY KEY (id);
-
-ALTER TABLE ONLY public.conversations
-    ADD CONSTRAINT conversations_match_id_key UNIQUE (match_id);
-
-ALTER TABLE ONLY public.conversations
-    ADD CONSTRAINT conversations_pkey PRIMARY KEY (id);
-
-ALTER TABLE ONLY public.favorites
-    ADD CONSTRAINT favorites_pkey PRIMARY KEY (id);
-
-ALTER TABLE ONLY public.favorites
-    ADD CONSTRAINT favorites_user_id_favorite_user_id_key UNIQUE (user_id, favorite_user_id);
-
-ALTER TABLE ONLY public.geo_countries
-    ADD CONSTRAINT geo_countries_pkey PRIMARY KEY (code);
-
-ALTER TABLE ONLY public.geo_timezones
-    ADD CONSTRAINT geo_timezones_pkey PRIMARY KEY (tz);
-
-ALTER TABLE ONLY public.likes
-    ADD CONSTRAINT likes_pkey PRIMARY KEY (id);
-
-ALTER TABLE ONLY public.likes
-    ADD CONSTRAINT likes_sender_id_receiver_id_key UNIQUE (sender_id, receiver_id);
-
-ALTER TABLE ONLY public.location_history
-    ADD CONSTRAINT location_history_pkey PRIMARY KEY (id);
-
-ALTER TABLE ONLY public.matches
-    ADD CONSTRAINT matches_pkey PRIMARY KEY (id);
-
-ALTER TABLE ONLY public.matches
-    ADD CONSTRAINT matches_user_1_id_user_2_id_key UNIQUE (user_1_id, user_2_id);
-
-ALTER TABLE ONLY public.messages
-    ADD CONSTRAINT messages_pkey PRIMARY KEY (id);
-
-ALTER TABLE ONLY public.moderation_actions
-    ADD CONSTRAINT moderation_actions_pkey PRIMARY KEY (id);
-
-ALTER TABLE ONLY public.notifications
-    ADD CONSTRAINT notifications_pkey PRIMARY KEY (id);
-
-ALTER TABLE ONLY public.payment_events
-    ADD CONSTRAINT payment_events_pkey PRIMARY KEY (id);
-
-ALTER TABLE ONLY public.payments
-    ADD CONSTRAINT payments_pkey PRIMARY KEY (id);
-
-ALTER TABLE ONLY public.photos
-    ADD CONSTRAINT photos_pkey PRIMARY KEY (id);
-
-ALTER TABLE ONLY public.photos
-    ADD CONSTRAINT photos_user_id_storage_path_key UNIQUE (user_id, storage_path);
-
-ALTER TABLE ONLY public.preferences
-    ADD CONSTRAINT preferences_pkey PRIMARY KEY (user_id);
-
-ALTER TABLE ONLY public.profile_boosts
-    ADD CONSTRAINT profile_boosts_pkey PRIMARY KEY (id);
-
-ALTER TABLE ONLY public.profile_locations
-    ADD CONSTRAINT profile_locations_pkey PRIMARY KEY (user_id);
-
-ALTER TABLE ONLY public.profile_verifications
-    ADD CONSTRAINT profile_verifications_pkey PRIMARY KEY (id);
-
-ALTER TABLE ONLY public.profile_visits
-    ADD CONSTRAINT profile_visits_pkey PRIMARY KEY (id);
-
-ALTER TABLE ONLY public.profiles
-    ADD CONSTRAINT profiles_pkey PRIMARY KEY (user_id);
-
-ALTER TABLE ONLY public.reports
-    ADD CONSTRAINT reports_pkey PRIMARY KEY (id);
-
-ALTER TABLE ONLY public.server_errors
-    ADD CONSTRAINT server_errors_pkey PRIMARY KEY (id);
-
-ALTER TABLE ONLY public.signup_events
-    ADD CONSTRAINT signup_events_once UNIQUE (user_id, step);
-
-ALTER TABLE ONLY public.signup_events
-    ADD CONSTRAINT signup_events_pkey PRIMARY KEY (id);
-
-ALTER TABLE ONLY public.storage_cleanup_queue
-    ADD CONSTRAINT storage_cleanup_queue_pkey PRIMARY KEY (id);
-
-ALTER TABLE ONLY public.subscriptions
-    ADD CONSTRAINT subscriptions_pkey PRIMARY KEY (id);
-
-ALTER TABLE ONLY public.support_tickets
-    ADD CONSTRAINT support_tickets_pkey PRIMARY KEY (id);
-
-ALTER TABLE ONLY public.user_activity
-    ADD CONSTRAINT user_activity_pkey PRIMARY KEY (user_id);
-
-ALTER TABLE ONLY public.user_roles
-    ADD CONSTRAINT user_roles_pkey PRIMARY KEY (id);
-
-ALTER TABLE ONLY public.user_roles
-    ADD CONSTRAINT user_roles_user_id_role_key UNIQUE (user_id, role);
-
-ALTER TABLE ONLY public.user_settings
-    ADD CONSTRAINT user_settings_pkey PRIMARY KEY (user_id);
-
-ALTER TABLE ONLY public.users
-    ADD CONSTRAINT users_email_key UNIQUE (email);
-
-ALTER TABLE ONLY public.users
-    ADD CONSTRAINT users_pkey PRIMARY KEY (id);
-
-ALTER TABLE ONLY public.verification_settings
-    ADD CONSTRAINT verification_settings_pkey PRIMARY KEY (id);
-
-ALTER TABLE ONLY public.virtual_profile_removals
-    ADD CONSTRAINT virtual_profile_removals_pkey PRIMARY KEY (user_id);
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.activity_events'::pg_catalog.regclass AND conname = 'activity_events_pkey') THEN
+    ALTER TABLE ONLY public.activity_events
+      ADD CONSTRAINT activity_events_pkey PRIMARY KEY (id);
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.ad_events'::pg_catalog.regclass AND conname = 'ad_events_pkey') THEN
+    ALTER TABLE ONLY public.ad_events
+      ADD CONSTRAINT ad_events_pkey PRIMARY KEY (id);
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.ad_settings'::pg_catalog.regclass AND conname = 'ad_settings_pkey') THEN
+    ALTER TABLE ONLY public.ad_settings
+      ADD CONSTRAINT ad_settings_pkey PRIMARY KEY (id);
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.admin_audit_log'::pg_catalog.regclass AND conname = 'admin_audit_log_pkey') THEN
+    ALTER TABLE ONLY public.admin_audit_log
+      ADD CONSTRAINT admin_audit_log_pkey PRIMARY KEY (id);
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.ads'::pg_catalog.regclass AND conname = 'ads_pkey') THEN
+    ALTER TABLE ONLY public.ads
+      ADD CONSTRAINT ads_pkey PRIMARY KEY (id);
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.ai_usage'::pg_catalog.regclass AND conname = 'ai_usage_pkey') THEN
+    ALTER TABLE ONLY public.ai_usage
+      ADD CONSTRAINT ai_usage_pkey PRIMARY KEY (id);
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.ai_usage'::pg_catalog.regclass AND conname = 'ai_usage_user_id_feature_usage_date_key') THEN
+    ALTER TABLE ONLY public.ai_usage
+      ADD CONSTRAINT ai_usage_user_id_feature_usage_date_key UNIQUE (user_id, feature, usage_date);
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.auth_events'::pg_catalog.regclass AND conname = 'auth_events_pkey') THEN
+    ALTER TABLE ONLY public.auth_events
+      ADD CONSTRAINT auth_events_pkey PRIMARY KEY (id);
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.blocks'::pg_catalog.regclass AND conname = 'blocks_blocker_id_blocked_id_key') THEN
+    ALTER TABLE ONLY public.blocks
+      ADD CONSTRAINT blocks_blocker_id_blocked_id_key UNIQUE (blocker_id, blocked_id);
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.blocks'::pg_catalog.regclass AND conname = 'blocks_pkey') THEN
+    ALTER TABLE ONLY public.blocks
+      ADD CONSTRAINT blocks_pkey PRIMARY KEY (id);
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.christian_profiles'::pg_catalog.regclass AND conname = 'christian_profiles_pkey') THEN
+    ALTER TABLE ONLY public.christian_profiles
+      ADD CONSTRAINT christian_profiles_pkey PRIMARY KEY (user_id);
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.contact_requests'::pg_catalog.regclass AND conname = 'contact_requests_pkey') THEN
+    ALTER TABLE ONLY public.contact_requests
+      ADD CONSTRAINT contact_requests_pkey PRIMARY KEY (id);
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.conversation_reads'::pg_catalog.regclass AND conname = 'conversation_reads_pkey') THEN
+    ALTER TABLE ONLY public.conversation_reads
+      ADD CONSTRAINT conversation_reads_pkey PRIMARY KEY (conversation_id, user_id);
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.conversation_unlocks'::pg_catalog.regclass AND conname = 'conversation_unlocks_pkey') THEN
+    ALTER TABLE ONLY public.conversation_unlocks
+      ADD CONSTRAINT conversation_unlocks_pkey PRIMARY KEY (id);
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.conversation_user_usage'::pg_catalog.regclass AND conname = 'conversation_user_usage_conversation_id_user_id_key') THEN
+    ALTER TABLE ONLY public.conversation_user_usage
+      ADD CONSTRAINT conversation_user_usage_conversation_id_user_id_key UNIQUE (conversation_id, user_id);
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.conversation_user_usage'::pg_catalog.regclass AND conname = 'conversation_user_usage_pkey') THEN
+    ALTER TABLE ONLY public.conversation_user_usage
+      ADD CONSTRAINT conversation_user_usage_pkey PRIMARY KEY (id);
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.conversations'::pg_catalog.regclass AND conname = 'conversations_match_id_key') THEN
+    ALTER TABLE ONLY public.conversations
+      ADD CONSTRAINT conversations_match_id_key UNIQUE (match_id);
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.conversations'::pg_catalog.regclass AND conname = 'conversations_pkey') THEN
+    ALTER TABLE ONLY public.conversations
+      ADD CONSTRAINT conversations_pkey PRIMARY KEY (id);
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.favorites'::pg_catalog.regclass AND conname = 'favorites_pkey') THEN
+    ALTER TABLE ONLY public.favorites
+      ADD CONSTRAINT favorites_pkey PRIMARY KEY (id);
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.favorites'::pg_catalog.regclass AND conname = 'favorites_user_id_favorite_user_id_key') THEN
+    ALTER TABLE ONLY public.favorites
+      ADD CONSTRAINT favorites_user_id_favorite_user_id_key UNIQUE (user_id, favorite_user_id);
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.geo_countries'::pg_catalog.regclass AND conname = 'geo_countries_pkey') THEN
+    ALTER TABLE ONLY public.geo_countries
+      ADD CONSTRAINT geo_countries_pkey PRIMARY KEY (code);
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.geo_timezones'::pg_catalog.regclass AND conname = 'geo_timezones_pkey') THEN
+    ALTER TABLE ONLY public.geo_timezones
+      ADD CONSTRAINT geo_timezones_pkey PRIMARY KEY (tz);
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.likes'::pg_catalog.regclass AND conname = 'likes_pkey') THEN
+    ALTER TABLE ONLY public.likes
+      ADD CONSTRAINT likes_pkey PRIMARY KEY (id);
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.likes'::pg_catalog.regclass AND conname = 'likes_sender_id_receiver_id_key') THEN
+    ALTER TABLE ONLY public.likes
+      ADD CONSTRAINT likes_sender_id_receiver_id_key UNIQUE (sender_id, receiver_id);
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.location_history'::pg_catalog.regclass AND conname = 'location_history_pkey') THEN
+    ALTER TABLE ONLY public.location_history
+      ADD CONSTRAINT location_history_pkey PRIMARY KEY (id);
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.matches'::pg_catalog.regclass AND conname = 'matches_pkey') THEN
+    ALTER TABLE ONLY public.matches
+      ADD CONSTRAINT matches_pkey PRIMARY KEY (id);
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.matches'::pg_catalog.regclass AND conname = 'matches_user_1_id_user_2_id_key') THEN
+    ALTER TABLE ONLY public.matches
+      ADD CONSTRAINT matches_user_1_id_user_2_id_key UNIQUE (user_1_id, user_2_id);
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.messages'::pg_catalog.regclass AND conname = 'messages_pkey') THEN
+    ALTER TABLE ONLY public.messages
+      ADD CONSTRAINT messages_pkey PRIMARY KEY (id);
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.moderation_actions'::pg_catalog.regclass AND conname = 'moderation_actions_pkey') THEN
+    ALTER TABLE ONLY public.moderation_actions
+      ADD CONSTRAINT moderation_actions_pkey PRIMARY KEY (id);
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.notifications'::pg_catalog.regclass AND conname = 'notifications_pkey') THEN
+    ALTER TABLE ONLY public.notifications
+      ADD CONSTRAINT notifications_pkey PRIMARY KEY (id);
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.payment_events'::pg_catalog.regclass AND conname = 'payment_events_pkey') THEN
+    ALTER TABLE ONLY public.payment_events
+      ADD CONSTRAINT payment_events_pkey PRIMARY KEY (id);
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.payments'::pg_catalog.regclass AND conname = 'payments_pkey') THEN
+    ALTER TABLE ONLY public.payments
+      ADD CONSTRAINT payments_pkey PRIMARY KEY (id);
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.photos'::pg_catalog.regclass AND conname = 'photos_pkey') THEN
+    ALTER TABLE ONLY public.photos
+      ADD CONSTRAINT photos_pkey PRIMARY KEY (id);
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.photos'::pg_catalog.regclass AND conname = 'photos_user_id_storage_path_key') THEN
+    ALTER TABLE ONLY public.photos
+      ADD CONSTRAINT photos_user_id_storage_path_key UNIQUE (user_id, storage_path);
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.preferences'::pg_catalog.regclass AND conname = 'preferences_pkey') THEN
+    ALTER TABLE ONLY public.preferences
+      ADD CONSTRAINT preferences_pkey PRIMARY KEY (user_id);
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.profile_boosts'::pg_catalog.regclass AND conname = 'profile_boosts_pkey') THEN
+    ALTER TABLE ONLY public.profile_boosts
+      ADD CONSTRAINT profile_boosts_pkey PRIMARY KEY (id);
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.profile_locations'::pg_catalog.regclass AND conname = 'profile_locations_pkey') THEN
+    ALTER TABLE ONLY public.profile_locations
+      ADD CONSTRAINT profile_locations_pkey PRIMARY KEY (user_id);
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.profile_verifications'::pg_catalog.regclass AND conname = 'profile_verifications_pkey') THEN
+    ALTER TABLE ONLY public.profile_verifications
+      ADD CONSTRAINT profile_verifications_pkey PRIMARY KEY (id);
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.profile_visits'::pg_catalog.regclass AND conname = 'profile_visits_pkey') THEN
+    ALTER TABLE ONLY public.profile_visits
+      ADD CONSTRAINT profile_visits_pkey PRIMARY KEY (id);
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.profiles'::pg_catalog.regclass AND conname = 'profiles_pkey') THEN
+    ALTER TABLE ONLY public.profiles
+      ADD CONSTRAINT profiles_pkey PRIMARY KEY (user_id);
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.reports'::pg_catalog.regclass AND conname = 'reports_pkey') THEN
+    ALTER TABLE ONLY public.reports
+      ADD CONSTRAINT reports_pkey PRIMARY KEY (id);
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.server_errors'::pg_catalog.regclass AND conname = 'server_errors_pkey') THEN
+    ALTER TABLE ONLY public.server_errors
+      ADD CONSTRAINT server_errors_pkey PRIMARY KEY (id);
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.signup_events'::pg_catalog.regclass AND conname = 'signup_events_once') THEN
+    ALTER TABLE ONLY public.signup_events
+      ADD CONSTRAINT signup_events_once UNIQUE (user_id, step);
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.signup_events'::pg_catalog.regclass AND conname = 'signup_events_pkey') THEN
+    ALTER TABLE ONLY public.signup_events
+      ADD CONSTRAINT signup_events_pkey PRIMARY KEY (id);
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.storage_cleanup_queue'::pg_catalog.regclass AND conname = 'storage_cleanup_queue_pkey') THEN
+    ALTER TABLE ONLY public.storage_cleanup_queue
+      ADD CONSTRAINT storage_cleanup_queue_pkey PRIMARY KEY (id);
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.subscriptions'::pg_catalog.regclass AND conname = 'subscriptions_pkey') THEN
+    ALTER TABLE ONLY public.subscriptions
+      ADD CONSTRAINT subscriptions_pkey PRIMARY KEY (id);
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.support_tickets'::pg_catalog.regclass AND conname = 'support_tickets_pkey') THEN
+    ALTER TABLE ONLY public.support_tickets
+      ADD CONSTRAINT support_tickets_pkey PRIMARY KEY (id);
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.user_activity'::pg_catalog.regclass AND conname = 'user_activity_pkey') THEN
+    ALTER TABLE ONLY public.user_activity
+      ADD CONSTRAINT user_activity_pkey PRIMARY KEY (user_id);
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.user_roles'::pg_catalog.regclass AND conname = 'user_roles_pkey') THEN
+    ALTER TABLE ONLY public.user_roles
+      ADD CONSTRAINT user_roles_pkey PRIMARY KEY (id);
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.user_roles'::pg_catalog.regclass AND conname = 'user_roles_user_id_role_key') THEN
+    ALTER TABLE ONLY public.user_roles
+      ADD CONSTRAINT user_roles_user_id_role_key UNIQUE (user_id, role);
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.user_settings'::pg_catalog.regclass AND conname = 'user_settings_pkey') THEN
+    ALTER TABLE ONLY public.user_settings
+      ADD CONSTRAINT user_settings_pkey PRIMARY KEY (user_id);
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.users'::pg_catalog.regclass AND conname = 'users_email_key') THEN
+    ALTER TABLE ONLY public.users
+      ADD CONSTRAINT users_email_key UNIQUE (email);
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.users'::pg_catalog.regclass AND conname = 'users_pkey') THEN
+    ALTER TABLE ONLY public.users
+      ADD CONSTRAINT users_pkey PRIMARY KEY (id);
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.verification_settings'::pg_catalog.regclass AND conname = 'verification_settings_pkey') THEN
+    ALTER TABLE ONLY public.verification_settings
+      ADD CONSTRAINT verification_settings_pkey PRIMARY KEY (id);
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.virtual_profile_removals'::pg_catalog.regclass AND conname = 'virtual_profile_removals_pkey') THEN
+    ALTER TABLE ONLY public.virtual_profile_removals
+      ADD CONSTRAINT virtual_profile_removals_pkey PRIMARY KEY (user_id);
+  END IF;
+END
+$contrainte$;
 
 -- ============================================================================
 -- 9. Index : recherches rapides
 -- ============================================================================
 
-CREATE INDEX activity_events_created_idx ON public.activity_events USING btree (created_at DESC);
-
-CREATE INDEX activity_events_event_idx ON public.activity_events USING btree (event, created_at DESC);
-
-CREATE INDEX activity_events_user_idx ON public.activity_events USING btree (user_id, created_at DESC);
-
-CREATE INDEX ad_events_ad_idx ON public.ad_events USING btree (ad_id, created_at DESC);
-
-CREATE INDEX ad_events_created_idx ON public.ad_events USING btree (created_at DESC);
-
-CREATE INDEX ad_events_user_idx ON public.ad_events USING btree (user_id, ad_id, created_at DESC);
-
-CREATE INDEX admin_audit_log_created_idx ON public.admin_audit_log USING btree (created_at DESC);
-
-CREATE INDEX ads_live_idx ON public.ads USING btree (status, starts_at) WHERE (status = 'active'::text);
-
-CREATE INDEX ai_usage_feature_date_idx ON public.ai_usage USING btree (feature, usage_date);
-
-CREATE INDEX ai_usage_user_idx ON public.ai_usage USING btree (user_id);
-
-CREATE INDEX auth_events_created_idx ON public.auth_events USING btree (created_at DESC);
-
-CREATE INDEX auth_events_ip_failed_idx ON public.auth_events USING btree (ip, created_at) WHERE (event = 'login_failed'::text);
-
-CREATE INDEX auth_events_user_idx ON public.auth_events USING btree (user_id, created_at DESC);
-
-CREATE INDEX blocks_blocked_idx ON public.blocks USING btree (blocked_id);
-
-CREATE UNIQUE INDEX contact_requests_one_pending ON public.contact_requests USING btree (sender_id, receiver_id) WHERE (status = 'pending'::text);
-
-CREATE INDEX contact_requests_receiver_idx ON public.contact_requests USING btree (receiver_id, created_at DESC);
-
-CREATE INDEX contact_requests_sender_day_idx ON public.contact_requests USING btree (sender_id, created_at);
-
-CREATE INDEX contact_requests_sender_idx ON public.contact_requests USING btree (sender_id, created_at DESC);
-
-CREATE UNIQUE INDEX conversation_unlocks_payment_unique ON public.conversation_unlocks USING btree (payment_id) WHERE (payment_id IS NOT NULL);
-
-CREATE INDEX conversation_user_usage_conversation_idx ON public.conversation_user_usage USING btree (conversation_id);
-
-CREATE INDEX conversation_user_usage_user_idx ON public.conversation_user_usage USING btree (user_id);
-
-CREATE INDEX conversations_user_1_idx ON public.conversations USING btree (user_1_id, last_message_at DESC);
-
-CREATE INDEX conversations_user_2_idx ON public.conversations USING btree (user_2_id, last_message_at DESC);
-
-CREATE INDEX favorites_favorite_user_idx ON public.favorites USING btree (favorite_user_id);
-
-CREATE INDEX favorites_user_idx ON public.favorites USING btree (user_id);
-
-CREATE INDEX geo_countries_name_idx ON public.geo_countries USING btree (lower(name));
-
-CREATE INDEX likes_receiver_idx ON public.likes USING btree (receiver_id, kind, status);
-
-CREATE INDEX location_history_created_idx ON public.location_history USING btree (created_at DESC);
-
-CREATE INDEX location_history_user_idx ON public.location_history USING btree (user_id, created_at DESC);
-
-CREATE INDEX matches_user_2_idx ON public.matches USING btree (user_2_id);
-
-CREATE INDEX messages_conversation_idx ON public.messages USING btree (conversation_id, created_at);
-
-CREATE INDEX moderation_actions_target_idx ON public.moderation_actions USING btree (target_user_id, created_at DESC);
-
-CREATE INDEX notifications_unread_idx ON public.notifications USING btree (user_id) WHERE (read_at IS NULL);
-
-CREATE INDEX notifications_user_idx ON public.notifications USING btree (user_id, created_at DESC);
-
-CREATE INDEX payment_events_created_idx ON public.payment_events USING btree (created_at DESC);
-
-CREATE INDEX payment_events_payment_idx ON public.payment_events USING btree (payment_id);
-
-CREATE INDEX payment_events_user_idx ON public.payment_events USING btree (user_id, created_at DESC);
-
-CREATE UNIQUE INDEX payments_provider_tx_idx ON public.payments USING btree (provider, provider_transaction_id) WHERE (provider_transaction_id IS NOT NULL);
-
-CREATE INDEX payments_user_idx ON public.payments USING btree (user_id, created_at DESC);
-
-CREATE UNIQUE INDEX photos_one_primary_idx ON public.photos USING btree (user_id) WHERE is_primary;
-
-CREATE INDEX photos_user_idx ON public.photos USING btree (user_id, "position");
-
-CREATE INDEX profile_boosts_user_idx ON public.profile_boosts USING btree (user_id, expires_at DESC);
-
-CREATE INDEX profile_locations_inconsistent_idx ON public.profile_locations USING btree (checked_at DESC) WHERE inconsistent;
-
-CREATE INDEX profile_verifications_pending_idx ON public.profile_verifications USING btree (created_at) WHERE (status = 'pending'::text);
-
-CREATE INDEX profile_verifications_status_idx ON public.profile_verifications USING btree (status, created_at) WHERE (status = ANY (ARRAY['processing'::text, 'pending'::text]));
-
-CREATE INDEX profile_verifications_user_created_idx ON public.profile_verifications USING btree (user_id, created_at DESC);
-
-CREATE INDEX profile_verifications_user_idx ON public.profile_verifications USING btree (user_id, created_at DESC);
-
-CREATE INDEX profile_visits_pair_recent_idx ON public.profile_visits USING btree (visitor_id, visited_user_id, visited_at DESC);
-
-CREATE INDEX profile_visits_visited_at_idx ON public.profile_visits USING btree (visited_at DESC);
-
-CREATE INDEX profile_visits_visited_idx ON public.profile_visits USING btree (visited_user_id);
-
-CREATE INDEX profile_visits_visitor_idx ON public.profile_visits USING btree (visitor_id);
-
-CREATE INDEX profiles_discovery_idx ON public.profiles USING btree (status, visibility, gender, city);
-
-CREATE INDEX profiles_virtual_country_idx ON public.profiles USING btree (lower(btrim(country))) WHERE is_virtual;
-
-CREATE INDEX reports_status_idx ON public.reports USING btree (status, created_at DESC);
-
-CREATE INDEX server_errors_created_idx ON public.server_errors USING btree (created_at DESC);
-
-CREATE INDEX signup_events_created_idx ON public.signup_events USING btree (created_at DESC);
-
-CREATE INDEX storage_cleanup_queue_pending_idx ON public.storage_cleanup_queue USING btree (created_at) WHERE (done_at IS NULL);
-
-CREATE UNIQUE INDEX subscriptions_payment_unique ON public.subscriptions USING btree (payment_id) WHERE (payment_id IS NOT NULL);
-
-CREATE INDEX subscriptions_user_idx ON public.subscriptions USING btree (user_id, status, expires_at DESC);
-
-CREATE INDEX support_tickets_queue_idx ON public.support_tickets USING btree (status, priority DESC, created_at);
-
-CREATE INDEX support_tickets_user_idx ON public.support_tickets USING btree (user_id, created_at DESC);
-
-CREATE INDEX unlocks_conversation_idx ON public.conversation_unlocks USING btree (conversation_id, status, expires_at DESC);
+CREATE INDEX IF NOT EXISTS activity_events_created_idx ON public.activity_events USING btree (created_at DESC);
+CREATE INDEX IF NOT EXISTS activity_events_event_idx ON public.activity_events USING btree (event, created_at DESC);
+CREATE INDEX IF NOT EXISTS activity_events_user_idx ON public.activity_events USING btree (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS ad_events_ad_idx ON public.ad_events USING btree (ad_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS ad_events_created_idx ON public.ad_events USING btree (created_at DESC);
+CREATE INDEX IF NOT EXISTS ad_events_user_idx ON public.ad_events USING btree (user_id, ad_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS admin_audit_log_created_idx ON public.admin_audit_log USING btree (created_at DESC);
+CREATE INDEX IF NOT EXISTS ads_live_idx ON public.ads USING btree (status, starts_at) WHERE (status = 'active'::text);
+CREATE INDEX IF NOT EXISTS ai_usage_feature_date_idx ON public.ai_usage USING btree (feature, usage_date);
+CREATE INDEX IF NOT EXISTS ai_usage_user_idx ON public.ai_usage USING btree (user_id);
+CREATE INDEX IF NOT EXISTS auth_events_created_idx ON public.auth_events USING btree (created_at DESC);
+CREATE INDEX IF NOT EXISTS auth_events_ip_failed_idx ON public.auth_events USING btree (ip, created_at) WHERE (event = 'login_failed'::text);
+CREATE INDEX IF NOT EXISTS auth_events_user_idx ON public.auth_events USING btree (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS blocks_blocked_idx ON public.blocks USING btree (blocked_id);
+CREATE UNIQUE INDEX IF NOT EXISTS contact_requests_one_pending ON public.contact_requests USING btree (sender_id, receiver_id) WHERE (status = 'pending'::text);
+CREATE INDEX IF NOT EXISTS contact_requests_receiver_idx ON public.contact_requests USING btree (receiver_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS contact_requests_sender_day_idx ON public.contact_requests USING btree (sender_id, created_at);
+CREATE INDEX IF NOT EXISTS contact_requests_sender_idx ON public.contact_requests USING btree (sender_id, created_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS conversation_unlocks_payment_unique ON public.conversation_unlocks USING btree (payment_id) WHERE (payment_id IS NOT NULL);
+CREATE INDEX IF NOT EXISTS conversation_user_usage_conversation_idx ON public.conversation_user_usage USING btree (conversation_id);
+CREATE INDEX IF NOT EXISTS conversation_user_usage_user_idx ON public.conversation_user_usage USING btree (user_id);
+CREATE INDEX IF NOT EXISTS conversations_user_1_idx ON public.conversations USING btree (user_1_id, last_message_at DESC);
+CREATE INDEX IF NOT EXISTS conversations_user_2_idx ON public.conversations USING btree (user_2_id, last_message_at DESC);
+CREATE INDEX IF NOT EXISTS favorites_favorite_user_idx ON public.favorites USING btree (favorite_user_id);
+CREATE INDEX IF NOT EXISTS favorites_user_idx ON public.favorites USING btree (user_id);
+CREATE INDEX IF NOT EXISTS geo_countries_name_idx ON public.geo_countries USING btree (lower(name));
+CREATE INDEX IF NOT EXISTS likes_receiver_idx ON public.likes USING btree (receiver_id, kind, status);
+CREATE INDEX IF NOT EXISTS location_history_created_idx ON public.location_history USING btree (created_at DESC);
+CREATE INDEX IF NOT EXISTS location_history_user_idx ON public.location_history USING btree (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS matches_user_2_idx ON public.matches USING btree (user_2_id);
+CREATE INDEX IF NOT EXISTS messages_conversation_idx ON public.messages USING btree (conversation_id, created_at);
+CREATE INDEX IF NOT EXISTS moderation_actions_target_idx ON public.moderation_actions USING btree (target_user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS notifications_unread_idx ON public.notifications USING btree (user_id) WHERE (read_at IS NULL);
+CREATE INDEX IF NOT EXISTS notifications_user_idx ON public.notifications USING btree (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS payment_events_created_idx ON public.payment_events USING btree (created_at DESC);
+CREATE INDEX IF NOT EXISTS payment_events_payment_idx ON public.payment_events USING btree (payment_id);
+CREATE INDEX IF NOT EXISTS payment_events_user_idx ON public.payment_events USING btree (user_id, created_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS payments_provider_tx_idx ON public.payments USING btree (provider, provider_transaction_id) WHERE (provider_transaction_id IS NOT NULL);
+CREATE INDEX IF NOT EXISTS payments_user_idx ON public.payments USING btree (user_id, created_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS photos_one_primary_idx ON public.photos USING btree (user_id) WHERE is_primary;
+CREATE INDEX IF NOT EXISTS photos_user_idx ON public.photos USING btree (user_id, "position");
+CREATE INDEX IF NOT EXISTS profile_boosts_user_idx ON public.profile_boosts USING btree (user_id, expires_at DESC);
+CREATE INDEX IF NOT EXISTS profile_locations_inconsistent_idx ON public.profile_locations USING btree (checked_at DESC) WHERE inconsistent;
+CREATE INDEX IF NOT EXISTS profile_verifications_pending_idx ON public.profile_verifications USING btree (created_at) WHERE (status = 'pending'::text);
+CREATE INDEX IF NOT EXISTS profile_verifications_status_idx ON public.profile_verifications USING btree (status, created_at) WHERE (status = ANY (ARRAY['processing'::text, 'pending'::text]));
+CREATE INDEX IF NOT EXISTS profile_verifications_user_created_idx ON public.profile_verifications USING btree (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS profile_verifications_user_idx ON public.profile_verifications USING btree (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS profile_visits_pair_recent_idx ON public.profile_visits USING btree (visitor_id, visited_user_id, visited_at DESC);
+CREATE INDEX IF NOT EXISTS profile_visits_visited_at_idx ON public.profile_visits USING btree (visited_at DESC);
+CREATE INDEX IF NOT EXISTS profile_visits_visited_idx ON public.profile_visits USING btree (visited_user_id);
+CREATE INDEX IF NOT EXISTS profile_visits_visitor_idx ON public.profile_visits USING btree (visitor_id);
+CREATE INDEX IF NOT EXISTS profiles_discovery_idx ON public.profiles USING btree (status, visibility, gender, city);
+CREATE INDEX IF NOT EXISTS profiles_virtual_country_idx ON public.profiles USING btree (lower(btrim(country))) WHERE is_virtual;
+CREATE INDEX IF NOT EXISTS reports_status_idx ON public.reports USING btree (status, created_at DESC);
+CREATE INDEX IF NOT EXISTS server_errors_created_idx ON public.server_errors USING btree (created_at DESC);
+CREATE INDEX IF NOT EXISTS signup_events_created_idx ON public.signup_events USING btree (created_at DESC);
+CREATE INDEX IF NOT EXISTS storage_cleanup_queue_pending_idx ON public.storage_cleanup_queue USING btree (created_at) WHERE (done_at IS NULL);
+CREATE UNIQUE INDEX IF NOT EXISTS subscriptions_payment_unique ON public.subscriptions USING btree (payment_id) WHERE (payment_id IS NOT NULL);
+CREATE INDEX IF NOT EXISTS subscriptions_user_idx ON public.subscriptions USING btree (user_id, status, expires_at DESC);
+CREATE INDEX IF NOT EXISTS support_tickets_queue_idx ON public.support_tickets USING btree (status, priority DESC, created_at);
+CREATE INDEX IF NOT EXISTS support_tickets_user_idx ON public.support_tickets USING btree (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS unlocks_conversation_idx ON public.conversation_unlocks USING btree (conversation_id, status, expires_at DESC);
 
 -- ============================================================================
 -- 10. Déclencheurs : actions automatiques à chaque ajout ou modification
 -- ============================================================================
 
-CREATE TRIGGER ad_settings_audit_admin AFTER UPDATE ON public.ad_settings FOR EACH ROW EXECUTE FUNCTION public.audit_admin_change();
-
-CREATE TRIGGER ad_settings_set_updated_at BEFORE UPDATE ON public.ad_settings FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
-
-CREATE TRIGGER ads_audit_admin AFTER INSERT OR DELETE OR UPDATE ON public.ads FOR EACH ROW EXECUTE FUNCTION public.audit_admin_change();
-
-CREATE TRIGGER ads_queue_media_cleanup AFTER DELETE OR UPDATE OF media_path, poster_path ON public.ads FOR EACH ROW EXECUTE FUNCTION public.queue_ad_media_cleanup();
-
-CREATE TRIGGER ads_set_updated_at BEFORE UPDATE ON public.ads FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
-
-CREATE TRIGGER ai_usage_updated_at BEFORE UPDATE ON public.ai_usage FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
-
-CREATE TRIGGER auth_events_count_login AFTER INSERT ON public.auth_events FOR EACH ROW WHEN (((new.event = 'login'::text) AND (new.user_id IS NOT NULL))) EXECUTE FUNCTION public.count_member_login();
-
-CREATE TRIGGER blocks_log_activity AFTER INSERT ON public.blocks FOR EACH ROW EXECUTE FUNCTION public.log_member_action();
-
-CREATE TRIGGER christian_profiles_updated_at BEFORE UPDATE ON public.christian_profiles FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
-
-CREATE TRIGGER contact_requests_log_activity AFTER INSERT ON public.contact_requests FOR EACH ROW EXECUTE FUNCTION public.log_member_action();
-
-CREATE TRIGGER contact_requests_notify AFTER INSERT ON public.contact_requests FOR EACH ROW EXECUTE FUNCTION public.notify_contact_request();
-
-CREATE TRIGGER contact_requests_refuse_demo BEFORE INSERT ON public.contact_requests FOR EACH ROW EXECUTE FUNCTION public.refuse_contact_to_demo_profile();
-
-CREATE TRIGGER contact_requests_require_verified BEFORE INSERT ON public.contact_requests FOR EACH ROW EXECUTE FUNCTION public.require_verified_sender();
-
-CREATE TRIGGER conversation_user_usage_updated_at BEFORE UPDATE ON public.conversation_user_usage FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
-
-CREATE TRIGGER conversations_init_usage AFTER INSERT ON public.conversations FOR EACH ROW EXECUTE FUNCTION public.init_conversation_usage();
-
-CREATE TRIGGER conversations_updated_at BEFORE UPDATE ON public.conversations FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
-
-CREATE TRIGGER favorites_log_activity AFTER INSERT ON public.favorites FOR EACH ROW EXECUTE FUNCTION public.log_member_action();
-
-CREATE TRIGGER favorites_notify AFTER INSERT ON public.favorites FOR EACH ROW EXECUTE FUNCTION public.notify_favorite();
-
-CREATE TRIGGER favorites_refuse_blocked BEFORE INSERT ON public.favorites FOR EACH ROW EXECUTE FUNCTION public.refuse_blocked_interaction();
-
-CREATE TRIGGER favorites_set_created_at BEFORE INSERT ON public.favorites FOR EACH ROW EXECUTE FUNCTION public.set_favorite_created_at();
-
-CREATE TRIGGER likes_create_match AFTER INSERT OR UPDATE ON public.likes FOR EACH ROW EXECUTE FUNCTION public.create_match_on_mutual_like();
-
-CREATE TRIGGER likes_log_activity AFTER INSERT OR UPDATE OF kind, status ON public.likes FOR EACH ROW EXECUTE FUNCTION public.log_member_action();
-
-CREATE TRIGGER likes_notify AFTER INSERT ON public.likes FOR EACH ROW EXECUTE FUNCTION public.notify_like();
-
-CREATE TRIGGER likes_protect_parties BEFORE UPDATE ON public.likes FOR EACH ROW EXECUTE FUNCTION public.protect_like_parties();
-
-CREATE TRIGGER likes_refuse_blocked BEFORE INSERT ON public.likes FOR EACH ROW EXECUTE FUNCTION public.refuse_blocked_interaction();
-
-CREATE TRIGGER likes_set_created_at BEFORE INSERT OR UPDATE ON public.likes FOR EACH ROW EXECUTE FUNCTION public.set_like_created_at();
-
-CREATE TRIGGER matches_create_conversation AFTER INSERT OR UPDATE OF status ON public.matches FOR EACH ROW EXECUTE FUNCTION public.create_conversation_for_match();
-
-CREATE TRIGGER matches_log_activity AFTER INSERT ON public.matches FOR EACH ROW EXECUTE FUNCTION public.log_member_action();
-
-CREATE TRIGGER matches_notify AFTER INSERT ON public.matches FOR EACH ROW EXECUTE FUNCTION public.notify_match();
-
-CREATE TRIGGER messages_block_phone_numbers BEFORE INSERT OR UPDATE OF content, status, contains_phone_number ON public.messages FOR EACH ROW EXECUTE FUNCTION public.messages_block_phone_numbers();
-
-CREATE TRIGGER messages_log_activity AFTER INSERT ON public.messages FOR EACH ROW EXECUTE FUNCTION public.log_member_action();
-
-CREATE TRIGGER messages_notify AFTER INSERT ON public.messages FOR EACH ROW EXECUTE FUNCTION public.notify_message();
-
-CREATE TRIGGER messages_require_verified BEFORE INSERT ON public.messages FOR EACH ROW EXECUTE FUNCTION public.require_verified_sender();
-
-CREATE TRIGGER moderation_actions_audit_admin AFTER INSERT OR DELETE OR UPDATE ON public.moderation_actions FOR EACH ROW EXECUTE FUNCTION public.audit_admin_change();
-
-CREATE TRIGGER payments_activate_conversation_unlock AFTER UPDATE OF status ON public.payments FOR EACH ROW EXECUTE FUNCTION public.activate_conversation_unlock();
-
-CREATE TRIGGER payments_activate_premium AFTER UPDATE OF status ON public.payments FOR EACH ROW EXECUTE FUNCTION public.activate_premium_subscription();
-
-CREATE TRIGGER payments_audit_admin AFTER INSERT OR DELETE OR UPDATE ON public.payments FOR EACH ROW EXECUTE FUNCTION public.audit_admin_change();
-
-CREATE TRIGGER payments_log AFTER INSERT OR UPDATE OF status ON public.payments FOR EACH ROW EXECUTE FUNCTION public.log_payment_change();
-
-CREATE TRIGGER payments_updated_at BEFORE UPDATE ON public.payments FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
-
-CREATE TRIGGER photos_audit_admin AFTER INSERT OR DELETE OR UPDATE ON public.photos FOR EACH ROW EXECUTE FUNCTION public.audit_admin_change();
-
-CREATE TRIGGER photos_enforce_limit BEFORE INSERT ON public.photos FOR EACH ROW EXECUTE FUNCTION public.enforce_photo_limit();
-
-CREATE TRIGGER photos_promote_primary_on_delete AFTER DELETE ON public.photos FOR EACH ROW EXECUTE FUNCTION public.photos_after_delete();
-
-CREATE TRIGGER photos_protect_status BEFORE INSERT OR UPDATE ON public.photos FOR EACH ROW EXECUTE FUNCTION public.protect_photo_status();
-
-CREATE TRIGGER photos_set_primary_on_insert BEFORE INSERT ON public.photos FOR EACH ROW EXECUTE FUNCTION public.photos_before_insert();
-
-CREATE TRIGGER preferences_updated_at BEFORE UPDATE ON public.preferences FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
-
-CREATE TRIGGER profile_verifications_audit_admin AFTER INSERT OR DELETE OR UPDATE ON public.profile_verifications FOR EACH ROW EXECUTE FUNCTION public.audit_admin_change();
-
-CREATE TRIGGER profile_verifications_log_signup AFTER INSERT OR UPDATE OF status ON public.profile_verifications FOR EACH ROW EXECUTE FUNCTION public.log_signup_milestone();
-
-CREATE TRIGGER profile_visits_log_activity AFTER INSERT ON public.profile_visits FOR EACH ROW EXECUTE FUNCTION public.log_member_action();
-
-CREATE TRIGGER profile_visits_notify AFTER INSERT ON public.profile_visits FOR EACH ROW EXECUTE FUNCTION public.notify_visit();
-
-CREATE TRIGGER profile_visits_refuse_blocked BEFORE INSERT ON public.profile_visits FOR EACH ROW EXECUTE FUNCTION public.refuse_blocked_interaction();
-
-CREATE TRIGGER profiles_audit_admin AFTER INSERT OR DELETE OR UPDATE ON public.profiles FOR EACH ROW EXECUTE FUNCTION public.audit_admin_change();
-
-CREATE TRIGGER profiles_check_personal_info BEFORE INSERT OR UPDATE ON public.profiles FOR EACH ROW EXECUTE FUNCTION public.check_profile_personal_info();
-
-CREATE TRIGGER profiles_check_visibility BEFORE UPDATE ON public.profiles FOR EACH ROW EXECUTE FUNCTION public.check_profile_visibility();
-
-CREATE TRIGGER profiles_log_signup AFTER UPDATE OF onboarding_completed_at ON public.profiles FOR EACH ROW EXECUTE FUNCTION public.log_signup_milestone();
-
-CREATE TRIGGER profiles_no_coordinates BEFORE INSERT OR UPDATE OF latitude, longitude ON public.profiles FOR EACH ROW EXECUTE FUNCTION public.clear_profile_coordinates();
-
-CREATE TRIGGER profiles_protect_server_fields BEFORE INSERT OR UPDATE ON public.profiles FOR EACH ROW EXECUTE FUNCTION public.protect_server_profile_fields();
-
-CREATE TRIGGER profiles_protect_status BEFORE UPDATE ON public.profiles FOR EACH ROW EXECUTE FUNCTION public.protect_profile_status();
-
-CREATE TRIGGER profiles_protect_terms BEFORE INSERT OR UPDATE ON public.profiles FOR EACH ROW EXECUTE FUNCTION public.protect_terms_accepted_at();
-
-CREATE TRIGGER profiles_replace_virtual AFTER UPDATE OF verified_at ON public.profiles FOR EACH ROW EXECUTE FUNCTION public.replace_virtual_profile_on_signup();
-
-CREATE TRIGGER profiles_updated_at BEFORE UPDATE ON public.profiles FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
-
-CREATE TRIGGER reports_audit_admin AFTER INSERT OR DELETE OR UPDATE ON public.reports FOR EACH ROW EXECUTE FUNCTION public.audit_admin_change();
-
-CREATE TRIGGER reports_log_activity AFTER INSERT ON public.reports FOR EACH ROW EXECUTE FUNCTION public.log_member_action();
-
-CREATE TRIGGER subscriptions_audit_admin AFTER INSERT OR DELETE OR UPDATE ON public.subscriptions FOR EACH ROW EXECUTE FUNCTION public.audit_admin_change();
-
-CREATE TRIGGER subscriptions_updated_at BEFORE UPDATE ON public.subscriptions FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
-
-CREATE TRIGGER support_tickets_audit_admin AFTER INSERT OR DELETE OR UPDATE ON public.support_tickets FOR EACH ROW EXECUTE FUNCTION public.audit_admin_change();
-
-CREATE TRIGGER user_activity_updated_at BEFORE UPDATE ON public.user_activity FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
-
-CREATE TRIGGER user_roles_audit_admin AFTER INSERT OR DELETE OR UPDATE ON public.user_roles FOR EACH ROW EXECUTE FUNCTION public.audit_admin_change();
-
-CREATE TRIGGER user_settings_updated_at BEFORE UPDATE ON public.user_settings FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
-
-CREATE TRIGGER users_audit_admin AFTER INSERT OR DELETE OR UPDATE ON public.users FOR EACH ROW EXECUTE FUNCTION public.audit_admin_change();
-
-CREATE TRIGGER users_log_account AFTER DELETE OR UPDATE OF status ON public.users FOR EACH ROW EXECUTE FUNCTION public.log_account_change();
-
-CREATE TRIGGER users_protect_columns BEFORE UPDATE ON public.users FOR EACH ROW EXECUTE FUNCTION public.protect_user_columns();
-
-CREATE TRIGGER users_updated_at BEFORE UPDATE ON public.users FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
-
-CREATE TRIGGER verification_settings_audit_admin AFTER UPDATE ON public.verification_settings FOR EACH ROW EXECUTE FUNCTION public.audit_admin_change();
-
-CREATE TRIGGER verification_settings_set_updated_at BEFORE UPDATE ON public.verification_settings FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+CREATE OR REPLACE TRIGGER ad_settings_audit_admin AFTER UPDATE ON public.ad_settings FOR EACH ROW EXECUTE FUNCTION public.audit_admin_change();
+CREATE OR REPLACE TRIGGER ad_settings_set_updated_at BEFORE UPDATE ON public.ad_settings FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+CREATE OR REPLACE TRIGGER ads_audit_admin AFTER INSERT OR DELETE OR UPDATE ON public.ads FOR EACH ROW EXECUTE FUNCTION public.audit_admin_change();
+CREATE OR REPLACE TRIGGER ads_queue_media_cleanup AFTER DELETE OR UPDATE OF media_path, poster_path ON public.ads FOR EACH ROW EXECUTE FUNCTION public.queue_ad_media_cleanup();
+CREATE OR REPLACE TRIGGER ads_set_updated_at BEFORE UPDATE ON public.ads FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+CREATE OR REPLACE TRIGGER ai_usage_updated_at BEFORE UPDATE ON public.ai_usage FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+CREATE OR REPLACE TRIGGER auth_events_count_login AFTER INSERT ON public.auth_events FOR EACH ROW WHEN (((new.event = 'login'::text) AND (new.user_id IS NOT NULL))) EXECUTE FUNCTION public.count_member_login();
+CREATE OR REPLACE TRIGGER blocks_log_activity AFTER INSERT ON public.blocks FOR EACH ROW EXECUTE FUNCTION public.log_member_action();
+CREATE OR REPLACE TRIGGER christian_profiles_updated_at BEFORE UPDATE ON public.christian_profiles FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+CREATE OR REPLACE TRIGGER contact_requests_log_activity AFTER INSERT ON public.contact_requests FOR EACH ROW EXECUTE FUNCTION public.log_member_action();
+CREATE OR REPLACE TRIGGER contact_requests_notify AFTER INSERT ON public.contact_requests FOR EACH ROW EXECUTE FUNCTION public.notify_contact_request();
+CREATE OR REPLACE TRIGGER contact_requests_refuse_demo BEFORE INSERT ON public.contact_requests FOR EACH ROW EXECUTE FUNCTION public.refuse_contact_to_demo_profile();
+CREATE OR REPLACE TRIGGER contact_requests_require_verified BEFORE INSERT ON public.contact_requests FOR EACH ROW EXECUTE FUNCTION public.require_verified_sender();
+CREATE OR REPLACE TRIGGER conversation_user_usage_updated_at BEFORE UPDATE ON public.conversation_user_usage FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+CREATE OR REPLACE TRIGGER conversations_init_usage AFTER INSERT ON public.conversations FOR EACH ROW EXECUTE FUNCTION public.init_conversation_usage();
+CREATE OR REPLACE TRIGGER conversations_updated_at BEFORE UPDATE ON public.conversations FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+CREATE OR REPLACE TRIGGER favorites_log_activity AFTER INSERT ON public.favorites FOR EACH ROW EXECUTE FUNCTION public.log_member_action();
+CREATE OR REPLACE TRIGGER favorites_notify AFTER INSERT ON public.favorites FOR EACH ROW EXECUTE FUNCTION public.notify_favorite();
+CREATE OR REPLACE TRIGGER favorites_refuse_blocked BEFORE INSERT ON public.favorites FOR EACH ROW EXECUTE FUNCTION public.refuse_blocked_interaction();
+CREATE OR REPLACE TRIGGER favorites_set_created_at BEFORE INSERT ON public.favorites FOR EACH ROW EXECUTE FUNCTION public.set_favorite_created_at();
+CREATE OR REPLACE TRIGGER likes_create_match AFTER INSERT OR UPDATE ON public.likes FOR EACH ROW EXECUTE FUNCTION public.create_match_on_mutual_like();
+CREATE OR REPLACE TRIGGER likes_log_activity AFTER INSERT OR UPDATE OF kind, status ON public.likes FOR EACH ROW EXECUTE FUNCTION public.log_member_action();
+CREATE OR REPLACE TRIGGER likes_notify AFTER INSERT ON public.likes FOR EACH ROW EXECUTE FUNCTION public.notify_like();
+CREATE OR REPLACE TRIGGER likes_protect_parties BEFORE UPDATE ON public.likes FOR EACH ROW EXECUTE FUNCTION public.protect_like_parties();
+CREATE OR REPLACE TRIGGER likes_refuse_blocked BEFORE INSERT ON public.likes FOR EACH ROW EXECUTE FUNCTION public.refuse_blocked_interaction();
+CREATE OR REPLACE TRIGGER likes_set_created_at BEFORE INSERT OR UPDATE ON public.likes FOR EACH ROW EXECUTE FUNCTION public.set_like_created_at();
+CREATE OR REPLACE TRIGGER matches_create_conversation AFTER INSERT OR UPDATE OF status ON public.matches FOR EACH ROW EXECUTE FUNCTION public.create_conversation_for_match();
+CREATE OR REPLACE TRIGGER matches_log_activity AFTER INSERT ON public.matches FOR EACH ROW EXECUTE FUNCTION public.log_member_action();
+CREATE OR REPLACE TRIGGER matches_notify AFTER INSERT ON public.matches FOR EACH ROW EXECUTE FUNCTION public.notify_match();
+CREATE OR REPLACE TRIGGER messages_block_phone_numbers BEFORE INSERT OR UPDATE OF content, status, contains_phone_number ON public.messages FOR EACH ROW EXECUTE FUNCTION public.messages_block_phone_numbers();
+CREATE OR REPLACE TRIGGER messages_log_activity AFTER INSERT ON public.messages FOR EACH ROW EXECUTE FUNCTION public.log_member_action();
+CREATE OR REPLACE TRIGGER messages_notify AFTER INSERT ON public.messages FOR EACH ROW EXECUTE FUNCTION public.notify_message();
+CREATE OR REPLACE TRIGGER messages_require_verified BEFORE INSERT ON public.messages FOR EACH ROW EXECUTE FUNCTION public.require_verified_sender();
+CREATE OR REPLACE TRIGGER moderation_actions_audit_admin AFTER INSERT OR DELETE OR UPDATE ON public.moderation_actions FOR EACH ROW EXECUTE FUNCTION public.audit_admin_change();
+CREATE OR REPLACE TRIGGER payments_activate_conversation_unlock AFTER UPDATE OF status ON public.payments FOR EACH ROW EXECUTE FUNCTION public.activate_conversation_unlock();
+CREATE OR REPLACE TRIGGER payments_activate_premium AFTER UPDATE OF status ON public.payments FOR EACH ROW EXECUTE FUNCTION public.activate_premium_subscription();
+CREATE OR REPLACE TRIGGER payments_audit_admin AFTER INSERT OR DELETE OR UPDATE ON public.payments FOR EACH ROW EXECUTE FUNCTION public.audit_admin_change();
+CREATE OR REPLACE TRIGGER payments_log AFTER INSERT OR UPDATE OF status ON public.payments FOR EACH ROW EXECUTE FUNCTION public.log_payment_change();
+CREATE OR REPLACE TRIGGER payments_updated_at BEFORE UPDATE ON public.payments FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+CREATE OR REPLACE TRIGGER photos_audit_admin AFTER INSERT OR DELETE OR UPDATE ON public.photos FOR EACH ROW EXECUTE FUNCTION public.audit_admin_change();
+CREATE OR REPLACE TRIGGER photos_enforce_limit BEFORE INSERT ON public.photos FOR EACH ROW EXECUTE FUNCTION public.enforce_photo_limit();
+CREATE OR REPLACE TRIGGER photos_promote_primary_on_delete AFTER DELETE ON public.photos FOR EACH ROW EXECUTE FUNCTION public.photos_after_delete();
+CREATE OR REPLACE TRIGGER photos_protect_status BEFORE INSERT OR UPDATE ON public.photos FOR EACH ROW EXECUTE FUNCTION public.protect_photo_status();
+CREATE OR REPLACE TRIGGER photos_set_primary_on_insert BEFORE INSERT ON public.photos FOR EACH ROW EXECUTE FUNCTION public.photos_before_insert();
+CREATE OR REPLACE TRIGGER preferences_updated_at BEFORE UPDATE ON public.preferences FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+CREATE OR REPLACE TRIGGER profile_verifications_audit_admin AFTER INSERT OR DELETE OR UPDATE ON public.profile_verifications FOR EACH ROW EXECUTE FUNCTION public.audit_admin_change();
+CREATE OR REPLACE TRIGGER profile_verifications_log_signup AFTER INSERT OR UPDATE OF status ON public.profile_verifications FOR EACH ROW EXECUTE FUNCTION public.log_signup_milestone();
+CREATE OR REPLACE TRIGGER profile_visits_log_activity AFTER INSERT ON public.profile_visits FOR EACH ROW EXECUTE FUNCTION public.log_member_action();
+CREATE OR REPLACE TRIGGER profile_visits_notify AFTER INSERT ON public.profile_visits FOR EACH ROW EXECUTE FUNCTION public.notify_visit();
+CREATE OR REPLACE TRIGGER profile_visits_refuse_blocked BEFORE INSERT ON public.profile_visits FOR EACH ROW EXECUTE FUNCTION public.refuse_blocked_interaction();
+CREATE OR REPLACE TRIGGER profiles_audit_admin AFTER INSERT OR DELETE OR UPDATE ON public.profiles FOR EACH ROW EXECUTE FUNCTION public.audit_admin_change();
+CREATE OR REPLACE TRIGGER profiles_check_personal_info BEFORE INSERT OR UPDATE ON public.profiles FOR EACH ROW EXECUTE FUNCTION public.check_profile_personal_info();
+CREATE OR REPLACE TRIGGER profiles_check_visibility BEFORE UPDATE ON public.profiles FOR EACH ROW EXECUTE FUNCTION public.check_profile_visibility();
+CREATE OR REPLACE TRIGGER profiles_log_signup AFTER UPDATE OF onboarding_completed_at ON public.profiles FOR EACH ROW EXECUTE FUNCTION public.log_signup_milestone();
+CREATE OR REPLACE TRIGGER profiles_no_coordinates BEFORE INSERT OR UPDATE OF latitude, longitude ON public.profiles FOR EACH ROW EXECUTE FUNCTION public.clear_profile_coordinates();
+CREATE OR REPLACE TRIGGER profiles_protect_server_fields BEFORE INSERT OR UPDATE ON public.profiles FOR EACH ROW EXECUTE FUNCTION public.protect_server_profile_fields();
+CREATE OR REPLACE TRIGGER profiles_protect_status BEFORE UPDATE ON public.profiles FOR EACH ROW EXECUTE FUNCTION public.protect_profile_status();
+CREATE OR REPLACE TRIGGER profiles_protect_terms BEFORE INSERT OR UPDATE ON public.profiles FOR EACH ROW EXECUTE FUNCTION public.protect_terms_accepted_at();
+CREATE OR REPLACE TRIGGER profiles_replace_virtual AFTER UPDATE OF verified_at ON public.profiles FOR EACH ROW EXECUTE FUNCTION public.replace_virtual_profile_on_signup();
+CREATE OR REPLACE TRIGGER profiles_updated_at BEFORE UPDATE ON public.profiles FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+CREATE OR REPLACE TRIGGER reports_audit_admin AFTER INSERT OR DELETE OR UPDATE ON public.reports FOR EACH ROW EXECUTE FUNCTION public.audit_admin_change();
+CREATE OR REPLACE TRIGGER reports_log_activity AFTER INSERT ON public.reports FOR EACH ROW EXECUTE FUNCTION public.log_member_action();
+CREATE OR REPLACE TRIGGER subscriptions_audit_admin AFTER INSERT OR DELETE OR UPDATE ON public.subscriptions FOR EACH ROW EXECUTE FUNCTION public.audit_admin_change();
+CREATE OR REPLACE TRIGGER subscriptions_updated_at BEFORE UPDATE ON public.subscriptions FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+CREATE OR REPLACE TRIGGER support_tickets_audit_admin AFTER INSERT OR DELETE OR UPDATE ON public.support_tickets FOR EACH ROW EXECUTE FUNCTION public.audit_admin_change();
+CREATE OR REPLACE TRIGGER user_activity_updated_at BEFORE UPDATE ON public.user_activity FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+CREATE OR REPLACE TRIGGER user_roles_audit_admin AFTER INSERT OR DELETE OR UPDATE ON public.user_roles FOR EACH ROW EXECUTE FUNCTION public.audit_admin_change();
+CREATE OR REPLACE TRIGGER user_settings_updated_at BEFORE UPDATE ON public.user_settings FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+CREATE OR REPLACE TRIGGER users_audit_admin AFTER INSERT OR DELETE OR UPDATE ON public.users FOR EACH ROW EXECUTE FUNCTION public.audit_admin_change();
+CREATE OR REPLACE TRIGGER users_log_account AFTER DELETE OR UPDATE OF status ON public.users FOR EACH ROW EXECUTE FUNCTION public.log_account_change();
+CREATE OR REPLACE TRIGGER users_protect_columns BEFORE UPDATE ON public.users FOR EACH ROW EXECUTE FUNCTION public.protect_user_columns();
+CREATE OR REPLACE TRIGGER users_updated_at BEFORE UPDATE ON public.users FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+CREATE OR REPLACE TRIGGER verification_settings_audit_admin AFTER UPDATE ON public.verification_settings FOR EACH ROW EXECUTE FUNCTION public.audit_admin_change();
+CREATE OR REPLACE TRIGGER verification_settings_set_updated_at BEFORE UPDATE ON public.verification_settings FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
 -- ============================================================================
 -- 11. Liens entre les tables (clés étrangères)
 -- ============================================================================
 
-ALTER TABLE ONLY public.ad_events
-    ADD CONSTRAINT ad_events_ad_id_fkey FOREIGN KEY (ad_id) REFERENCES public.ads(id) ON DELETE CASCADE;
-
-ALTER TABLE ONLY public.ad_events
-    ADD CONSTRAINT ad_events_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE SET NULL;
-
-ALTER TABLE ONLY public.ads
-    ADD CONSTRAINT ads_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id) ON DELETE SET NULL;
-
-ALTER TABLE ONLY public.ai_usage
-    ADD CONSTRAINT ai_usage_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
-
-ALTER TABLE ONLY public.blocks
-    ADD CONSTRAINT blocks_blocked_id_fkey FOREIGN KEY (blocked_id) REFERENCES public.users(id) ON DELETE CASCADE;
-
-ALTER TABLE ONLY public.blocks
-    ADD CONSTRAINT blocks_blocker_id_fkey FOREIGN KEY (blocker_id) REFERENCES public.users(id) ON DELETE CASCADE;
-
-ALTER TABLE ONLY public.christian_profiles
-    ADD CONSTRAINT christian_profiles_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
-
-ALTER TABLE ONLY public.contact_requests
-    ADD CONSTRAINT contact_requests_receiver_id_fkey FOREIGN KEY (receiver_id) REFERENCES public.users(id) ON DELETE CASCADE;
-
-ALTER TABLE ONLY public.contact_requests
-    ADD CONSTRAINT contact_requests_sender_id_fkey FOREIGN KEY (sender_id) REFERENCES public.users(id) ON DELETE CASCADE;
-
-ALTER TABLE ONLY public.conversation_reads
-    ADD CONSTRAINT conversation_reads_conversation_id_fkey FOREIGN KEY (conversation_id) REFERENCES public.conversations(id) ON DELETE CASCADE;
-
-ALTER TABLE ONLY public.conversation_reads
-    ADD CONSTRAINT conversation_reads_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
-
-ALTER TABLE ONLY public.conversation_unlocks
-    ADD CONSTRAINT conversation_unlocks_conversation_id_fkey FOREIGN KEY (conversation_id) REFERENCES public.conversations(id) ON DELETE CASCADE;
-
-ALTER TABLE ONLY public.conversation_unlocks
-    ADD CONSTRAINT conversation_unlocks_paid_by_user_id_fkey FOREIGN KEY (paid_by_user_id) REFERENCES public.users(id) ON DELETE CASCADE;
-
-ALTER TABLE ONLY public.conversation_unlocks
-    ADD CONSTRAINT conversation_unlocks_payment_id_fkey FOREIGN KEY (payment_id) REFERENCES public.payments(id) ON DELETE SET NULL;
-
-ALTER TABLE ONLY public.conversation_user_usage
-    ADD CONSTRAINT conversation_user_usage_conversation_id_fkey FOREIGN KEY (conversation_id) REFERENCES public.conversations(id) ON DELETE CASCADE;
-
-ALTER TABLE ONLY public.conversation_user_usage
-    ADD CONSTRAINT conversation_user_usage_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
-
-ALTER TABLE ONLY public.conversations
-    ADD CONSTRAINT conversations_match_id_fkey FOREIGN KEY (match_id) REFERENCES public.matches(id) ON DELETE CASCADE;
-
-ALTER TABLE ONLY public.conversations
-    ADD CONSTRAINT conversations_user_1_id_fkey FOREIGN KEY (user_1_id) REFERENCES public.users(id) ON DELETE CASCADE;
-
-ALTER TABLE ONLY public.conversations
-    ADD CONSTRAINT conversations_user_2_id_fkey FOREIGN KEY (user_2_id) REFERENCES public.users(id) ON DELETE CASCADE;
-
-ALTER TABLE ONLY public.favorites
-    ADD CONSTRAINT favorites_favorite_user_id_fkey FOREIGN KEY (favorite_user_id) REFERENCES public.users(id) ON DELETE CASCADE;
-
-ALTER TABLE ONLY public.favorites
-    ADD CONSTRAINT favorites_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
-
-ALTER TABLE ONLY public.likes
-    ADD CONSTRAINT likes_receiver_id_fkey FOREIGN KEY (receiver_id) REFERENCES public.users(id) ON DELETE CASCADE;
-
-ALTER TABLE ONLY public.likes
-    ADD CONSTRAINT likes_sender_id_fkey FOREIGN KEY (sender_id) REFERENCES public.users(id) ON DELETE CASCADE;
-
-ALTER TABLE ONLY public.location_history
-    ADD CONSTRAINT location_history_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
-
-ALTER TABLE ONLY public.matches
-    ADD CONSTRAINT matches_user_1_id_fkey FOREIGN KEY (user_1_id) REFERENCES public.users(id) ON DELETE CASCADE;
-
-ALTER TABLE ONLY public.matches
-    ADD CONSTRAINT matches_user_2_id_fkey FOREIGN KEY (user_2_id) REFERENCES public.users(id) ON DELETE CASCADE;
-
-ALTER TABLE ONLY public.messages
-    ADD CONSTRAINT messages_conversation_id_fkey FOREIGN KEY (conversation_id) REFERENCES public.conversations(id) ON DELETE CASCADE;
-
-ALTER TABLE ONLY public.messages
-    ADD CONSTRAINT messages_sender_id_fkey FOREIGN KEY (sender_id) REFERENCES public.users(id) ON DELETE CASCADE;
-
-ALTER TABLE ONLY public.moderation_actions
-    ADD CONSTRAINT moderation_actions_admin_id_fkey FOREIGN KEY (admin_id) REFERENCES public.users(id) ON DELETE CASCADE;
-
-ALTER TABLE ONLY public.moderation_actions
-    ADD CONSTRAINT moderation_actions_target_user_id_fkey FOREIGN KEY (target_user_id) REFERENCES public.users(id) ON DELETE CASCADE;
-
-ALTER TABLE ONLY public.notifications
-    ADD CONSTRAINT notifications_actor_id_fkey FOREIGN KEY (actor_id) REFERENCES public.users(id) ON DELETE CASCADE;
-
-ALTER TABLE ONLY public.notifications
-    ADD CONSTRAINT notifications_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
-
-ALTER TABLE ONLY public.payments
-    ADD CONSTRAINT payments_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
-
-ALTER TABLE ONLY public.photos
-    ADD CONSTRAINT photos_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
-
-ALTER TABLE ONLY public.preferences
-    ADD CONSTRAINT preferences_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
-
-ALTER TABLE ONLY public.profile_boosts
-    ADD CONSTRAINT profile_boosts_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
-
-ALTER TABLE ONLY public.profile_locations
-    ADD CONSTRAINT profile_locations_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
-
-ALTER TABLE ONLY public.profile_verifications
-    ADD CONSTRAINT profile_verifications_reviewed_by_fkey FOREIGN KEY (reviewed_by) REFERENCES public.users(id) ON DELETE SET NULL;
-
-ALTER TABLE ONLY public.profile_verifications
-    ADD CONSTRAINT profile_verifications_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
-
-ALTER TABLE ONLY public.profile_visits
-    ADD CONSTRAINT profile_visits_visited_user_id_fkey FOREIGN KEY (visited_user_id) REFERENCES public.users(id) ON DELETE CASCADE;
-
-ALTER TABLE ONLY public.profile_visits
-    ADD CONSTRAINT profile_visits_visitor_id_fkey FOREIGN KEY (visitor_id) REFERENCES public.users(id) ON DELETE CASCADE;
-
-ALTER TABLE ONLY public.profiles
-    ADD CONSTRAINT profiles_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
-
-ALTER TABLE ONLY public.reports
-    ADD CONSTRAINT reports_conversation_id_fkey FOREIGN KEY (conversation_id) REFERENCES public.conversations(id) ON DELETE SET NULL;
-
-ALTER TABLE ONLY public.reports
-    ADD CONSTRAINT reports_message_id_fkey FOREIGN KEY (message_id) REFERENCES public.messages(id) ON DELETE SET NULL;
-
-ALTER TABLE ONLY public.reports
-    ADD CONSTRAINT reports_reported_user_id_fkey FOREIGN KEY (reported_user_id) REFERENCES public.users(id) ON DELETE CASCADE;
-
-ALTER TABLE ONLY public.reports
-    ADD CONSTRAINT reports_reporter_id_fkey FOREIGN KEY (reporter_id) REFERENCES public.users(id) ON DELETE CASCADE;
-
-ALTER TABLE ONLY public.subscriptions
-    ADD CONSTRAINT subscriptions_payment_id_fkey FOREIGN KEY (payment_id) REFERENCES public.payments(id) ON DELETE SET NULL;
-
-ALTER TABLE ONLY public.subscriptions
-    ADD CONSTRAINT subscriptions_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
-
-ALTER TABLE ONLY public.support_tickets
-    ADD CONSTRAINT support_tickets_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
-
-ALTER TABLE ONLY public.user_activity
-    ADD CONSTRAINT user_activity_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
-
-ALTER TABLE ONLY public.user_roles
-    ADD CONSTRAINT user_roles_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
-
-ALTER TABLE ONLY public.user_settings
-    ADD CONSTRAINT user_settings_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
-
-ALTER TABLE ONLY public.users
-    ADD CONSTRAINT users_id_auth_fkey FOREIGN KEY (id) REFERENCES auth.users(id) ON DELETE CASCADE;
-
-ALTER TABLE ONLY public.virtual_profile_removals
-    ADD CONSTRAINT virtual_profile_removals_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.ad_events'::pg_catalog.regclass AND conname = 'ad_events_ad_id_fkey') THEN
+    ALTER TABLE ONLY public.ad_events
+      ADD CONSTRAINT ad_events_ad_id_fkey FOREIGN KEY (ad_id) REFERENCES public.ads(id) ON DELETE CASCADE;
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.ad_events'::pg_catalog.regclass AND conname = 'ad_events_user_id_fkey') THEN
+    ALTER TABLE ONLY public.ad_events
+      ADD CONSTRAINT ad_events_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE SET NULL;
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.ads'::pg_catalog.regclass AND conname = 'ads_created_by_fkey') THEN
+    ALTER TABLE ONLY public.ads
+      ADD CONSTRAINT ads_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id) ON DELETE SET NULL;
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.ai_usage'::pg_catalog.regclass AND conname = 'ai_usage_user_id_fkey') THEN
+    ALTER TABLE ONLY public.ai_usage
+      ADD CONSTRAINT ai_usage_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.blocks'::pg_catalog.regclass AND conname = 'blocks_blocked_id_fkey') THEN
+    ALTER TABLE ONLY public.blocks
+      ADD CONSTRAINT blocks_blocked_id_fkey FOREIGN KEY (blocked_id) REFERENCES public.users(id) ON DELETE CASCADE;
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.blocks'::pg_catalog.regclass AND conname = 'blocks_blocker_id_fkey') THEN
+    ALTER TABLE ONLY public.blocks
+      ADD CONSTRAINT blocks_blocker_id_fkey FOREIGN KEY (blocker_id) REFERENCES public.users(id) ON DELETE CASCADE;
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.christian_profiles'::pg_catalog.regclass AND conname = 'christian_profiles_user_id_fkey') THEN
+    ALTER TABLE ONLY public.christian_profiles
+      ADD CONSTRAINT christian_profiles_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.contact_requests'::pg_catalog.regclass AND conname = 'contact_requests_receiver_id_fkey') THEN
+    ALTER TABLE ONLY public.contact_requests
+      ADD CONSTRAINT contact_requests_receiver_id_fkey FOREIGN KEY (receiver_id) REFERENCES public.users(id) ON DELETE CASCADE;
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.contact_requests'::pg_catalog.regclass AND conname = 'contact_requests_sender_id_fkey') THEN
+    ALTER TABLE ONLY public.contact_requests
+      ADD CONSTRAINT contact_requests_sender_id_fkey FOREIGN KEY (sender_id) REFERENCES public.users(id) ON DELETE CASCADE;
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.conversation_reads'::pg_catalog.regclass AND conname = 'conversation_reads_conversation_id_fkey') THEN
+    ALTER TABLE ONLY public.conversation_reads
+      ADD CONSTRAINT conversation_reads_conversation_id_fkey FOREIGN KEY (conversation_id) REFERENCES public.conversations(id) ON DELETE CASCADE;
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.conversation_reads'::pg_catalog.regclass AND conname = 'conversation_reads_user_id_fkey') THEN
+    ALTER TABLE ONLY public.conversation_reads
+      ADD CONSTRAINT conversation_reads_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.conversation_unlocks'::pg_catalog.regclass AND conname = 'conversation_unlocks_conversation_id_fkey') THEN
+    ALTER TABLE ONLY public.conversation_unlocks
+      ADD CONSTRAINT conversation_unlocks_conversation_id_fkey FOREIGN KEY (conversation_id) REFERENCES public.conversations(id) ON DELETE CASCADE;
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.conversation_unlocks'::pg_catalog.regclass AND conname = 'conversation_unlocks_paid_by_user_id_fkey') THEN
+    ALTER TABLE ONLY public.conversation_unlocks
+      ADD CONSTRAINT conversation_unlocks_paid_by_user_id_fkey FOREIGN KEY (paid_by_user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.conversation_unlocks'::pg_catalog.regclass AND conname = 'conversation_unlocks_payment_id_fkey') THEN
+    ALTER TABLE ONLY public.conversation_unlocks
+      ADD CONSTRAINT conversation_unlocks_payment_id_fkey FOREIGN KEY (payment_id) REFERENCES public.payments(id) ON DELETE SET NULL;
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.conversation_user_usage'::pg_catalog.regclass AND conname = 'conversation_user_usage_conversation_id_fkey') THEN
+    ALTER TABLE ONLY public.conversation_user_usage
+      ADD CONSTRAINT conversation_user_usage_conversation_id_fkey FOREIGN KEY (conversation_id) REFERENCES public.conversations(id) ON DELETE CASCADE;
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.conversation_user_usage'::pg_catalog.regclass AND conname = 'conversation_user_usage_user_id_fkey') THEN
+    ALTER TABLE ONLY public.conversation_user_usage
+      ADD CONSTRAINT conversation_user_usage_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.conversations'::pg_catalog.regclass AND conname = 'conversations_match_id_fkey') THEN
+    ALTER TABLE ONLY public.conversations
+      ADD CONSTRAINT conversations_match_id_fkey FOREIGN KEY (match_id) REFERENCES public.matches(id) ON DELETE CASCADE;
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.conversations'::pg_catalog.regclass AND conname = 'conversations_user_1_id_fkey') THEN
+    ALTER TABLE ONLY public.conversations
+      ADD CONSTRAINT conversations_user_1_id_fkey FOREIGN KEY (user_1_id) REFERENCES public.users(id) ON DELETE CASCADE;
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.conversations'::pg_catalog.regclass AND conname = 'conversations_user_2_id_fkey') THEN
+    ALTER TABLE ONLY public.conversations
+      ADD CONSTRAINT conversations_user_2_id_fkey FOREIGN KEY (user_2_id) REFERENCES public.users(id) ON DELETE CASCADE;
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.favorites'::pg_catalog.regclass AND conname = 'favorites_favorite_user_id_fkey') THEN
+    ALTER TABLE ONLY public.favorites
+      ADD CONSTRAINT favorites_favorite_user_id_fkey FOREIGN KEY (favorite_user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.favorites'::pg_catalog.regclass AND conname = 'favorites_user_id_fkey') THEN
+    ALTER TABLE ONLY public.favorites
+      ADD CONSTRAINT favorites_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.likes'::pg_catalog.regclass AND conname = 'likes_receiver_id_fkey') THEN
+    ALTER TABLE ONLY public.likes
+      ADD CONSTRAINT likes_receiver_id_fkey FOREIGN KEY (receiver_id) REFERENCES public.users(id) ON DELETE CASCADE;
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.likes'::pg_catalog.regclass AND conname = 'likes_sender_id_fkey') THEN
+    ALTER TABLE ONLY public.likes
+      ADD CONSTRAINT likes_sender_id_fkey FOREIGN KEY (sender_id) REFERENCES public.users(id) ON DELETE CASCADE;
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.location_history'::pg_catalog.regclass AND conname = 'location_history_user_id_fkey') THEN
+    ALTER TABLE ONLY public.location_history
+      ADD CONSTRAINT location_history_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.matches'::pg_catalog.regclass AND conname = 'matches_user_1_id_fkey') THEN
+    ALTER TABLE ONLY public.matches
+      ADD CONSTRAINT matches_user_1_id_fkey FOREIGN KEY (user_1_id) REFERENCES public.users(id) ON DELETE CASCADE;
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.matches'::pg_catalog.regclass AND conname = 'matches_user_2_id_fkey') THEN
+    ALTER TABLE ONLY public.matches
+      ADD CONSTRAINT matches_user_2_id_fkey FOREIGN KEY (user_2_id) REFERENCES public.users(id) ON DELETE CASCADE;
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.messages'::pg_catalog.regclass AND conname = 'messages_conversation_id_fkey') THEN
+    ALTER TABLE ONLY public.messages
+      ADD CONSTRAINT messages_conversation_id_fkey FOREIGN KEY (conversation_id) REFERENCES public.conversations(id) ON DELETE CASCADE;
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.messages'::pg_catalog.regclass AND conname = 'messages_sender_id_fkey') THEN
+    ALTER TABLE ONLY public.messages
+      ADD CONSTRAINT messages_sender_id_fkey FOREIGN KEY (sender_id) REFERENCES public.users(id) ON DELETE CASCADE;
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.moderation_actions'::pg_catalog.regclass AND conname = 'moderation_actions_admin_id_fkey') THEN
+    ALTER TABLE ONLY public.moderation_actions
+      ADD CONSTRAINT moderation_actions_admin_id_fkey FOREIGN KEY (admin_id) REFERENCES public.users(id) ON DELETE CASCADE;
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.moderation_actions'::pg_catalog.regclass AND conname = 'moderation_actions_target_user_id_fkey') THEN
+    ALTER TABLE ONLY public.moderation_actions
+      ADD CONSTRAINT moderation_actions_target_user_id_fkey FOREIGN KEY (target_user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.notifications'::pg_catalog.regclass AND conname = 'notifications_actor_id_fkey') THEN
+    ALTER TABLE ONLY public.notifications
+      ADD CONSTRAINT notifications_actor_id_fkey FOREIGN KEY (actor_id) REFERENCES public.users(id) ON DELETE CASCADE;
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.notifications'::pg_catalog.regclass AND conname = 'notifications_user_id_fkey') THEN
+    ALTER TABLE ONLY public.notifications
+      ADD CONSTRAINT notifications_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.payments'::pg_catalog.regclass AND conname = 'payments_user_id_fkey') THEN
+    ALTER TABLE ONLY public.payments
+      ADD CONSTRAINT payments_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.photos'::pg_catalog.regclass AND conname = 'photos_user_id_fkey') THEN
+    ALTER TABLE ONLY public.photos
+      ADD CONSTRAINT photos_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.preferences'::pg_catalog.regclass AND conname = 'preferences_user_id_fkey') THEN
+    ALTER TABLE ONLY public.preferences
+      ADD CONSTRAINT preferences_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.profile_boosts'::pg_catalog.regclass AND conname = 'profile_boosts_user_id_fkey') THEN
+    ALTER TABLE ONLY public.profile_boosts
+      ADD CONSTRAINT profile_boosts_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.profile_locations'::pg_catalog.regclass AND conname = 'profile_locations_user_id_fkey') THEN
+    ALTER TABLE ONLY public.profile_locations
+      ADD CONSTRAINT profile_locations_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.profile_verifications'::pg_catalog.regclass AND conname = 'profile_verifications_reviewed_by_fkey') THEN
+    ALTER TABLE ONLY public.profile_verifications
+      ADD CONSTRAINT profile_verifications_reviewed_by_fkey FOREIGN KEY (reviewed_by) REFERENCES public.users(id) ON DELETE SET NULL;
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.profile_verifications'::pg_catalog.regclass AND conname = 'profile_verifications_user_id_fkey') THEN
+    ALTER TABLE ONLY public.profile_verifications
+      ADD CONSTRAINT profile_verifications_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.profile_visits'::pg_catalog.regclass AND conname = 'profile_visits_visited_user_id_fkey') THEN
+    ALTER TABLE ONLY public.profile_visits
+      ADD CONSTRAINT profile_visits_visited_user_id_fkey FOREIGN KEY (visited_user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.profile_visits'::pg_catalog.regclass AND conname = 'profile_visits_visitor_id_fkey') THEN
+    ALTER TABLE ONLY public.profile_visits
+      ADD CONSTRAINT profile_visits_visitor_id_fkey FOREIGN KEY (visitor_id) REFERENCES public.users(id) ON DELETE CASCADE;
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.profiles'::pg_catalog.regclass AND conname = 'profiles_user_id_fkey') THEN
+    ALTER TABLE ONLY public.profiles
+      ADD CONSTRAINT profiles_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.reports'::pg_catalog.regclass AND conname = 'reports_conversation_id_fkey') THEN
+    ALTER TABLE ONLY public.reports
+      ADD CONSTRAINT reports_conversation_id_fkey FOREIGN KEY (conversation_id) REFERENCES public.conversations(id) ON DELETE SET NULL;
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.reports'::pg_catalog.regclass AND conname = 'reports_message_id_fkey') THEN
+    ALTER TABLE ONLY public.reports
+      ADD CONSTRAINT reports_message_id_fkey FOREIGN KEY (message_id) REFERENCES public.messages(id) ON DELETE SET NULL;
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.reports'::pg_catalog.regclass AND conname = 'reports_reported_user_id_fkey') THEN
+    ALTER TABLE ONLY public.reports
+      ADD CONSTRAINT reports_reported_user_id_fkey FOREIGN KEY (reported_user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.reports'::pg_catalog.regclass AND conname = 'reports_reporter_id_fkey') THEN
+    ALTER TABLE ONLY public.reports
+      ADD CONSTRAINT reports_reporter_id_fkey FOREIGN KEY (reporter_id) REFERENCES public.users(id) ON DELETE CASCADE;
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.subscriptions'::pg_catalog.regclass AND conname = 'subscriptions_payment_id_fkey') THEN
+    ALTER TABLE ONLY public.subscriptions
+      ADD CONSTRAINT subscriptions_payment_id_fkey FOREIGN KEY (payment_id) REFERENCES public.payments(id) ON DELETE SET NULL;
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.subscriptions'::pg_catalog.regclass AND conname = 'subscriptions_user_id_fkey') THEN
+    ALTER TABLE ONLY public.subscriptions
+      ADD CONSTRAINT subscriptions_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.support_tickets'::pg_catalog.regclass AND conname = 'support_tickets_user_id_fkey') THEN
+    ALTER TABLE ONLY public.support_tickets
+      ADD CONSTRAINT support_tickets_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.user_activity'::pg_catalog.regclass AND conname = 'user_activity_user_id_fkey') THEN
+    ALTER TABLE ONLY public.user_activity
+      ADD CONSTRAINT user_activity_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.user_roles'::pg_catalog.regclass AND conname = 'user_roles_user_id_fkey') THEN
+    ALTER TABLE ONLY public.user_roles
+      ADD CONSTRAINT user_roles_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.user_settings'::pg_catalog.regclass AND conname = 'user_settings_user_id_fkey') THEN
+    ALTER TABLE ONLY public.user_settings
+      ADD CONSTRAINT user_settings_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.users'::pg_catalog.regclass AND conname = 'users_id_auth_fkey') THEN
+    ALTER TABLE ONLY public.users
+      ADD CONSTRAINT users_id_auth_fkey FOREIGN KEY (id) REFERENCES auth.users(id) ON DELETE CASCADE;
+  END IF;
+END
+$contrainte$;
+DO $contrainte$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+                 WHERE conrelid = 'public.virtual_profile_removals'::pg_catalog.regclass AND conname = 'virtual_profile_removals_user_id_fkey') THEN
+    ALTER TABLE ONLY public.virtual_profile_removals
+      ADD CONSTRAINT virtual_profile_removals_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+  END IF;
+END
+$contrainte$;
 
 -- ============================================================================
 -- 12. Sécurité par ligne (RLS) : activée sur toutes les tables
@@ -6350,224 +6868,276 @@ ALTER TABLE public.virtual_profile_removals ENABLE ROW LEVEL SECURITY;
 -- 13. Règles d'accès : qui peut lire ou modifier quelles lignes
 -- ============================================================================
 
+-- Chaque règle est d'abord retirée puis recréée : le fichier peut être rejoué.
 -- activity_events
+DROP POLICY IF EXISTS activity_events_select_admin ON public.activity_events;
 CREATE POLICY activity_events_select_admin ON public.activity_events FOR SELECT TO authenticated USING (public.is_admin());
-
 -- ad_events
+DROP POLICY IF EXISTS ad_events_admin_select ON public.ad_events;
 CREATE POLICY ad_events_admin_select ON public.ad_events FOR SELECT TO authenticated USING (public.is_admin());
-
 -- ad_settings
+DROP POLICY IF EXISTS ad_settings_admin_select ON public.ad_settings;
 CREATE POLICY ad_settings_admin_select ON public.ad_settings FOR SELECT TO authenticated USING (public.is_admin());
 
+DROP POLICY IF EXISTS ad_settings_admin_update ON public.ad_settings;
 CREATE POLICY ad_settings_admin_update ON public.ad_settings FOR UPDATE TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
-
 -- admin_audit_log
+DROP POLICY IF EXISTS admin_audit_log_select_admin ON public.admin_audit_log;
 CREATE POLICY admin_audit_log_select_admin ON public.admin_audit_log FOR SELECT TO authenticated USING (public.is_admin());
-
 -- ads
+DROP POLICY IF EXISTS ads_admin_delete ON public.ads;
 CREATE POLICY ads_admin_delete ON public.ads FOR DELETE TO authenticated USING (public.is_admin());
 
+DROP POLICY IF EXISTS ads_admin_insert ON public.ads;
 CREATE POLICY ads_admin_insert ON public.ads FOR INSERT TO authenticated WITH CHECK (public.is_admin());
 
+DROP POLICY IF EXISTS ads_admin_select ON public.ads;
 CREATE POLICY ads_admin_select ON public.ads FOR SELECT TO authenticated USING (public.is_admin());
 
+DROP POLICY IF EXISTS ads_admin_update ON public.ads;
 CREATE POLICY ads_admin_update ON public.ads FOR UPDATE TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
-
 -- ai_usage
+DROP POLICY IF EXISTS ai_usage_select_admin ON public.ai_usage;
 CREATE POLICY ai_usage_select_admin ON public.ai_usage FOR SELECT TO authenticated USING (public.is_admin());
 
+DROP POLICY IF EXISTS ai_usage_select_own ON public.ai_usage;
 CREATE POLICY ai_usage_select_own ON public.ai_usage FOR SELECT TO authenticated USING ((user_id = auth.uid()));
-
 -- auth_events
+DROP POLICY IF EXISTS auth_events_select_admin ON public.auth_events;
 CREATE POLICY auth_events_select_admin ON public.auth_events FOR SELECT TO authenticated USING (public.is_admin());
-
 -- blocks
+DROP POLICY IF EXISTS blocks_delete_own ON public.blocks;
 CREATE POLICY blocks_delete_own ON public.blocks FOR DELETE TO authenticated USING ((blocker_id = auth.uid()));
 
+DROP POLICY IF EXISTS blocks_insert_own ON public.blocks;
 CREATE POLICY blocks_insert_own ON public.blocks FOR INSERT TO authenticated WITH CHECK ((blocker_id = auth.uid()));
 
+DROP POLICY IF EXISTS blocks_select_admin ON public.blocks;
 CREATE POLICY blocks_select_admin ON public.blocks FOR SELECT TO authenticated USING (public.is_admin());
 
+DROP POLICY IF EXISTS blocks_select_own ON public.blocks;
 CREATE POLICY blocks_select_own ON public.blocks FOR SELECT TO authenticated USING ((blocker_id = auth.uid()));
-
 -- christian_profiles
+DROP POLICY IF EXISTS christian_select_admin ON public.christian_profiles;
 CREATE POLICY christian_select_admin ON public.christian_profiles FOR SELECT TO authenticated USING (public.is_admin());
 
+DROP POLICY IF EXISTS christian_select_own ON public.christian_profiles;
 CREATE POLICY christian_select_own ON public.christian_profiles FOR SELECT TO authenticated USING ((user_id = auth.uid()));
 
+DROP POLICY IF EXISTS christian_select_visible ON public.christian_profiles;
 CREATE POLICY christian_select_visible ON public.christian_profiles FOR SELECT TO authenticated USING (((user_id <> auth.uid()) AND public.can_browse_profiles() AND (NOT public.is_blocked_between(auth.uid(), user_id)) AND public.is_discoverable_profile(user_id)));
 
+DROP POLICY IF EXISTS christian_update_own ON public.christian_profiles;
 CREATE POLICY christian_update_own ON public.christian_profiles FOR UPDATE TO authenticated USING ((user_id = auth.uid())) WITH CHECK ((user_id = auth.uid()));
-
 -- contact_requests
+DROP POLICY IF EXISTS contact_requests_select_parties ON public.contact_requests;
 CREATE POLICY contact_requests_select_parties ON public.contact_requests FOR SELECT TO authenticated USING (((sender_id = auth.uid()) OR (receiver_id = auth.uid())));
-
 -- conversation_reads
+DROP POLICY IF EXISTS conversation_reads_select_own ON public.conversation_reads;
 CREATE POLICY conversation_reads_select_own ON public.conversation_reads FOR SELECT TO authenticated USING ((user_id = auth.uid()));
-
 -- conversation_unlocks
+DROP POLICY IF EXISTS unlocks_select_admin ON public.conversation_unlocks;
 CREATE POLICY unlocks_select_admin ON public.conversation_unlocks FOR SELECT TO authenticated USING (public.is_admin());
 
+DROP POLICY IF EXISTS unlocks_select_participant ON public.conversation_unlocks;
 CREATE POLICY unlocks_select_participant ON public.conversation_unlocks FOR SELECT TO authenticated USING (public.is_conversation_participant(conversation_id, auth.uid()));
-
 -- conversation_user_usage
+DROP POLICY IF EXISTS cuu_select_admin ON public.conversation_user_usage;
 CREATE POLICY cuu_select_admin ON public.conversation_user_usage FOR SELECT TO authenticated USING (public.is_admin());
 
+DROP POLICY IF EXISTS cuu_select_own ON public.conversation_user_usage;
 CREATE POLICY cuu_select_own ON public.conversation_user_usage FOR SELECT TO authenticated USING ((user_id = auth.uid()));
-
 -- conversations
+DROP POLICY IF EXISTS conversations_select_admin ON public.conversations;
 CREATE POLICY conversations_select_admin ON public.conversations FOR SELECT TO authenticated USING (public.is_admin());
 
+DROP POLICY IF EXISTS conversations_select_participant ON public.conversations;
 CREATE POLICY conversations_select_participant ON public.conversations FOR SELECT TO authenticated USING (((auth.uid() = user_1_id) OR (auth.uid() = user_2_id)));
-
 -- favorites
+DROP POLICY IF EXISTS favorites_delete_own ON public.favorites;
 CREATE POLICY favorites_delete_own ON public.favorites FOR DELETE TO authenticated USING ((user_id = auth.uid()));
 
+DROP POLICY IF EXISTS favorites_insert_own ON public.favorites;
 CREATE POLICY favorites_insert_own ON public.favorites FOR INSERT TO authenticated WITH CHECK (((user_id = auth.uid()) AND (user_id <> favorite_user_id) AND (NOT public.is_blocked_between(user_id, favorite_user_id)) AND public.can_browse_profiles() AND public.is_discoverable_profile(favorite_user_id)));
 
+DROP POLICY IF EXISTS favorites_select_admin ON public.favorites;
 CREATE POLICY favorites_select_admin ON public.favorites FOR SELECT TO authenticated USING (public.is_admin());
 
+DROP POLICY IF EXISTS favorites_select_own ON public.favorites;
 CREATE POLICY favorites_select_own ON public.favorites FOR SELECT TO authenticated USING ((user_id = auth.uid()));
-
 -- likes
+DROP POLICY IF EXISTS likes_insert_own ON public.likes;
 CREATE POLICY likes_insert_own ON public.likes FOR INSERT TO authenticated WITH CHECK (((sender_id = auth.uid()) AND (sender_id <> receiver_id) AND (NOT public.is_blocked_between(sender_id, receiver_id)) AND public.can_browse_profiles() AND public.is_discoverable_profile(receiver_id)));
 
+DROP POLICY IF EXISTS likes_select_admin ON public.likes;
 CREATE POLICY likes_select_admin ON public.likes FOR SELECT TO authenticated USING (public.is_admin());
 
+DROP POLICY IF EXISTS likes_select_sent ON public.likes;
 CREATE POLICY likes_select_sent ON public.likes FOR SELECT TO authenticated USING ((sender_id = auth.uid()));
 
+DROP POLICY IF EXISTS likes_update_own ON public.likes;
 CREATE POLICY likes_update_own ON public.likes FOR UPDATE TO authenticated USING ((sender_id = auth.uid())) WITH CHECK (((sender_id = auth.uid()) AND ((status = 'withdrawn'::public.like_status) OR ((NOT public.is_blocked_between(sender_id, receiver_id)) AND public.can_browse_profiles() AND public.is_discoverable_profile(receiver_id)))));
-
 -- location_history
+DROP POLICY IF EXISTS location_history_admin_select ON public.location_history;
 CREATE POLICY location_history_admin_select ON public.location_history FOR SELECT TO authenticated USING (public.is_admin());
-
 -- matches
+DROP POLICY IF EXISTS matches_select_admin ON public.matches;
 CREATE POLICY matches_select_admin ON public.matches FOR SELECT TO authenticated USING (public.is_admin());
 
+DROP POLICY IF EXISTS matches_select_participant ON public.matches;
 CREATE POLICY matches_select_participant ON public.matches FOR SELECT TO authenticated USING (((auth.uid() = user_1_id) OR (auth.uid() = user_2_id)));
-
 -- messages
+DROP POLICY IF EXISTS messages_select_admin ON public.messages;
 CREATE POLICY messages_select_admin ON public.messages FOR SELECT TO authenticated USING (public.is_admin());
 
+DROP POLICY IF EXISTS messages_select_own_blocked ON public.messages;
 CREATE POLICY messages_select_own_blocked ON public.messages FOR SELECT TO authenticated USING ((sender_id = auth.uid()));
 
+DROP POLICY IF EXISTS messages_select_participant ON public.messages;
 CREATE POLICY messages_select_participant ON public.messages FOR SELECT TO authenticated USING (((status = 'delivered'::public.message_status) AND public.is_conversation_participant(conversation_id, auth.uid())));
-
 -- moderation_actions
+DROP POLICY IF EXISTS moderation_insert_admin ON public.moderation_actions;
 CREATE POLICY moderation_insert_admin ON public.moderation_actions FOR INSERT TO authenticated WITH CHECK ((public.is_admin() AND (admin_id = auth.uid())));
 
+DROP POLICY IF EXISTS moderation_select_admin ON public.moderation_actions;
 CREATE POLICY moderation_select_admin ON public.moderation_actions FOR SELECT TO authenticated USING (public.is_admin());
-
 -- notifications
+DROP POLICY IF EXISTS notifications_select_own ON public.notifications;
 CREATE POLICY notifications_select_own ON public.notifications FOR SELECT TO authenticated USING ((user_id = auth.uid()));
-
 -- payment_events
+DROP POLICY IF EXISTS payment_events_select_admin ON public.payment_events;
 CREATE POLICY payment_events_select_admin ON public.payment_events FOR SELECT TO authenticated USING (public.is_admin());
-
 -- payments
+DROP POLICY IF EXISTS payments_select_admin ON public.payments;
 CREATE POLICY payments_select_admin ON public.payments FOR SELECT TO authenticated USING (public.is_admin());
 
+DROP POLICY IF EXISTS payments_select_own ON public.payments;
 CREATE POLICY payments_select_own ON public.payments FOR SELECT TO authenticated USING ((user_id = auth.uid()));
-
 -- photos
+DROP POLICY IF EXISTS photos_delete_admin ON public.photos;
 CREATE POLICY photos_delete_admin ON public.photos FOR DELETE TO authenticated USING (public.is_admin());
 
+DROP POLICY IF EXISTS photos_delete_own ON public.photos;
 CREATE POLICY photos_delete_own ON public.photos FOR DELETE TO authenticated USING ((user_id = auth.uid()));
 
+DROP POLICY IF EXISTS photos_insert_own ON public.photos;
 CREATE POLICY photos_insert_own ON public.photos FOR INSERT TO authenticated WITH CHECK ((user_id = auth.uid()));
 
+DROP POLICY IF EXISTS photos_select_admin ON public.photos;
 CREATE POLICY photos_select_admin ON public.photos FOR SELECT TO authenticated USING (public.is_admin());
 
+DROP POLICY IF EXISTS photos_select_own ON public.photos;
 CREATE POLICY photos_select_own ON public.photos FOR SELECT TO authenticated USING ((user_id = auth.uid()));
 
+DROP POLICY IF EXISTS photos_select_visible ON public.photos;
 CREATE POLICY photos_select_visible ON public.photos FOR SELECT TO authenticated USING (((user_id <> auth.uid()) AND (status = 'approved'::public.photo_status) AND public.can_browse_profiles() AND (NOT public.is_blocked_between(auth.uid(), user_id)) AND public.is_discoverable_profile(user_id)));
 
+DROP POLICY IF EXISTS photos_update_admin ON public.photos;
 CREATE POLICY photos_update_admin ON public.photos FOR UPDATE TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
 
+DROP POLICY IF EXISTS photos_update_own ON public.photos;
 CREATE POLICY photos_update_own ON public.photos FOR UPDATE TO authenticated USING ((user_id = auth.uid())) WITH CHECK ((user_id = auth.uid()));
-
 -- preferences
+DROP POLICY IF EXISTS preferences_select_admin ON public.preferences;
 CREATE POLICY preferences_select_admin ON public.preferences FOR SELECT TO authenticated USING (public.is_admin());
 
+DROP POLICY IF EXISTS preferences_select_own ON public.preferences;
 CREATE POLICY preferences_select_own ON public.preferences FOR SELECT TO authenticated USING ((user_id = auth.uid()));
 
+DROP POLICY IF EXISTS preferences_update_own ON public.preferences;
 CREATE POLICY preferences_update_own ON public.preferences FOR UPDATE TO authenticated USING ((user_id = auth.uid())) WITH CHECK ((user_id = auth.uid()));
-
 -- profile_boosts
+DROP POLICY IF EXISTS profile_boosts_select_own ON public.profile_boosts;
 CREATE POLICY profile_boosts_select_own ON public.profile_boosts FOR SELECT TO authenticated USING (((user_id = auth.uid()) OR public.is_admin()));
-
 -- profile_locations
+DROP POLICY IF EXISTS profile_locations_select_own ON public.profile_locations;
 CREATE POLICY profile_locations_select_own ON public.profile_locations FOR SELECT TO authenticated USING ((user_id = auth.uid()));
-
 -- profile_verifications
+DROP POLICY IF EXISTS verifications_select_own ON public.profile_verifications;
 CREATE POLICY verifications_select_own ON public.profile_verifications FOR SELECT TO authenticated USING ((user_id = auth.uid()));
-
 -- profile_visits
+DROP POLICY IF EXISTS profile_visits_select_admin ON public.profile_visits;
 CREATE POLICY profile_visits_select_admin ON public.profile_visits FOR SELECT TO authenticated USING (public.is_admin());
 
+DROP POLICY IF EXISTS profile_visits_select_own_visits ON public.profile_visits;
 CREATE POLICY profile_visits_select_own_visits ON public.profile_visits FOR SELECT TO authenticated USING ((visitor_id = auth.uid()));
-
 -- profiles
+DROP POLICY IF EXISTS profiles_select_admin ON public.profiles;
 CREATE POLICY profiles_select_admin ON public.profiles FOR SELECT TO authenticated USING (public.is_admin());
 
+DROP POLICY IF EXISTS profiles_select_own ON public.profiles;
 CREATE POLICY profiles_select_own ON public.profiles FOR SELECT TO authenticated USING ((user_id = auth.uid()));
 
+DROP POLICY IF EXISTS profiles_select_visible ON public.profiles;
 CREATE POLICY profiles_select_visible ON public.profiles FOR SELECT TO authenticated USING (((user_id <> auth.uid()) AND (status = 'active'::public.profile_status) AND (visibility = 'visible'::public.profile_visibility) AND ((NOT is_virtual) OR (demo_photo_path IS NOT NULL)) AND public.can_browse_profiles() AND (NOT public.is_blocked_between(auth.uid(), user_id)) AND public.is_active_account(user_id)));
 
+DROP POLICY IF EXISTS profiles_update_admin ON public.profiles;
 CREATE POLICY profiles_update_admin ON public.profiles FOR UPDATE TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
 
+DROP POLICY IF EXISTS profiles_update_own ON public.profiles;
 CREATE POLICY profiles_update_own ON public.profiles FOR UPDATE TO authenticated USING ((user_id = auth.uid())) WITH CHECK ((user_id = auth.uid()));
-
 -- reports
+DROP POLICY IF EXISTS reports_select_admin ON public.reports;
 CREATE POLICY reports_select_admin ON public.reports FOR SELECT TO authenticated USING (public.is_admin());
 
+DROP POLICY IF EXISTS reports_select_own ON public.reports;
 CREATE POLICY reports_select_own ON public.reports FOR SELECT TO authenticated USING ((reporter_id = auth.uid()));
 
+DROP POLICY IF EXISTS reports_update_admin ON public.reports;
 CREATE POLICY reports_update_admin ON public.reports FOR UPDATE TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
-
 -- server_errors
+DROP POLICY IF EXISTS server_errors_select_admin ON public.server_errors;
 CREATE POLICY server_errors_select_admin ON public.server_errors FOR SELECT TO authenticated USING (public.is_admin());
-
 -- signup_events
+DROP POLICY IF EXISTS signup_events_select_admin ON public.signup_events;
 CREATE POLICY signup_events_select_admin ON public.signup_events FOR SELECT TO authenticated USING (public.is_admin());
-
 -- subscriptions
+DROP POLICY IF EXISTS subscriptions_select_admin ON public.subscriptions;
 CREATE POLICY subscriptions_select_admin ON public.subscriptions FOR SELECT TO authenticated USING (public.is_admin());
 
+DROP POLICY IF EXISTS subscriptions_select_own ON public.subscriptions;
 CREATE POLICY subscriptions_select_own ON public.subscriptions FOR SELECT TO authenticated USING ((user_id = auth.uid()));
-
 -- support_tickets
+DROP POLICY IF EXISTS support_tickets_select_own ON public.support_tickets;
 CREATE POLICY support_tickets_select_own ON public.support_tickets FOR SELECT TO authenticated USING (((user_id = auth.uid()) OR public.is_admin()));
-
 -- user_activity
+DROP POLICY IF EXISTS activity_select_admin ON public.user_activity;
 CREATE POLICY activity_select_admin ON public.user_activity FOR SELECT TO authenticated USING (public.is_admin());
 
+DROP POLICY IF EXISTS activity_select_own ON public.user_activity;
 CREATE POLICY activity_select_own ON public.user_activity FOR SELECT TO authenticated USING ((user_id = auth.uid()));
-
 -- user_roles
+DROP POLICY IF EXISTS user_roles_select_admin ON public.user_roles;
 CREATE POLICY user_roles_select_admin ON public.user_roles FOR SELECT TO authenticated USING (public.is_admin());
 
+DROP POLICY IF EXISTS user_roles_select_own ON public.user_roles;
 CREATE POLICY user_roles_select_own ON public.user_roles FOR SELECT TO authenticated USING ((user_id = auth.uid()));
-
 -- user_settings
+DROP POLICY IF EXISTS user_settings_insert_own ON public.user_settings;
 CREATE POLICY user_settings_insert_own ON public.user_settings FOR INSERT TO authenticated WITH CHECK ((user_id = auth.uid()));
 
+DROP POLICY IF EXISTS user_settings_select_own ON public.user_settings;
 CREATE POLICY user_settings_select_own ON public.user_settings FOR SELECT TO authenticated USING ((user_id = auth.uid()));
 
+DROP POLICY IF EXISTS user_settings_update_own ON public.user_settings;
 CREATE POLICY user_settings_update_own ON public.user_settings FOR UPDATE TO authenticated USING ((user_id = auth.uid())) WITH CHECK ((user_id = auth.uid()));
-
 -- users
+DROP POLICY IF EXISTS users_select_admin ON public.users;
 CREATE POLICY users_select_admin ON public.users FOR SELECT TO authenticated USING (public.is_admin());
 
+DROP POLICY IF EXISTS users_select_own ON public.users;
 CREATE POLICY users_select_own ON public.users FOR SELECT TO authenticated USING ((id = auth.uid()));
 
+DROP POLICY IF EXISTS users_update_admin ON public.users;
 CREATE POLICY users_update_admin ON public.users FOR UPDATE TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
 
+DROP POLICY IF EXISTS users_update_own ON public.users;
 CREATE POLICY users_update_own ON public.users FOR UPDATE TO authenticated USING ((id = auth.uid())) WITH CHECK ((id = auth.uid()));
-
 -- verification_settings
+DROP POLICY IF EXISTS verification_settings_admin_select ON public.verification_settings;
 CREATE POLICY verification_settings_admin_select ON public.verification_settings FOR SELECT TO authenticated USING (public.is_admin());
 
+DROP POLICY IF EXISTS verification_settings_admin_update ON public.verification_settings;
 CREATE POLICY verification_settings_admin_update ON public.verification_settings FOR UPDATE TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
 
 -- ============================================================================
@@ -7149,8 +7719,8 @@ RESET check_function_bodies;
 -- 15. Comptes : chaque nouveau compte (e-mail ou Google) reçoit son profil
 -- ============================================================================
 
-CREATE TRIGGER on_auth_user_created AFTER INSERT ON auth.users FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
-CREATE TRIGGER on_auth_user_logged AFTER INSERT OR UPDATE ON auth.users FOR EACH ROW EXECUTE FUNCTION public.log_auth_user_change();
+CREATE OR REPLACE TRIGGER on_auth_user_created AFTER INSERT ON auth.users FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+CREATE OR REPLACE TRIGGER on_auth_user_logged AFTER INSERT OR UPDATE ON auth.users FOR EACH ROW EXECUTE FUNCTION public.log_auth_user_change();
 
 -- ============================================================================
 -- 16. Fichiers : espaces de stockage (privés et publics) et leurs règles
@@ -7165,74 +7735,91 @@ INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_typ
 ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, public = EXCLUDED.public,
   file_size_limit = EXCLUDED.file_size_limit, allowed_mime_types = EXCLUDED.allowed_mime_types;
 
+DROP POLICY IF EXISTS ads_storage_delete_admin ON storage.objects;
 CREATE POLICY ads_storage_delete_admin ON storage.objects
   FOR DELETE TO authenticated
   USING (((bucket_id = 'ads'::text) AND public.is_admin()));
 
+DROP POLICY IF EXISTS ads_storage_insert_admin ON storage.objects;
 CREATE POLICY ads_storage_insert_admin ON storage.objects
   FOR INSERT TO authenticated
   WITH CHECK (((bucket_id = 'ads'::text) AND public.is_admin()));
 
+DROP POLICY IF EXISTS ads_storage_select_admin ON storage.objects;
 CREATE POLICY ads_storage_select_admin ON storage.objects
   FOR SELECT TO authenticated
   USING (((bucket_id = 'ads'::text) AND public.is_admin()));
 
+DROP POLICY IF EXISTS ads_storage_update_admin ON storage.objects;
 CREATE POLICY ads_storage_update_admin ON storage.objects
   FOR UPDATE TO authenticated
   USING (((bucket_id = 'ads'::text) AND public.is_admin()))
   WITH CHECK (((bucket_id = 'ads'::text) AND public.is_admin()));
 
+DROP POLICY IF EXISTS demo_storage_delete_admin ON storage.objects;
 CREATE POLICY demo_storage_delete_admin ON storage.objects
   FOR DELETE TO authenticated
   USING (((bucket_id = 'demo-profils'::text) AND public.is_admin()));
 
+DROP POLICY IF EXISTS demo_storage_insert_admin ON storage.objects;
 CREATE POLICY demo_storage_insert_admin ON storage.objects
   FOR INSERT TO authenticated
   WITH CHECK (((bucket_id = 'demo-profils'::text) AND public.is_admin()));
 
+DROP POLICY IF EXISTS demo_storage_select_admin ON storage.objects;
 CREATE POLICY demo_storage_select_admin ON storage.objects
   FOR SELECT TO authenticated
   USING (((bucket_id = 'demo-profils'::text) AND public.is_admin()));
 
+DROP POLICY IF EXISTS demo_storage_update_admin ON storage.objects;
 CREATE POLICY demo_storage_update_admin ON storage.objects
   FOR UPDATE TO authenticated
   USING (((bucket_id = 'demo-profils'::text) AND public.is_admin()))
   WITH CHECK (((bucket_id = 'demo-profils'::text) AND public.is_admin()));
 
+DROP POLICY IF EXISTS photos_storage_delete_own ON storage.objects;
 CREATE POLICY photos_storage_delete_own ON storage.objects
   FOR DELETE TO authenticated
   USING (((bucket_id = 'photos'::text) AND (((storage.foldername(name))[1] = (auth.uid())::text) OR public.is_admin())));
 
+DROP POLICY IF EXISTS photos_storage_insert_own ON storage.objects;
 CREATE POLICY photos_storage_insert_own ON storage.objects
   FOR INSERT TO authenticated
   WITH CHECK (((bucket_id = 'photos'::text) AND ((storage.foldername(name))[1] = (auth.uid())::text)));
 
+DROP POLICY IF EXISTS photos_storage_select ON storage.objects;
 CREATE POLICY photos_storage_select ON storage.objects
   FOR SELECT TO authenticated
   USING (((bucket_id = 'photos'::text) AND (((storage.foldername(name))[1] = (auth.uid())::text) OR public.is_admin() OR (public.can_browse_profiles() AND (EXISTS ( SELECT 1
    FROM public.photos p
   WHERE ((p.storage_path = objects.name) AND (p.status = 'approved'::public.photo_status) AND (NOT public.is_blocked_between(auth.uid(), p.user_id)) AND public.is_discoverable_profile(p.user_id))))))));
 
+DROP POLICY IF EXISTS verifications_storage_delete ON storage.objects;
 CREATE POLICY verifications_storage_delete ON storage.objects
   FOR DELETE TO authenticated
   USING (((bucket_id = 'verifications'::text) AND (((storage.foldername(name))[1] = (auth.uid())::text) OR public.is_admin())));
 
+DROP POLICY IF EXISTS verifications_storage_insert_own ON storage.objects;
 CREATE POLICY verifications_storage_insert_own ON storage.objects
   FOR INSERT TO authenticated
   WITH CHECK (((bucket_id = 'verifications'::text) AND ((storage.foldername(name))[1] = (auth.uid())::text)));
 
+DROP POLICY IF EXISTS verifications_storage_select ON storage.objects;
 CREATE POLICY verifications_storage_select ON storage.objects
   FOR SELECT TO authenticated
   USING (((bucket_id = 'verifications'::text) AND (((storage.foldername(name))[1] = (auth.uid())::text) OR public.is_admin())));
 
+DROP POLICY IF EXISTS voice_storage_delete_own ON storage.objects;
 CREATE POLICY voice_storage_delete_own ON storage.objects
   FOR DELETE TO authenticated
   USING (((bucket_id = 'voice-messages'::text) AND ((storage.foldername(name))[2] = (auth.uid())::text)));
 
+DROP POLICY IF EXISTS voice_storage_insert_premium ON storage.objects;
 CREATE POLICY voice_storage_insert_premium ON storage.objects
   FOR INSERT TO authenticated
   WITH CHECK (((bucket_id = 'voice-messages'::text) AND ((storage.foldername(name))[2] = (auth.uid())::text) AND public.is_conversation_folder_participant((storage.foldername(name))[1]) AND public.is_premium(auth.uid())));
 
+DROP POLICY IF EXISTS voice_storage_select_participant ON storage.objects;
 CREATE POLICY voice_storage_select_participant ON storage.objects
   FOR SELECT TO authenticated
   USING (((bucket_id = 'voice-messages'::text) AND (public.is_conversation_folder_participant((storage.foldername(name))[1]) OR public.is_admin())));
@@ -7324,6 +7911,8 @@ $cron$;
 -- 19. Données de départ : réglages (publicités, vérification d'identité) et fuseaux horaires
 -- ============================================================================
 
+-- Valeurs par défaut, modifiables ensuite dans /admin. Une ligne déjà présente
+-- (réglages changés par l'administrateur) est gardée telle quelle.
 INSERT INTO public.ad_settings (id) VALUES (true) ON CONFLICT (id) DO NOTHING;
 INSERT INTO public.verification_settings (id) VALUES (true) ON CONFLICT (id) DO NOTHING;
 INSERT INTO public.geo_timezones (tz, country_codes) VALUES
@@ -8126,7 +8715,7 @@ INSERT INTO public.geo_countries (code, name, lat, lng) VALUES
 ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name, lat = EXCLUDED.lat, lng = EXCLUDED.lng;
 
 -- ============================================================================
--- 21. Données de départ : 40 profils virtuels (comptes sans mot de passe)
+-- 21. Données de départ : 40 profils de démonstration (comptes sans mot de passe)
 -- ============================================================================
 
 DO $do$
@@ -8175,6 +8764,10 @@ DECLARE
 ]$seed$;
   _col text;
 BEGIN
+  IF EXISTS (SELECT 1 FROM public.profiles) THEN
+    RAISE NOTICE 'Profils déjà présents : profils de démonstration non ajoutés de nouveau.';
+    RETURN;
+  END IF;
 
   -- 1. Comptes sans mot de passe (le déclencheur handle_new_user crée users, profiles,
   --    préférences…). Un compte déjà présent (même adresse) n'est pas recréé.
@@ -8254,7 +8847,23 @@ END
 $do$;
 
 -- ============================================================================
--- 22. Bilan
+-- 22. Premier administrateur (à faire après votre inscription sur le site)
+-- ============================================================================
+
+-- Le premier administrateur ne peut pas être créé d'avance : il faut d'abord un compte.
+--   1. Inscrivez-vous sur le site avec votre adresse e-mail (ou Google).
+--   2. Revenez ici (SQL Editor), retirez les deux tirets « -- » au début des 3 lignes
+--      ci-dessous, remplacez VOTRE-ADRESSE@exemple.com par votre adresse, puis exécutez
+--      seulement ces 3 lignes (sélectionnez-les, puis Run).
+--   3. Déconnectez-vous puis reconnectez-vous : le menu « Administration » apparaît.
+-- Rejouable : si vous êtes déjà administrateur, rien ne change.
+--
+-- INSERT INTO public.user_roles (user_id, role)
+-- SELECT id, 'admin' FROM auth.users WHERE email = lower('VOTRE-ADRESSE@exemple.com')
+-- ON CONFLICT (user_id, role) DO NOTHING;
+
+-- ============================================================================
+-- 23. Bilan
 -- ============================================================================
 
 -- Tâches automatiques : comptées à part (pg_cron peut être absent ou non lisible).
@@ -8271,6 +8880,11 @@ RESET client_min_messages;
 SELECT b.element AS "Élément", b.trouve AS "Dans la base", b.attendu AS "Attendu",
        CASE WHEN b.trouve = b.attendu THEN '✅'
             WHEN b.facultatif THEN '⚠️ facultatif'
+            -- Fichier rejoué après l'ouverture : chaque vrai membre a remplacé un profil
+            -- de démonstration (ils ne sont pas remis).
+            WHEN b.n = 11 AND b.trouve::int < b.attendu::int
+                 AND EXISTS (SELECT 1 FROM public.profiles WHERE NOT is_virtual)
+              THEN '✅ (les autres ont laissé la place à de vrais membres)'
             ELSE '❌' END AS "État"
 FROM (VALUES
   (1, 'Tables', (SELECT count(*) FROM pg_catalog.pg_tables WHERE schemaname = 'public')::text, '44', false),
@@ -8299,6 +8913,6 @@ FROM (VALUES
   (8, 'Messages en temps réel', (SELECT CASE WHEN count(*) > 0 THEN 'oui' ELSE 'non' END FROM pg_catalog.pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'messages'), 'oui', false),
   (9, 'Tâches automatiques', current_setting('yona.taches', true), '4', true),
   (10, 'Pays', (SELECT count(*) FROM public.geo_countries)::text, '247', false),
-  (11, 'Profils virtuels', (SELECT count(*) FROM public.profiles WHERE is_virtual)::text, '40', false)
+  (11, 'Profils de démonstration', (SELECT count(*) FROM public.profiles WHERE is_virtual)::text, '40', false)
 ) AS b(n, element, trouve, attendu, facultatif)
 ORDER BY b.n;

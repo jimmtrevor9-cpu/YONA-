@@ -18,6 +18,10 @@ chaque migration est nouvelle (0086 et suivantes, copie horodatée dans
    qui n'existe pas, ou banque d'images dont la licence autorise les sites de rencontre),
    avec une attestation à cocher. Chaque profil de démonstration porte l'étiquette
    visible « Profil de démonstration ».
+   **Mise à jour du 3 octobre (après le plan)** : le propriétaire a ensuite fourni des
+   images générées par IA (personnes qui n'existent pas) dont il détient les droits ; 39
+   sont livrées avec le site (`public/demo-profils/`) et attribuées aux profils. La photo
+   de Nadège manque : ce profil reste caché jusqu'à l'ajout d'une photo dans /admin.
 2. **Localisation des profils virtuels calquée sur celle du membre : non faite.** Faire
    croire que des profils fictifs habitent la ville de chaque membre, à quelques km, est
    une pratique commerciale trompeuse. Les profils de démonstration gardent leur propre

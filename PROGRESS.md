@@ -24,18 +24,40 @@ Dernière mise à jour : 2026-10-03
 | 26 | Validation finale + README | ✅ Terminé (types, lint, build, migrations à neuf, écrans, README) |
 | + | Nouvelle inscription fluide (captures wazz241) + Google | ✅ Terminé et testé (82/82, 2026-10-01) |
 | + | Corrections visuelles, pages légales, PWA, compte d'abord, pays/régions/villes, profils virtuels, vérification du profil | ✅ Terminé (2026-10-02) : types, lint, build, migrations rejouées sur PostgreSQL 16, écrans 320 à 1 440 px |
-| + | Base complète en un fichier pour un projet Supabase neuf (`supabase/nouvelle-base/creer-toute-la-base.sql`, généré par `scripts/generate-base-complete.py`) | ✅ Terminé et testé (2026-10-03) : identique aux 87 migrations (structure, droits de 255 objets, stockage, temps réel, données), projets « classique » et « 2026 sans droits automatiques », 29/29 parcours |
+| + | Base complète en un fichier pour un projet Supabase neuf (généré par `scripts/generate-base-complete.py`) | ✅ Terminé et testé (2026-10-03) ; remplacé par `YONA_base_de_donnees_complete.sql` (tâche G) |
+| A | 40 profils de démonstration (21 femmes, 19 hommes, 22-35 ans, un prénom), photos fournies, étiquette « Profil de démonstration » | ✅ Terminé et testé (2026-10-03), migrations 0086-0087 |
+| B | Découverte et recherche filtrées par sexe côté serveur, ordre mélangé | ✅ Terminé et testé (16/16), migration 0088 |
+| C | Page Découvrir sur le modèle de la capture | ✅ Terminé (captures 320 / 768 / 1 440), migration 0089 |
+| D1 | Journal de tout ce qui se passe (connexions, inscriptions, paiements, actions, erreurs, admins) | ✅ Terminé et testé (22/22), migration 0090 |
+| D2 | Tableau de bord admin (graphiques, périodes, membres, journaux, export CSV, suppression) | ✅ Terminé et testé (26/26 SQL, 24/24 navigateur), migration 0091 |
+| D3 | Publicités sponsorisées (gratuits seulement) | ✅ Terminé et testé (31/31 SQL, 38/38 navigateur), migration 0092 |
+| E | Localisation réelle des membres (appareil, ville déclarée, IP) et drapeau VPN | ✅ Terminé et testé (22/22 SQL, 13/13 navigateur), migration 0093 |
+| F | Vérification d'identité automatique (selfie en direct, pièce, comparaison des visages) | ✅ Terminé et testé (31/31 SQL, 17/17 navigateur sur la version Vercel), migration 0094 |
+| G | Livrables : textes légaux, registre RGPD, documentation, `YONA_base_de_donnees_complete.sql` rejouable (+ 5 parties), captures, ZIP | ✅ Terminé et testé (2026-10-03) : rapport `docs/verification/ajouts-2026-10/RAPPORT.md` |
 
 ## Tâche en cours
 
-Aucune : toutes les phases du plan (0 à 26) sont terminées.
+Aucune : toutes les phases du plan (0 à 26) et les ajouts A à G sont terminés.
 
 ## Prochaine action précise
 
-Brancher les vrais services avant la mise en ligne : clés Stripe (`PAYMENT_PROVIDER=stripe`),
-clé Anthropic, et un service d'e-mail (voir le README, section « Limites connues »).
+Créer le projet Supabase neuf avec `YONA_base_de_donnees_complete.sql`, puis brancher les
+vrais services : clés Stripe (`PAYMENT_PROVIDER=stripe`), clé Anthropic, et un service
+d'e-mail (voir `docs/GUIDE_MISE_EN_LIGNE.md` et le README, section « Limites connues »).
+Surveiller les premières vérifications d'identité réelles et ajuster les seuils dans /admin.
 
 ## Décisions techniques
+
+- **2026-10-03 (ajouts A à G)** : vérification d'identité **obligatoire** pour voir les
+  profils et écrire (contrôlée en base : `can_browse_profiles`, déclencheur
+  `require_verified_sender`). Moteur de visages open source `@vladmandic/face-api` exécuté
+  sur le serveur (WASM, modèles intégrés au code, images décodées par `sharp`), AWS
+  Rekognition en option (`FACE_MATCH_PROVIDER=aws`). Fonction Vercel : 60 s maximum.
+  Localisation : appareil > ville déclarée > IP ; les profils de démonstration gardent leur
+  propre ville (refus de leur donner celle du membre : ce serait faire croire qu'ils sont
+  près de lui). Publicités sans cookie ni traceur. Base complète : fichier rejouable
+  (`IF NOT EXISTS`, `OR REPLACE`, contrôle avant chaque contrainte, profils de démonstration
+  ajoutés une seule fois) qui refuse une base étrangère ou une ancienne version de YONA.
 
 - **2026-10-02** : logo, images du slider et vidéo servis depuis `public/` (les anciens liens
   Lovable `/__l5e/…` ne marchent pas sur Vercel). Base géographique GeoNames (CC BY 4.0) en
@@ -98,8 +120,12 @@ clé Anthropic, et un service d'e-mail (voir le README, section « Limites connu
 
 ## Problèmes connus
 
-- Profils virtuels **sans photo** (initiale affichée) : aucune photo réaliste ne peut être
-  générée ici ; à ajouter plus tard (photos libres de droits ou générées, avec accord).
+- Profils de démonstration : 39 photos sur 40 fournies (celle de Nadège manque) ; ce profil
+  reste caché tant qu'un administrateur ne lui donne pas une photo (/admin → Profils de démo).
+- Reconnaissance faciale : testée avec des visages de synthèse, pas encore avec de vraies
+  personnes en nombre ; AWS Rekognition non testé (pas de compte). Voir le README.
+- Accueil : le chiffre « +12 000 membres actifs » vient de la maquette d'origine ; à
+  remplacer par un chiffre réel (ou à retirer) avant l'ouverture.
 - Base géographique : certains noms de régions sont en anglais dans GeoNames (ex. « Far
   North », « Brittany ») ; les villes absentes peuvent être saisies à la main.
 - Scripts de test `docs/verification/inscription/` et 1.x : écrits pour l'ancien ordre

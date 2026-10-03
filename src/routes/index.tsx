@@ -131,6 +131,7 @@ const freeLimits = [
   "Boosts de profil inclus",
   "Badge Premium vérifié",
   "Support prioritaire 7 j/7",
+  "Sans annonces sponsorisées",
 ];
 
 const premiumFeatures = [
@@ -150,6 +151,7 @@ const premiumFeatures = [
   "Boosts de profil inclus",
   "Badge Premium vérifié",
   "Support prioritaire 7 j/7",
+  "Sans annonces sponsorisées",
 ];
 
 const commerce = [
@@ -321,7 +323,7 @@ function Index() {
         <div className="mt-12 grid grid-cols-3 gap-3 sm:gap-5">
           {[
             { icon: Users, k: "+12 000", v: "membres actifs" },
-            { icon: BadgeCheck, k: "100 %", v: "profils vérifiés" },
+            { icon: BadgeCheck, k: "Vérifiée", v: "identité de chaque membre" },
             { icon: Gift, k: "Gratuite", v: "inscription" },
           ].map((s, index) => (
             <Reveal

@@ -5,11 +5,15 @@
 ## Nouvelle base Supabase (à faire une fois)
 
 Les anciens projets Supabase ont été supprimés. Toute la base se recrée avec **un seul
-fichier** : `supabase/nouvelle-base/creer-toute-la-base.sql`. Il contient tout ce que le
-site utilise : 31 tables, 122 fonctions, 84 règles d'accès, les droits de chaque rôle, la
-création du profil à l'inscription (e-mail ou Google), les 3 espaces de fichiers privés
-(photos, messages vocaux, selfies de vérification), les messages en temps réel, les
-247 pays et les 50 profils virtuels.
+fichier**, à la racine du projet : `YONA_base_de_donnees_complete.sql`. Il contient tout ce
+que le site utilise : 44 tables, 169 fonctions, 107 règles d'accès, les droits de chaque
+rôle, la création du profil à l'inscription (e-mail ou Google), les 5 espaces de fichiers
+(privés : photos, messages vocaux, vérifications d'identité ; publics : photos des profils
+de démonstration, publicités), les messages en temps réel, les tâches automatiques, les
+réglages par défaut (publicités, vérification), les 247 pays et les 40 profils de
+démonstration. Si l'éditeur de Supabase refuse un fichier aussi long, le même contenu
+existe en 5 parties dans `supabase/nouvelle-base/parties/` (`01_…` à `05_…`), à exécuter
+dans l'ordre.
 
 Les comptes, les mots de passe (chiffrés), les connexions et le « mot de passe oublié »
 sont gérés par **Supabase Auth** : il n'y a pas de table à créer pour eux, il suffit des
@@ -22,15 +26,17 @@ réglages de l'étape 4.
      automatiquement les nouvelles tables n'a pas d'importance : le fichier donne
      lui-même les bons droits à chaque table.
 2. **Créer la base** : **SQL Editor** → **New query** (page **non traduite** par Chrome) →
-   colle **tout** le fichier `creer-toute-la-base.sql` → **Run**. Si Supabase affiche un
+   colle **tout** le fichier `YONA_base_de_donnees_complete.sql` → **Run**. Si Supabase affiche un
    avertissement (« destructive operation »), choisis **Run this query** : rien n'est
    supprimé, ce sont des mots présents dans les fonctions. Le tableau final doit
    afficher ✅ sur chaque ligne. La ligne « Tâches automatiques » peut indiquer
    « ⚠️ facultatif » : les fins d'abonnement et de déblocage restent exactes (elles se
    calculent par date).
    - Tout ou rien : en cas d'erreur, rien n'est enregistré. Envoie-moi alors une capture.
-   - Lancé une deuxième fois, le fichier s'arrête avec « YONA est déjà installé » : c'est
-     normal, il n'y a rien à refaire.
+   - Le fichier est **rejouable** : le relancer ne casse rien et ne crée aucun doublon
+     (les profils de démonstration ne sont ajoutés qu'une fois). Il refuse seulement une
+     base qui contient d'autres tables, ou une ancienne version de YONA (dans ce cas,
+     appliquer les migrations de `supabase/migrations/`).
 3. **Brancher le site** : récupère l'adresse et les clés du nouveau projet (bouton
    **Connect** en haut de la page du projet, ou **Project Settings → API Keys**) et
    remplace les anciennes valeurs dans Vercel (étape 2 ci-dessous), puis **Redeploy**.
@@ -90,6 +96,8 @@ Une clé secrète est comme un mot de passe que le site utilise pour parler à u
 | `STRIPE_SECRET_KEY` | Étape 3. SECRÈTE | Pour les paiements |
 | `STRIPE_WEBHOOK_SECRET` | Étape 3. SECRÈTE | Pour les paiements |
 | `ANTHROPIC_API_KEY` | [console.anthropic.com](https://console.anthropic.com) → API Keys → Create Key. SECRÈTE | Pour Roi Salomon et l'Ice Breaker IA |
+| `FACE_MATCH_PROVIDER` | Ne rien mettre (ou `local`) : la vérification d'identité utilise le moteur gratuit intégré. `aws` seulement si tu ouvres un compte Amazon Rekognition | Non |
+| `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | Seulement si `FACE_MATCH_PROVIDER` = `aws`. SECRÈTES | Non |
 
 Les valeurs Supabase se trouvent dans le projet : bouton **Connect**, ou **Project Settings →
 API Keys**. Si tu changes de projet Supabase, remplace ces 7 valeurs puis refais un déploiement.
@@ -147,11 +155,14 @@ L'espace /admin (membres, signalements, photos à valider, paiements) n'est ouve
 
 1. Inscris-toi sur ton site en ligne avec ton adresse e-mail, comme un membre normal.
 2. Dans Supabase, ouvre le **SQL Editor** (l'endroit où l'on tape des commandes pour la base).
-3. Colle cette commande en remplaçant l'adresse par la tienne, puis clique sur **Run** :
+3. Colle cette commande en remplaçant l'adresse par la tienne, puis clique sur **Run**
+   (c'est aussi l'avant-dernière section, commentée, du fichier
+   `YONA_base_de_donnees_complete.sql`) :
 
 ```sql
 insert into public.user_roles (user_id, role)
-select id, 'admin' from auth.users where email = 'ton-adresse@exemple.com';
+select id, 'admin' from auth.users where email = lower('ton-adresse@exemple.com')
+on conflict (user_id, role) do nothing;
 ```
 
 4. Recharge le site : un lien **Administration** apparaît sur ta page Profil.
@@ -181,8 +192,10 @@ Ces deux codes Google ne vont jamais dans le code ni dans le fichier `.env` : se
 Fais ce parcours avec deux comptes (par exemple toi et un proche), sur téléphone. Coche chaque ligne qui marche ; si une ligne ne marche pas, envoie-moi une capture d'écran.
 
 - [ ] Inscription par e-mail : compte créé, e-mail de confirmation reçu, le lien ouvre la création du profil
-- [ ] Après les 4 étapes : écran « Ton profil est prêt », puis « Vérifie ton profil » (selfie envoyé)
-- [ ] Le selfie apparaît dans /admin → Vérifications
+- [ ] Après les 4 étapes : écran « Ton profil est prêt », puis « Vérifie ton identité »
+- [ ] Vérification : case de consentement cochée, selfie pris avec la caméra (de face, puis tête tournée), réponse « Identité vérifiée » en quelques secondes
+- [ ] Avant la vérification, Découvrir affiche « Vérifie ton identité pour voir les profils »
+- [ ] Un cas incertain apparaît dans /admin → Vérifications (avec les scores) ; les réglages y sont modifiables
 - [ ] Inscription avec Google
 - [ ] Profil complet avec photo, photo validée dans /admin
 - [ ] Chaque compte voit l'autre dans Découvrir
@@ -195,6 +208,9 @@ Fais ce parcours avec deux comptes (par exemple toi et un proche), sur télépho
 - [ ] « Mot de passe oublié » : e-mail en français, le lien marche
 - [ ] Bloquer et signaler depuis une conversation
 - [ ] Le signalement apparaît dans /admin
+- [ ] Une publicité créée dans /admin → Publicités apparaît pour un compte gratuit (étiquette « Sponsorisé »), jamais pour un compte Premium
+- [ ] /admin → Statistiques : graphiques et export CSV ; fiche d'un membre avec sa localisation
+- [ ] Les profils de démonstration portent l'étiquette « Profil de démonstration »
 
 Quand tout est coché en mode test, passe Stripe en mode réel (étape 3, point 8) et fais un vrai paiement de 1 USD pour vérifier. Tu peux ensuite ouvrir le site au public.
 
@@ -202,7 +218,7 @@ Quand tout est coché en mode test, passe Stripe en mode réel (étape 3, point 
 
 Comme tu n'utilises plus Lovable, personne n'applique les changements de base tout seul. Si une future version du code ajoute un fichier dans `supabase/migrations/`, il faudra l'exécuter dans le **SQL Editor** de Supabase (je te le dirai à chaque fois).
 
-Pour les développeurs : un projet Supabase récent n'ouvre plus automatiquement les nouvelles tables à l'API. Toute nouvelle migration doit donc écrire ses droits (`GRANT … TO authenticated, service_role`), puis `scripts/generate-base-complete.py` doit être relancé pour mettre à jour `supabase/nouvelle-base/creer-toute-la-base.sql`.
+Pour les développeurs : un projet Supabase récent n'ouvre plus automatiquement les nouvelles tables à l'API. Toute nouvelle migration doit donc écrire ses droits (`GRANT … TO authenticated, service_role`), puis `scripts/generate-base-complete.py` doit être relancé pour mettre à jour `YONA_base_de_donnees_complete.sql` et ses parties.
 
 ## Plus tard : ce qui peut attendre
 

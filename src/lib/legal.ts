@@ -15,7 +15,7 @@ export const LEGAL = {
   email: "angeboussamba12@gmail.com",
   publicationDirector: "L'équipe YONA",
   /** Date de dernière mise à jour des pages légales. */
-  updatedAt: "2 octobre 2026",
+  updatedAt: "3 octobre 2026",
 } as const;
 
 export const LEGAL_LINKS = [

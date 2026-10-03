@@ -1,0 +1,58 @@
+YONA_base_de_donnees_complete.sql : 426078 octets
+  supabase/nouvelle-base/parties/01_verification_a_fonctions.sql : 82863 octets
+  supabase/nouvelle-base/parties/02_fonctions.sql : 90572 octets
+  supabase/nouvelle-base/parties/03_fonctions_a_cles.sql : 90797 octets
+  supabase/nouvelle-base/parties/04_cles_a_droits.sql : 83624 octets
+  supabase/nouvelle-base/parties/05_droits_a_bilan.sql : 83317 octets
+=== référence : toutes les migrations
+=== strict : 1re exécution
+| 0 | 'Tables' | '44' | '44' | '✅' |
+| 1 | 'Fonctions' | '169' | '169' | '✅' |
+| 2 | "Règles d'accès des tables" | '90' | '90' | '✅' |
+| 3 | 'Tables protégées (RLS)' | '44' | '44' | '✅' |
+| 4 | "Profil créé à l'inscription" | 'oui' | 'oui' | '✅' |
+| 5 | 'Espaces de fichiers' | '5' | '5' | '✅' |
+| 6 | "Règles d'accès des fichiers" | '17' | '17' | '✅' |
+| 7 | 'Messages en temps réel' | 'oui' | 'oui' | '✅' |
+| 8 | 'Tâches automatiques' | 'pg_cron non activé' | '4' | '⚠️ facultatif' |
+| 9 | 'Pays' | '247' | '247' | '✅' |
+| 10 | 'Profils de démonstration' | '40' | '40' | '✅' |
+    structure / droits / hors public + données identiques aux migrations : oui / oui / oui
+=== strict : 2e exécution (rejeu)
+| 8 | 'Tâches automatiques' | 'pg_cron non activé' | '4' | '⚠️ facultatif' |
+    structure / droits / hors public + données identiques aux migrations : oui / oui / oui
+    parcours :  37 / 37 tests réussis 
+=== strict : 3e exécution sur la base utilisée par le parcours
+| 8 | 'Tâches automatiques' | 'pg_cron non activé' | '4' | '⚠️ facultatif' |
+    données inchangées : oui
+=== strict : parties exécutées deux fois
+    structure / droits / hors public + données identiques aux migrations : oui / oui / oui
+=== classique : 1re exécution
+| 0 | 'Tables' | '44' | '44' | '✅' |
+| 1 | 'Fonctions' | '169' | '169' | '✅' |
+| 2 | "Règles d'accès des tables" | '90' | '90' | '✅' |
+| 3 | 'Tables protégées (RLS)' | '44' | '44' | '✅' |
+| 4 | "Profil créé à l'inscription" | 'oui' | 'oui' | '✅' |
+| 5 | 'Espaces de fichiers' | '5' | '5' | '✅' |
+| 6 | "Règles d'accès des fichiers" | '17' | '17' | '✅' |
+| 7 | 'Messages en temps réel' | 'oui' | 'oui' | '✅' |
+| 8 | 'Tâches automatiques' | 'pg_cron non activé' | '4' | '⚠️ facultatif' |
+| 9 | 'Pays' | '247' | '247' | '✅' |
+| 10 | 'Profils de démonstration' | '40' | '40' | '✅' |
+    structure / droits / hors public + données identiques aux migrations : oui / oui / oui
+=== classique : 2e exécution (rejeu)
+| 8 | 'Tâches automatiques' | 'pg_cron non activé' | '4' | '⚠️ facultatif' |
+    structure / droits / hors public + données identiques aux migrations : oui / oui / oui
+    parcours :  37 / 37 tests réussis 
+=== classique : 3e exécution sur la base utilisée par le parcours
+| 8 | 'Tâches automatiques' | 'pg_cron non activé' | '4' | '⚠️ facultatif' |
+    données inchangées : oui
+=== classique : parties exécutées deux fois
+    structure / droits / hors public + données identiques aux migrations : oui / oui / oui
+=== refus d'une base YONA plus ancienne (sans la dernière migration)
+ERREUR : Une version plus ancienne de YONA est installée ici (colonnes absentes : profile_verifications.automatic, profile_verifications.challenge, profile_ver
+INDICE : Pour mettre à jour une base existante, appliquer les migrations de supabase/migrations/ dans l'ordre. 
+    base inchangée : oui
+=== refus d'une base étrangère
+ERREUR : Cette base contient des tables qui ne viennent pas de YONA (clients) : rien n'a été modifié. 
+INDICE : Ce fichier est prévu pour un projet Supabase neuf et vide. 

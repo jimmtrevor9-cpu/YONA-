@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
-"""Génère supabase/nouvelle-base/creer-toute-la-base.sql.
+"""Génère YONA_base_de_donnees_complete.sql (racine du projet) et sa version découpée en
+parties numérotées (supabase/nouvelle-base/parties/).
 
 Ce fichier crée en une fois toute la base de YONA dans un projet Supabase neuf et vide :
 c'est l'état final des migrations de supabase/migrations/, sans l'historique (tables
-créées puis modifiées, fonctions remplacées plusieurs fois…).
+créées puis modifiées, fonctions remplacées plusieurs fois…). Il est rejouable : chaque
+instruction est écrite pour ne rien casser si elle a déjà été exécutée (IF NOT EXISTS,
+OR REPLACE, contrôle avant chaque contrainte), et les données de départ ne sont ajoutées
+qu'une seule fois.
 
 Méthode : on construit une base de référence sur un PostgreSQL local (imitation de
 Supabase : scripts/data/supabase-local-shim.sql) en appliquant toutes les migrations dans
@@ -26,7 +30,11 @@ import subprocess
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MIG = os.path.join(ROOT, "supabase", "migrations")
 SHIM = os.path.join(ROOT, "scripts", "data", "supabase-local-shim.sql")
-OUT = os.path.join(ROOT, "supabase", "nouvelle-base", "creer-toute-la-base.sql")
+OUT = os.path.join(ROOT, "YONA_base_de_donnees_complete.sql")
+PARTS_DIR = os.path.join(ROOT, "supabase", "nouvelle-base", "parties")
+# Taille visée d'une partie (prudente : un très long texte peut ralentir ou bloquer
+# l'éditeur SQL de Supabase dans le navigateur).
+PART_LIMIT = 90_000
 DB = os.environ.get("YONA_GEN_DB", "yona_generation_base")
 GEO_MIG = "20261002110000_profils_virtuels_donnees.sql"
 SEED_MIG = "20261003100100_profils_demo_donnees.sql"
@@ -122,6 +130,72 @@ def dump_entries():
     return entries
 
 
+# ---------------------------------------------------------------------------
+# Rejouable : chaque instruction de pg_dump réécrite pour pouvoir être relancée
+# ---------------------------------------------------------------------------
+
+def _name_literal(name):
+    """Nom SQL (éventuellement entre guillemets) → texte SQL entre apostrophes."""
+    if name.startswith('"'):
+        name = name[1:-1].replace('""', '"')
+    return "'" + name.replace("'", "''") + "'"
+
+
+def _only_once(pattern, repl, body, what):
+    new, n = re.subn(pattern, repl, body, flags=re.M | re.S)
+    if n == 0:
+        raise SystemExit(f"Rejouable : forme inattendue pour {what} :\n{body[:300]}")
+    return new
+
+
+def replayable(typ, name, body):
+    if typ == "TYPE":
+        return _only_once(
+            r"^CREATE TYPE (?P<t>public\.\S+) (?P<rest>.*?;)$",
+            lambda m: ("DO $type$\nBEGIN\n"
+                       f"  IF pg_catalog.to_regtype('{m['t'].replace(chr(39), chr(39) * 2)}') IS NULL THEN\n"
+                       f"    CREATE TYPE {m['t']} {m['rest']}\n"
+                       "  END IF;\nEND\n$type$;"),
+            body, name)
+    if typ == "FUNCTION":
+        return _only_once(r"^CREATE (FUNCTION|PROCEDURE) ", r"CREATE OR REPLACE \1 ", body, name)
+    if typ == "TABLE":
+        body = _only_once(r"^CREATE TABLE public\.", "CREATE TABLE IF NOT EXISTS public.", body, name)
+        # Colonne « identity » : ajoutée seulement si elle ne l'est pas déjà.
+        return re.sub(
+            r"^ALTER TABLE (?P<t>public\.\S+) ALTER COLUMN (?P<c>\S+) ADD GENERATED (?P<rest>.*?\n\);)",
+            lambda m: ("DO $identity$\nBEGIN\n"
+                       "  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_attribute\n"
+                       f"                 WHERE attrelid = '{m['t']}'::pg_catalog.regclass\n"
+                       f"                   AND attname = {_name_literal(m['c'])} AND attidentity <> '') THEN\n"
+                       f"    ALTER TABLE {m['t']} ALTER COLUMN {m['c']} ADD GENERATED "
+                       + m["rest"].replace("\n", "\n    ") + "\n"
+                       "  END IF;\nEND\n$identity$;"),
+            body, flags=re.M | re.S)
+    if typ in ("CONSTRAINT", "FK CONSTRAINT"):
+        return _only_once(
+            r"^ALTER TABLE ONLY (?P<t>public\.\S+)\n    ADD CONSTRAINT (?P<c>\S+) (?P<rest>.*?;)$",
+            lambda m: ("DO $contrainte$\nBEGIN\n"
+                       "  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint\n"
+                       f"                 WHERE conrelid = '{m['t']}'::pg_catalog.regclass"
+                       f" AND conname = {_name_literal(m['c'])}) THEN\n"
+                       f"    ALTER TABLE ONLY {m['t']}\n      ADD CONSTRAINT {m['c']} {m['rest']}\n"
+                       "  END IF;\nEND\n$contrainte$;"),
+            body, name)
+    if typ == "INDEX":
+        return _only_once(r"^CREATE (UNIQUE )?INDEX ", r"CREATE \1INDEX IF NOT EXISTS ", body, name)
+    if typ == "TRIGGER":
+        return _only_once(r"^CREATE TRIGGER ", "CREATE OR REPLACE TRIGGER ", body, name)
+    if typ == "POLICY":
+        return drop_policy_first(body, name)
+    return body  # ROW SECURITY : ENABLE ROW LEVEL SECURITY peut être relancé tel quel.
+
+
+def drop_policy_first(body, what):
+    return _only_once(r"^CREATE POLICY (?P<p>(?:\"(?:[^\"]|\"\")*\"|\S+)) ON (?P<t>\S+)",
+                      lambda m: f"DROP POLICY IF EXISTS {m['p']} ON {m['t']};\n{m[0]}", body, what)
+
+
 def schema_sections(entries, out):
     """Écrit la structure. Les activations RLS passent avant les règles d'accès ; le
     reste garde l'ordre de pg_dump, qui respecte les dépendances."""
@@ -146,17 +220,19 @@ def schema_sections(entries, out):
                 title += " (suite)"
             seen.add(typ)
         out.section(title)
-        out.write("\n\n".join(body for _, _, body in items))
+        for t, name, body in items:
+            out.write(replayable(t, name, body) + "\n")
 
     out.section(SECTION_TITLES["ROW SECURITY"])
     out.write("\n".join(body for _, _, body in rls))
 
     out.section(SECTION_TITLES["POLICY"])
+    out.write("-- Chaque règle est d'abord retirée puis recréée : le fichier peut être rejoué.")
     by_table = {}
-    for _, name, body in policies:
-        by_table.setdefault(name.split(" ", 1)[0], []).append(body)
-    out.write("\n\n".join(
-        f"-- {table}\n" + "\n\n".join(bodies) for table, bodies in sorted(by_table.items())))
+    for t, name, body in policies:
+        by_table.setdefault(name.split(" ", 1)[0], []).append(replayable(t, name, body))
+    for table, bodies in sorted(by_table.items()):
+        out.write(f"-- {table}\n" + "\n\n".join(bodies) + "\n")
 
 
 # ---------------------------------------------------------------------------
@@ -280,7 +356,7 @@ def auth_triggers_sql():
                    JOIN pg_class c ON c.oid = t.tgrelid
                    WHERE NOT t.tgisinternal AND c.relnamespace <> 'public'::regnamespace
                    ORDER BY c.oid::regclass::text, t.tgname""")
-    return "\n".join(t["def"] + ";" for t in trig)
+    return "\n".join(re.sub(r"^CREATE TRIGGER ", "CREATE OR REPLACE TRIGGER ", t["def"]) + ";" for t in trig)
 
 
 def storage_sql():
@@ -308,7 +384,7 @@ def storage_sql():
         + ",\n".join(b["v"] for b in buckets)
         + "\nON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, public = EXCLUDED.public,\n"
         "  file_size_limit = EXCLUDED.file_size_limit, allowed_mime_types = EXCLUDED.allowed_mime_types;\n\n"
-        + "\n\n".join(p["def"] for p in policies)
+        + "\n\n".join(drop_policy_first(p["def"], p["name"]) for p in policies)
     ), [b["id"] for b in buckets], [p["name"] for p in policies]
 
 
@@ -354,6 +430,19 @@ def seed_sql():
     seed_block, n = re.subn(r"\n  -- 0\. Profils virtuels .*?= u\.email\);\n", "\n", seed[0], flags=re.S)
     if n != 1:
         raise SystemExit("Étape 0 (retrait des anciens profils virtuels) introuvable")
+    # Rejouable : les profils de démonstration ne sont ajoutés que dans une base sans aucun
+    # profil. Sinon, rejouer le fichier ferait revenir ceux déjà remplacés par de vrais
+    # membres, ou effacerait les photos choisies dans /admin.
+    seed_block, n = re.subn(
+        r"^BEGIN\n",
+        "BEGIN\n"
+        "  IF EXISTS (SELECT 1 FROM public.profiles) THEN\n"
+        "    RAISE NOTICE 'Profils déjà présents : profils de démonstration non ajoutés de nouveau.';\n"
+        "    RETURN;\n"
+        "  END IF;\n\n",
+        seed_block, count=1, flags=re.M)
+    if n != 1:
+        raise SystemExit("Début du bloc des profils de démonstration introuvable")
     return geo[0], seed_block
 
 
@@ -371,20 +460,168 @@ def settings_sql():
 # Écriture
 # ---------------------------------------------------------------------------
 
+STRUCT_ON = """SET check_function_bodies = false;
+SET client_min_messages = warning;
+-- Pendant la création de la structure, tous les noms sont écrits en entier (public.…).
+SET search_path = pg_catalog;
+"""
+STRUCT_OFF = """
+-- Fin de la structure : retour aux réglages habituels de la session.
+RESET search_path;
+RESET check_function_bodies;
+"""
+
+
 class Out:
+    """Texte du fichier, gardé en blocs pour pouvoir aussi l'écrire en parties."""
+
     def __init__(self):
-        self.parts = []
+        self.blocks = []  # (phase, texte, titre de section ou None)
         self.n = 0
+        self.phase = "debut"  # debut → structure → donnees
 
     def write(self, text):
-        self.parts.append(text.rstrip() + "\n")
+        self.blocks.append((self.phase, text.rstrip() + "\n", None))
 
     def section(self, title):
         self.n += 1
-        self.parts.append(f"\n-- {'=' * 76}\n-- {self.n}. {title}\n-- {'=' * 76}\n\n")
+        self.blocks.append((self.phase, f"\n-- {'=' * 76}\n-- {self.n}. {title}\n-- {'=' * 76}\n\n",
+                            f"{self.n}. {title}"))
+
+    @staticmethod
+    def render(blocks, preamble=""):
+        out, cur = [preamble], None
+        for phase, text, _ in blocks:
+            if phase == "structure" and cur != "structure":
+                out.append(STRUCT_ON)
+            if phase != "structure" and cur == "structure":
+                out.append(STRUCT_OFF)
+            cur = phase
+            out.append(text)
+        if cur == "structure":
+            out.append(STRUCT_OFF)
+        return re.sub(r"\n{3,}", "\n\n", "".join(out)).lstrip("\n")
 
     def text(self):
-        return re.sub(r"\n{3,}", "\n\n", "".join(self.parts)).lstrip("\n")
+        return self.render(self.blocks)
+
+    def split(self, limit):
+        """Parties d'au plus `limit` octets environ, coupées entre deux instructions
+        (un titre de section reste avec ce qui le suit)."""
+        units = []
+        for b in self.blocks:
+            if units and units[-1][-1][2] is not None:
+                units[-1].append(b)
+            else:
+                units.append([b])
+        parts, cur, size = [], [], 0
+        for u in units:
+            n = sum(len(t.encode()) for _, t, _ in u)
+            if cur and size + n > limit:
+                parts.append(cur)
+                cur, size = [], 0
+            cur += u
+            size += n
+        if cur:
+            parts.append(cur)
+        return parts
+
+
+def first_word(title):
+    import unicodedata
+    word = re.sub(r"^\d+\. ", "", title).split()[0]
+    word = unicodedata.normalize("NFKD", word).encode("ascii", "ignore").decode().lower()
+    return re.sub(r"[^a-z0-9]+", "", word)
+
+
+def write_parts(out):
+    parts = out.split(PART_LIMIT)
+    os.makedirs(PARTS_DIR, exist_ok=True)
+    for old in os.listdir(PARTS_DIR):
+        if old.endswith(".sql"):
+            os.remove(os.path.join(PARTS_DIR, old))
+    total = len(parts)
+    names = []
+    last_title = None
+    for i, blocks in enumerate(parts, 1):
+        titles = [t for _, _, t in blocks if t]
+        shown = ([f"{last_title} (suite)"] if blocks[0][2] is None and last_title else []) + titles
+        last_title = titles[-1] if titles else last_title
+        words = [first_word(shown[0]), first_word(shown[-1])] if shown else ["suite"]
+        name = f"{i:02d}_{'_a_'.join(dict.fromkeys(words))}.sql"
+        header = (
+            f"-- YONA — base de données complète, partie {i} sur {total}\n"
+            "-- Contenu :\n" + "".join(f"--   {t}\n" for t in shown) +
+            "-- À exécuter dans l'ordre (01, 02, …), chaque partie en entier :\n"
+            "-- Supabase → SQL Editor → New query → coller la partie → Run.\n"
+            "-- Chaque partie peut être relancée sans danger (par exemple après une erreur).\n"
+            "-- Fichier généré par scripts/generate-base-complete.py. Ne pas modifier à la main.\n\n"
+            "SET client_min_messages = warning;\n\n")
+        with open(os.path.join(PARTS_DIR, name), "w", encoding="utf-8") as f:
+            f.write(Out.render(blocks, header))
+        names.append(name)
+    return names
+
+
+def guard_sql(columns):
+    """Contrôle de départ : base neuve, ou YONA de cette version déjà installé (rejeu)."""
+    data = json.dumps(columns, ensure_ascii=False, separators=(",", ":"))
+    return f"""-- Le fichier accepte :
+--   - une base neuve et vide (cas normal) ;
+--   - une base où ce même fichier a déjà été exécuté (il est alors rejoué sans rien
+--     supprimer ni dupliquer).
+-- Il refuse, sans rien modifier :
+--   - une base qui contient des tables étrangères à YONA ;
+--   - une base YONA d'une version plus ancienne (colonnes manquantes) : pour la mettre à
+--     jour, appliquer les migrations de supabase/migrations/ dans l'ordre.
+DO $garde$
+DECLARE
+  -- Tables de YONA et leurs colonnes (état final des migrations).
+  _attendu jsonb := $json${data}$json$;
+  _etrangeres text;
+  _manquantes text;
+BEGIN
+  SELECT string_agg(c.relname, ', ' ORDER BY c.relname) INTO _etrangeres
+  FROM pg_catalog.pg_class c
+  WHERE c.relnamespace = 'public'::regnamespace AND c.relkind IN ('r', 'p', 'v', 'm', 'f')
+    AND NOT _attendu ? c.relname;
+  IF _etrangeres IS NOT NULL THEN
+    RAISE EXCEPTION 'Cette base contient des tables qui ne viennent pas de YONA (%) : rien n''a été modifié.', _etrangeres
+      USING HINT = 'Ce fichier est prévu pour un projet Supabase neuf et vide.';
+  END IF;
+
+  SELECT string_agg(t.key || '.' || col, ', ' ORDER BY t.key, col) INTO _manquantes
+  FROM jsonb_each(_attendu) t
+  CROSS JOIN LATERAL jsonb_array_elements_text(t.value) col
+  WHERE pg_catalog.to_regclass('public.' || quote_ident(t.key)) IS NOT NULL
+    AND NOT EXISTS (
+      SELECT 1 FROM pg_catalog.pg_attribute a
+      WHERE a.attrelid = pg_catalog.to_regclass('public.' || quote_ident(t.key))
+        AND a.attname = col AND a.attnum > 0 AND NOT a.attisdropped);
+  IF _manquantes IS NOT NULL THEN
+    RAISE EXCEPTION 'Une version plus ancienne de YONA est installée ici (colonnes absentes : %) : rien n''a été modifié.',
+      left(_manquantes, 500)
+      USING HINT = 'Pour mettre à jour une base existante, appliquer les migrations de supabase/migrations/ dans l''ordre.';
+  END IF;
+
+  IF pg_catalog.to_regclass('public.profiles') IS NOT NULL THEN
+    RAISE NOTICE 'YONA est déjà installé dans cette base : le fichier est rejoué sans rien supprimer.';
+  END IF;
+END
+$garde$;"""
+
+
+FIRST_ADMIN = """-- Le premier administrateur ne peut pas être créé d'avance : il faut d'abord un compte.
+--   1. Inscrivez-vous sur le site avec votre adresse e-mail (ou Google).
+--   2. Revenez ici (SQL Editor), retirez les deux tirets « -- » au début des 3 lignes
+--      ci-dessous, remplacez VOTRE-ADRESSE@exemple.com par votre adresse, puis exécutez
+--      seulement ces 3 lignes (sélectionnez-les, puis Run).
+--   3. Déconnectez-vous puis reconnectez-vous : le menu « Administration » apparaît.
+-- Rejouable : si vous êtes déjà administrateur, rien ne change.
+--
+-- INSERT INTO public.user_roles (user_id, role)
+-- SELECT id, 'admin' FROM auth.users WHERE email = lower('VOTRE-ADRESSE@exemple.com')
+-- ON CONFLICT (user_id, role) DO NOTHING;"""
 
 
 def main():
@@ -396,6 +633,11 @@ def main():
              (SELECT count(*) FROM pg_policies WHERE schemaname <> 'public') AS storage_policies,
              (SELECT count(*) FROM public.geo_countries) AS countries,
              (SELECT count(*) FROM public.profiles WHERE is_virtual) AS virtual""")[0]
+    columns = {r["tbl"]: r["cols"] for r in rows("""
+      SELECT c.relname AS tbl, json_agg(a.attname::text ORDER BY a.attnum) AS cols
+      FROM pg_class c JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped
+      WHERE c.relnamespace = 'public'::regnamespace AND c.relkind IN ('r', 'p', 'v', 'm', 'f')
+      GROUP BY c.relname ORDER BY c.relname""")}
     entries = dump_entries()
     storage, bucket_names, storage_policy_names = storage_sql()
     n_buckets = len(bucket_names)
@@ -405,22 +647,29 @@ def main():
 
     out = Out()
     out.write(f"""-- ============================================================================
--- YONA — CRÉER TOUTE LA BASE DE DONNÉES (projet Supabase neuf et vide)
+-- YONA — BASE DE DONNÉES COMPLÈTE (projet Supabase neuf et vide)
 --
 -- Ce fichier installe en une seule fois tout ce dont le site a besoin :
 --   {expected['tables']} tables, {expected['functions']} fonctions, {expected['policies'] + expected['storage_policies']} règles d'accès, les droits de chaque rôle,
 --   la création automatique du profil à l'inscription (e-mail ou Google), {n_buckets} espaces de
 --   fichiers (privés : photos, messages vocaux, vérifications ; publics : images des profils
---   de démonstration, publicités), les messages en temps réel,
---   les tâches automatiques, les {expected['countries']} pays et les {expected['virtual']} profils virtuels.
+--   de démonstration, publicités), les messages en temps réel, les tâches automatiques,
+--   les réglages par défaut (publicités, vérification d'identité), les {expected['countries']} pays et
+--   les {expected['virtual']} profils de démonstration.
 --
 -- Mode d'emploi : Supabase → SQL Editor → New query → coller TOUT le fichier → Run.
 -- Si Supabase affiche un avertissement (« destructive operation »), choisir
--- « Run this query » : rien n'est supprimé, ce sont des mots présents dans les fonctions.
+-- « Run this query » : rien n'est supprimé, ce sont des mots présents dans les fonctions
+-- (et les « DROP POLICY IF EXISTS » qui remplacent une règle par elle-même).
 -- Le tableau affiché à la fin doit indiquer ✅ sur chaque ligne.
+-- Si l'éditeur refuse un fichier aussi long : utiliser les parties numérotées de
+-- supabase/nouvelle-base/parties/ (même contenu), à exécuter dans l'ordre.
 --
--- Tout ou rien : en cas d'erreur, rien n'est enregistré. Le fichier refuse de s'exécuter
--- dans une base qui contient déjà des tables.
+-- Tout ou rien : en cas d'erreur, rien n'est enregistré.
+-- Rejouable : relancer ce fichier ne casse rien et ne crée aucun doublon (IF NOT EXISTS,
+-- OR REPLACE, contrôle avant chaque contrainte ; profils de démonstration ajoutés une
+-- seule fois). Après l'installation, ajoutez le premier administrateur (avant-dernière
+-- section).
 --
 -- Les comptes, mots de passe, connexions et e-mails « mot de passe oublié » sont gérés par
 -- Supabase Auth (schéma auth, mots de passe chiffrés) : aucune table à créer pour eux.
@@ -430,38 +679,17 @@ def main():
 -- ({n_migrations} migrations). Ne pas modifier à la main.
 -- ============================================================================""")
 
-    out.section("Vérification : la base doit être vide")
-    out.write("""DO $garde$
-DECLARE
-  _tables text;
-BEGIN
-  IF to_regclass('public.profiles') IS NOT NULL THEN
-    RAISE EXCEPTION 'YONA est déjà installé dans cette base : rien n''a été modifié.'
-      USING HINT = 'Ce fichier sert uniquement à remplir un projet Supabase neuf et vide.';
-  END IF;
-  SELECT string_agg(relname, ', ' ORDER BY relname) INTO _tables
-  FROM pg_catalog.pg_class
-  WHERE relnamespace = 'public'::regnamespace AND relkind IN ('r', 'p', 'v', 'm');
-  IF _tables IS NOT NULL THEN
-    RAISE EXCEPTION 'Cette base n''est pas vide (tables : %) : rien n''a été modifié.', _tables
-      USING HINT = 'Ce fichier est prévu pour un projet Supabase neuf et vide.';
-  END IF;
-END
-$garde$;
+    out.section("Vérification : base neuve, ou YONA déjà installé par ce même fichier")
+    out.write(guard_sql(columns))
 
-SET check_function_bodies = false;
-SET client_min_messages = warning;
--- Pendant la création de la structure, tous les noms sont écrits en entier (public.…).
-SET search_path = pg_catalog;""")
-
+    out.phase = "structure"
     out.section("Extensions")
     out.write("-- unaccent : recherche sans accents (villes, prénoms).\n" + extensions_sql())
 
     schema_sections(entries, out)
     grants_section(out)
-    out.write("\n-- Fin de la structure : retour aux réglages habituels de la session.\n"
-              "RESET search_path;\nRESET check_function_bodies;")
 
+    out.phase = "donnees"
     out.section("Comptes : chaque nouveau compte (e-mail ou Google) reçoit son profil")
     out.write(auth_triggers_sql())
 
@@ -475,13 +703,17 @@ SET search_path = pg_catalog;""")
     out.write(cron_sql())
 
     out.section("Données de départ : réglages (publicités, vérification d'identité) et fuseaux horaires")
-    out.write(settings_sql())
+    out.write("-- Valeurs par défaut, modifiables ensuite dans /admin. Une ligne déjà présente\n"
+              "-- (réglages changés par l'administrateur) est gardée telle quelle.\n" + settings_sql())
 
     out.section(f"Données de départ : {expected['countries']} pays (position, pour le pays le plus proche)")
     out.write(geo)
 
-    out.section(f"Données de départ : {expected['virtual']} profils virtuels (comptes sans mot de passe)")
+    out.section(f"Données de départ : {expected['virtual']} profils de démonstration (comptes sans mot de passe)")
     out.write(seed)
+
+    out.section("Premier administrateur (à faire après votre inscription sur le site)")
+    out.write(FIRST_ADMIN)
 
     out.section("Bilan")
     rt = realtime_tables[0] if realtime_tables else "messages"
@@ -501,6 +733,11 @@ RESET client_min_messages;
 SELECT b.element AS "Élément", b.trouve AS "Dans la base", b.attendu AS "Attendu",
        CASE WHEN b.trouve = b.attendu THEN '✅'
             WHEN b.facultatif THEN '⚠️ facultatif'
+            -- Fichier rejoué après l'ouverture : chaque vrai membre a remplacé un profil
+            -- de démonstration (ils ne sont pas remis).
+            WHEN b.n = 11 AND b.trouve::int < b.attendu::int
+                 AND EXISTS (SELECT 1 FROM public.profiles WHERE NOT is_virtual)
+              THEN '✅ (les autres ont laissé la place à de vrais membres)'
             ELSE '❌' END AS "État"
 FROM (VALUES
   (1, 'Tables', (SELECT count(*) FROM pg_catalog.pg_tables WHERE schemaname = 'public')::text, '{expected['tables']}', false),
@@ -513,15 +750,21 @@ FROM (VALUES
   (8, 'Messages en temps réel', (SELECT CASE WHEN count(*) > 0 THEN 'oui' ELSE 'non' END FROM pg_catalog.pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = '{rt}'), 'oui', false),
   (9, 'Tâches automatiques', current_setting('yona.taches', true), '{len(CRON_MIGS)}', true),
   (10, 'Pays', (SELECT count(*) FROM public.geo_countries)::text, '{expected['countries']}', false),
-  (11, 'Profils virtuels', (SELECT count(*) FROM public.profiles WHERE is_virtual)::text, '{expected['virtual']}', false)
+  (11, 'Profils de démonstration', (SELECT count(*) FROM public.profiles WHERE is_virtual)::text, '{expected['virtual']}', false)
 ) AS b(n, element, trouve, attendu, facultatif)
 ORDER BY b.n;""")
 
-    os.makedirs(os.path.dirname(OUT), exist_ok=True)
+    text = out.text()
     with open(OUT, "w", encoding="utf-8") as f:
-        f.write(out.text())
+        f.write(text)
+    names = write_parts(out)
     sh("dropdb", "--if-exists", DB)
-    print(f"{os.path.relpath(OUT, ROOT)} : {len(out.text().encode())} octets")
+    print(f"{os.path.relpath(OUT, ROOT)} : {len(text.encode())} octets")
+    for name in names:
+        size = os.path.getsize(os.path.join(PARTS_DIR, name))
+        print(f"  {os.path.relpath(os.path.join(PARTS_DIR, name), ROOT)} : {size} octets")
+
+
 
 
 if __name__ == "__main__":

@@ -20,7 +20,9 @@ pour le mobile.
 | Favoris, visites, recherche, demandes de contact (5 par jour) | Demandes et Roi Salomon illimités, Message Flash |
 | Roi Salomon (conseiller IA, quota quotidien), Ice Breaker | Ice Breaker personnalisé par l'IA, détail de compatibilité |
 | Score de compatibilité, notifications, paramètres | Filtres avancés, support prioritaire, badge doré |
-| Bloquer, signaler, supprimer son compte | |
+| Bloquer, signaler, supprimer son compte | Aucune annonce sponsorisée |
+| Vérification d'identité automatique (obligatoire pour voir les profils et écrire) | |
+| Annonces sponsorisées (abonnés gratuits seulement) | |
 
 **Inscription** (`/register`) : le compte d'abord (Google, avec choix du compte, ou e-mail +
 mot de passe), puis redirection automatique vers la création du profil (`/onboarding`) en
@@ -28,22 +30,58 @@ mot de passe), puis redirection automatique vers la création du profil (`/onboa
 âge des profils), « Ta bio en 30 s » (puces → bio proposée), « Où es-tu ? » (pays, région et
 ville du monde entier, listes liées avec recherche), « Reste au courant » (e-mails
 d'actualité, bouton « Confirmer et créer mon profil »), puis les conditions (18 ans et
-plus). Ensuite : « Vérifie ton profil » (`/verification` : selfie express ou pièce
-d'identité, stockage privé), puis Découvrir (bienvenue, 2e photo, position…). Le détail de
-la foi se complète dans Profil → « Ma foi et mes attentes ».
+plus). Ensuite : « Vérifie ton identité » (`/verification`, voir plus bas), puis Découvrir
+(bienvenue, 2e photo, position…). Le détail de la foi se complète dans Profil → « Ma foi et
+mes attentes ».
 
-**Profils virtuels** : 50 profils d'exemple (5 par pays dans 8 pays d'Afrique francophone, 10 en France),
-`profiles.is_virtual = true`, sans photo ni mot de passe. Chaque vrai membre qui termine son
-profil en retire un (même pays, sinon le plus proche) : déclencheur SQL
+**Profils de démonstration** : 40 profils (21 femmes, 19 hommes, 22 à 35 ans, un seul
+prénom ; 4 par pays dans 8 pays d'Afrique francophone, 8 en France),
+`profiles.is_virtual = true`, sans mot de passe, toujours marqués « Profil de
+démonstration » (mention dans les CGU et la politique de confidentialité). Photos fournies
+par le propriétaire du site : `public/demo-profils/` (39 photos ; le profil sans photo reste
+caché tant qu'un administrateur ne lui en donne pas une dans `/admin` → Profils de démo).
+Ils ne répondent pas, ne reçoivent ni message ni demande de contact. Chaque vrai membre qui
+termine son profil en retire un (même pays, sinon le plus proche) : déclencheur SQL
 `replace_virtual_profile_on_signup`. Données : `scripts/generate-virtual-profiles.mjs`.
+
+**Découvrir** : la base ne renvoie que les profils du sexe recherché et dans la tranche d'âge
+choisie (filtre fait côté serveur, jamais seulement dans le navigateur), dans un ordre
+mélangé. Mise en page sur le modèle de la capture de référence (photo plein écran, Like /
+Passer).
+
+**Vérification d'identité** (`/verification`) : obligatoire pour voir les profils et écrire
+(sinon, la base refuse : `identity_not_verified`). Le membre choisit : selfie, pièce
+(carte d'identité, passeport, carte d'étudiant, carte scolaire) ou les deux, et coche le
+consentement. Le selfie est pris **en direct** avec la caméra (pas depuis la galerie) : une
+photo de face, puis une photo tête tournée à gauche ou à droite (consigne tirée au hasard,
+contre les photos d'écran). Le serveur compare les visages (moteur open source
+`@vladmandic/face-api` intégré, gratuit ; ou AWS Rekognition si `FACE_MATCH_PROVIDER=aws`)
+avec les photos du profil et la pièce, puis décide seul : vérifié au-dessus du seuil
+d'acceptation, refusé en dessous du seuil de refus (motif clair : pas de visage, image
+floue, plusieurs visages…), sinon « en attente » pour l'équipe (`/admin` → Vérifications).
+Les images sont supprimées dès la décision. Réglages (seuils, essais par jour, conservation)
+dans `/admin` → Vérifications. Code : `src/features/verification/`.
+
+**Annonces sponsorisées** : montrées seulement aux abonnés gratuits (jamais aux Premium ni
+aux administrateurs), toujours marquées « Sponsorisé » : une carte toutes les N cartes dans
+Découvrir, une bannière dans Matchs et Messages. Image ou vidéo (muette par défaut, lancée
+seulement quand elle est visible, légère sur connexion lente). Ciblage par pays, sexe et
+âge, dates, plafond par jour, priorité. Gestion et statistiques (vues, clics, taux de clic)
+dans `/admin` → Publicités. Aucun cookie ni traceur tiers.
 
 **Fichiers de la marque** : `public/brand/` (logo, images du slider), `public/videos/`
 (vidéo de présentation), `public/geo/` (base géographique GeoNames, générée par
 `scripts/generate-geo.mjs`). Pages légales : `/confidentialite`, `/cgu`,
 `/mentions-legales`, `/cookies` (informations dans `src/lib/legal.ts`).
 
-Espace **/admin** (rôle administrateur) : tableau de bord, membres (suspendre, réactiver,
-bannir), signalements, validation des photos, paiements, abonnements, déblocages, support.
+Espace **/admin** (rôle administrateur) : tableau de bord avec graphiques et période au
+choix (heure, jour, semaine, mois, année ; inscriptions, connexions, membres actifs,
+paiements, entonnoir d'inscription — profils de démonstration exclus), liste des membres
+(tri, recherche, export CSV, fiche avec historique, localisation et suppression du compte),
+journaux (connexions, inscriptions, paiements, activité, actions des administrateurs,
+erreurs serveur, publicités, localisation ; export CSV), signalements, validation des
+photos, vérifications, profils de démo, publicités, paiements, abonnements, déblocages,
+support. Les journaux gardent l'adresse IP 12 mois au plus (`purge_old_logs`).
 
 ## 1. Installer en local
 
@@ -61,11 +99,14 @@ npm run dev          # ouvrir ensuite l'adresse affichée dans le terminal
 
 1. Créez un projet sur <https://supabase.com> (laissez la *Data API* activée).
 2. Créez toute la base d'un coup : dans le SQL Editor, collez et exécutez
-   `supabase/nouvelle-base/creer-toute-la-base.sql` (tables, fonctions, sécurité, droits,
-   stockage, temps réel, pays, profils virtuels). C'est l'état final des migrations, avec
-   des droits d'accès écrits explicitement : il marche aussi sur les projets créés depuis
-   mai 2026, qui n'ouvrent plus automatiquement les nouvelles tables à l'API.
-   Ce fichier est généré par `scripts/generate-base-complete.py` ; le régénérer après
+   `YONA_base_de_donnees_complete.sql` (à la racine : tables, fonctions, sécurité, droits,
+   stockage, temps réel, tâches automatiques, réglages, pays, profils de démonstration).
+   C'est l'état final des migrations, avec des droits d'accès écrits explicitement : il
+   marche aussi sur les projets créés depuis mai 2026, qui n'ouvrent plus automatiquement
+   les nouvelles tables à l'API. Il est **rejouable** (le relancer ne casse rien). Version
+   découpée, si l'éditeur refuse un fichier aussi long :
+   `supabase/nouvelle-base/parties/01_…sql` à `05_…sql`, dans l'ordre.
+   Ces fichiers sont générés par `scripts/generate-base-complete.py` ; les régénérer après
    chaque nouvelle migration. (`npx supabase db push` applique les migrations une à une,
    mais sur un projet récent certaines tables resteraient fermées à l'API.)
 3. Dans Supabase → *Authentication* : activez la connexion par e-mail et mettez l'adresse
@@ -112,6 +153,11 @@ n'est écrite dans le code.** Tout ce qui commence par `VITE_` est visible par l
 | `ANTHROPIC_API_KEY` | non | **Secret.** Active Roi Salomon et l'Ice Breaker personnalisé (Claude) |
 | `AI_MODEL` | non | Modèle Claude (par défaut `claude-opus-5-5`) |
 | `AI_PROVIDER` | non | `test` = réponses IA fixes (tests seulement) |
+| `FACE_MATCH_PROVIDER` | non | Moteur de vérification des visages : vide ou `local` = intégré, gratuit (conseillé) ; `aws` = Amazon Rekognition |
+| `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | si `aws` | **Secrets.** Utilisateur IAM limité à `rekognition:DetectFaces` et `rekognition:CompareFaces` |
+
+Sur Vercel, la fonction serveur demande 60 secondes au plus (`vite.config.ts`) : une
+vérification d'identité prend quelques secondes. Rien à régler de plus.
 
 ## 4. Commandes
 
@@ -169,7 +215,8 @@ src/features/<thème>/  logique par thème : requêtes, fonctions serveur (*.fun
                        code serveur uniquement (*.server.ts)
 src/integrations/supabase/  clients Supabase et types (générés)
 supabase/migrations/   toutes les migrations SQL (la vraie source de la base)
-supabase/nouvelle-base/  toute la base en un fichier, pour un projet Supabase neuf
+supabase/nouvelle-base/parties/  la base complète découpée en parties (copie de
+                       YONA_base_de_donnees_complete.sql, pour un projet Supabase neuf)
 drizzle/migrations/    copie des migrations au format drizzle-kit
 docs/verification/     tests automatiques et rapports
 ```
@@ -183,3 +230,13 @@ docs/verification/     tests automatiques et rapports
 - Premium = paiement unique (mensuel ou annuel), sans renouvellement automatique.
 - Localisation : sans la position de l'appareil, un VPN peut fausser l'adresse IP ; elle
   n'est alors qu'un indice (drapeau dans l'administration), jamais une vérité.
+- Reconnaissance faciale : elle n'est pas infaillible (éclairage, qualité de la caméra,
+  photos anciennes, jumeaux). Le contrôle « tête tournée » arrête une photo imprimée ou un
+  écran simple, pas une vidéo truquée élaborée. Les cas incertains vont à l'équipe. Le
+  moteur local a été testé avec des visages de synthèse, pas avec de vraies personnes en
+  grand nombre : surveiller les premiers résultats et ajuster les seuils dans `/admin`.
+- AWS Rekognition est branché mais n'a pas pu être testé ici (pas de compte AWS).
+- Les membres déjà inscrits avant cette version doivent vérifier leur identité pour
+  continuer à voir les profils et à écrire.
+- Données personnelles : registre des traitements dans
+  [docs/REGISTRE_RGPD.md](docs/REGISTRE_RGPD.md).

@@ -40,12 +40,13 @@ const SECTIONS: LegalSection[] = [
     title: "4. Offres payantes",
     blocks: [
       "L'inscription est gratuite. Le Premium (mensuel ou annuel) et le déblocage d'une conversation sont des paiements uniques, sans renouvellement automatique.",
+      "Les abonnés gratuits voient des annonces sponsorisées, toujours signalées par l'étiquette « Sponsorisé ». Les membres Premium n'en voient aucune.",
     ],
   },
   {
     title: "5. Vos données",
     blocks: [
-      "Nous utilisons seulement les cookies nécessaires pour vous garder connecté, sans publicité ni mesure d'audience.",
+      "Nous utilisons seulement les cookies nécessaires pour vous garder connecté : aucun cookie publicitaire ni de mesure d'audience, y compris pour les annonces sponsorisées.",
       "Vous pouvez masquer votre profil ou supprimer votre compte à tout moment depuis les paramètres.",
     ],
   },
@@ -66,8 +67,10 @@ const SECTIONS: LegalSection[] = [
   {
     title: "8. Vérification du profil",
     blocks: [
-      "Pour protéger la communauté contre les faux profils et les arnaques, nous vous demandons de vérifier votre profil, au choix par un selfie ou avec une pièce d'identité (carte d'identité ou passeport).",
-      "Les photos de vérification sont privées : elles ne sont jamais publiées sur votre profil et ne sont vues que par l'équipe chargée de la vérification. Elles sont conservées uniquement le temps nécessaire à cette vérification.",
+      "Pour protéger la communauté contre les faux profils et les arnaques, chaque membre doit vérifier son identité avant de voir les profils et d'écrire aux autres membres. Au choix : un selfie pris en direct, une pièce (carte d'identité, passeport, carte d'étudiant ou carte scolaire), ou les deux.",
+      "La vérification est automatique : votre visage est comparé à vos photos de profil et, si vous l'avez choisie, à votre pièce. Elle n'a lieu qu'avec votre accord explicite, donné avant la prise de vue. Les cas incertains sont relus par l'équipe.",
+      "Les images de vérification sont privées : elles ne sont jamais publiées et sont supprimées dès la décision. Les détails sont dans la politique de confidentialité.",
+      "La reconnaissance faciale n'est pas infaillible. En cas de refus que vous pensez injustifié, vous pouvez recommencer ou nous écrire pour demander un examen par une personne.",
     ],
   },
   {
