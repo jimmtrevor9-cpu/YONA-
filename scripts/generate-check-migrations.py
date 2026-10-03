@@ -17,6 +17,9 @@ MIG = os.path.join(ROOT, "supabase", "migrations")
 OUT = os.path.join(ROOT, "supabase", "rattrapage", "verifier-migrations.sql")
 COMBINED = os.path.join(ROOT, "supabase", "rattrapage", "50-profils-virtuels-et-verification.sql")
 DATA = "20261002110000_profils_virtuels_donnees.sql"
+AUTO = os.path.join(ROOT, "supabase", "rattrapage", "tout-mettre-a-jour-et-50-profils.sql")
+# Première migration embarquée dans le rattrapage automatique (phase 12).
+AUTO_START = "20260929110000_phase12_creer_demande.sql"
 
 IDENT = r'"?([A-Za-z_][A-Za-z0-9_]*)"?'
 QUAL = r'(?:"?(public|storage|auth)"?\.)?' + IDENT
@@ -214,6 +217,84 @@ ORDER BY 1;
     with open(COMBINED, "w", encoding="utf-8") as fh:
         fh.write(combined)
     print(f"-> {COMBINED} ({len(combined)} octets)")
+
+    # Rattrapage AUTOMATIQUE : la base trouve elle-même la première migration absente,
+    # puis exécute, dans l'ordre, cette migration et toutes les suivantes (à partir de
+    # AUTO_START), ajoute les 50 profils virtuels et affiche la vérification.
+    cte = sql[sql.index("WITH attendu"):sql.index("bilan AS (")].rstrip().rstrip(",")
+    replay = [f for f in files if f >= AUTO_START and f != DATA]
+    blocks = []
+    for i, f in enumerate(replay, 1):
+        body = open(os.path.join(MIG, f), encoding="utf-8").read()
+        tag = f"$m{i:03d}$"
+        if tag in body:
+            raise SystemExit(f"Délimiteur {tag} présent dans {f}")
+        blocks.append(
+            f"  IF {q(f[:-4])} >= _first THEN\n"
+            f"    RAISE NOTICE 'Mise à jour : %', {q(f[:-4])};\n"
+            f"    EXECUTE {tag}\n{body}\n{tag};\n"
+            f"  END IF;\n"
+        )
+    auto = f"""-- ============================================================
+-- YONA — TOUT METTRE À JOUR AUTOMATIQUEMENT + 50 PROFILS VIRTUELS
+--
+-- À coller EN ENTIER dans Supabase → SQL Editor, puis « Run ».
+-- (Si Supabase affiche « Potential issue detected », confirmer avec « Run this query ».)
+--
+-- 1. La base cherche elle-même la première mise à jour (migration) qui lui manque, puis
+--    applique automatiquement, dans l'ordre, cette mise à jour et toutes les suivantes.
+--    Mises à jour embarquées : de {AUTO_START[:-4]} à la dernière.
+--    Si une mise à jour plus ancienne manquait, rien n'est modifié et un message
+--    l'indique (envoyer alors une capture d'écran).
+-- 2. Ajoute les 50 profils virtuels (5 par pays : Gabon, Cameroun, Côte d'Ivoire,
+--    Congo-Brazzaville, Togo, Bénin, Sénégal, Mali ; 10 en France).
+-- 3. Affiche le bilan : « Tout est à jour » et « → Profils virtuels dans la base : 50 ».
+--
+-- En cas d'erreur, Supabase annule tout : rien n'est enregistré à moitié.
+-- Généré par scripts/generate-check-migrations.py.
+-- ============================================================
+
+-- ############################################################
+-- PARTIE 1 : mises à jour manquantes (automatique)
+-- ############################################################
+DO $auto$
+DECLARE
+  _first text;
+  _detail text;
+BEGIN
+  {cte},
+  premiere AS (SELECT min(migration) AS f FROM controle WHERE NOT present)
+  SELECT p.f,
+         (SELECT string_agg(c.nature || ' ' || c.a || CASE WHEN c.b <> '' THEN '.' || c.b ELSE '' END, ', ')
+            FROM controle c WHERE c.migration = p.f AND NOT c.present)
+    INTO _first, _detail
+    FROM premiere p;
+
+  IF _first IS NULL THEN
+    RAISE NOTICE 'Aucune mise à jour manquante.';
+    RETURN;
+  END IF;
+
+  IF _first < {q(AUTO_START[:-4])} THEN
+    RAISE EXCEPTION 'Mise à jour ancienne manquante : % (%). Rien n''a été modifié : envoie une capture de ce message.',
+      _first, left(_detail, 300);
+  END IF;
+
+  RAISE NOTICE 'Rattrapage à partir de : %', _first;
+{''.join(blocks)}END
+$auto$;
+
+-- ############################################################
+-- PARTIE 2 : les 50 profils virtuels
+-- ############################################################
+{data}
+-- ############################################################
+-- PARTIE 3 : bilan (lecture seule)
+-- ############################################################
+{check}"""
+    with open(AUTO, "w", encoding="utf-8") as fh:
+        fh.write(auto)
+    print(f"-> {AUTO} ({len(auto)} octets, {len(replay)} migrations embarquées)")
 
 
 if __name__ == "__main__":
