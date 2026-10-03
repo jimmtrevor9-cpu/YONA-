@@ -1,29 +1,44 @@
 # YONA — Guide de mise en ligne
 
-2 octobre 2026 · Hébergement : Vercel · Base : Supabase (projet `ahljepryelikxepfpnuq`)
+3 octobre 2026 · Hébergement : Vercel · Base : un **nouveau** projet Supabase
 
-## Mise à jour du 2 octobre 2026 (à faire une fois)
+## Nouvelle base Supabase (à faire une fois)
 
-Cette version ajoute : logo, images et vidéo hébergés dans le site, pages légales,
-application installable, inscription « compte d'abord » (Google ou e-mail), pays / région /
-ville du monde entier, 50 profils virtuels et page « Vérifie ton profil ». Aucune nouvelle
-variable d'environnement n'est nécessaire.
+Les anciens projets Supabase ont été supprimés. Toute la base se recrée avec **un seul
+fichier** : `supabase/nouvelle-base/creer-toute-la-base.sql`. Il contient tout ce que le
+site utilise : 31 tables, 122 fonctions, 84 règles d'accès, les droits de chaque rôle, la
+création du profil à l'inscription (e-mail ou Google), les 3 espaces de fichiers privés
+(photos, messages vocaux, selfies de vérification), les messages en temps réel, les
+247 pays et les 50 profils virtuels.
 
-1. **Fusionner** la Pull Request de la branche `claude/admiring-ride-05jon2` (étape 1 ci-dessous).
-2. **Base de données** : dans Supabase → **SQL Editor** (page **non traduite** par Chrome),
-   colle **en entier** le fichier `supabase/rattrapage/tout-mettre-a-jour-et-50-profils.sql`,
-   puis **Run** (et « Run this query » si Supabase affiche un avertissement). La base trouve
-   elle-même les mises à jour qui lui manquent (depuis la phase 12), les applique dans
-   l'ordre, ajoute les 50 profils virtuels et affiche un bilan : « Tout est à jour » et
-   « → Profils virtuels dans la base : 50 ». Rejouable sans risque ; en cas d'erreur, rien
-   n'est modifié.
-3. **Adresses de retour** : Supabase → **Authentication → URL Configuration** :
-   - *Site URL* : l'adresse de ton site (par exemple `https://yona-xxx.vercel.app`) ;
-   - *Redirect URLs* : `https://yona-xxx.vercel.app/**` (et la même chose pour ton nom de domaine).
-   Après Google ou après le lien de confirmation, le visiteur revient sur `/login`, qui
-   l'envoie tout seul vers la création du profil.
-4. **Google** : voir l'étape 5 bis. Dans Google Cloud, en plus de l'URI de redirection Supabase,
-   ajoute l'adresse de ton site dans **Origines JavaScript autorisées**.
+Les comptes, les mots de passe (chiffrés), les connexions et le « mot de passe oublié »
+sont gérés par **Supabase Auth** : il n'y a pas de table à créer pour eux, il suffit des
+réglages de l'étape 4.
+
+1. **Créer le projet** sur [supabase.com](https://supabase.com) → **New project** :
+   - nom : `YONA` ; région conseillée : **Europe (Paris)** ou la plus proche de tes membres ;
+   - note le mot de passe de la base dans un endroit sûr ;
+   - laisse la **Data API** activée (c'est elle que le site utilise). L'option qui ouvre
+     automatiquement les nouvelles tables n'a pas d'importance : le fichier donne
+     lui-même les bons droits à chaque table.
+2. **Créer la base** : **SQL Editor** → **New query** (page **non traduite** par Chrome) →
+   colle **tout** le fichier `creer-toute-la-base.sql` → **Run**. Si Supabase affiche un
+   avertissement (« destructive operation »), choisis **Run this query** : rien n'est
+   supprimé, ce sont des mots présents dans les fonctions. Le tableau final doit
+   afficher ✅ sur chaque ligne. La ligne « Tâches automatiques » peut indiquer
+   « ⚠️ facultatif » : les fins d'abonnement et de déblocage restent exactes (elles se
+   calculent par date).
+   - Tout ou rien : en cas d'erreur, rien n'est enregistré. Envoie-moi alors une capture.
+   - Lancé une deuxième fois, le fichier s'arrête avec « YONA est déjà installé » : c'est
+     normal, il n'y a rien à refaire.
+3. **Brancher le site** : récupère l'adresse et les clés du nouveau projet (bouton
+   **Connect** en haut de la page du projet, ou **Project Settings → API Keys**) et
+   remplace les anciennes valeurs dans Vercel (étape 2 ci-dessous), puis **Redeploy**.
+4. **Adresses de retour et e-mails** : étapes 4 et 5 bis ci-dessous (adresse du site,
+   modèle d'e-mail « mot de passe oublié », Google).
+5. **Te nommer administrateur** : étape 5 ci-dessous.
+
+Le dossier `supabase/rattrapage/` ne sert plus : il servait à mettre à jour l'ancienne base.
 
 ## Ce qui manque, expliqué simplement
 
@@ -63,18 +78,21 @@ Une clé secrète est comme un mot de passe que le site utilise pour parler à u
 
 | Nom de la variable | Valeur | Obligatoire |
 | --- | --- | --- |
-| `VITE_SUPABASE_URL` | `https://ahljepryelikxepfpnuq.supabase.co` | Oui |
-| `VITE_SUPABASE_PUBLISHABLE_KEY` | `sb_publishable_jF5khMl8SFnLi2cYW7nUbA_QFchkhaS` | Oui |
-| `VITE_SUPABASE_PROJECT_ID` | `ahljepryelikxepfpnuq` | Oui |
-| `SUPABASE_URL` | `https://ahljepryelikxepfpnuq.supabase.co` | Oui |
-| `SUPABASE_PUBLISHABLE_KEY` | `sb_publishable_jF5khMl8SFnLi2cYW7nUbA_QFchkhaS` | Oui |
-| `SUPABASE_PROJECT_ID` | `ahljepryelikxepfpnuq` | Oui |
+| `VITE_SUPABASE_URL` | L'adresse du projet Supabase, de la forme `https://XXXX.supabase.co` | Oui |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | La clé **publique** du projet (`sb_publishable_…`) | Oui |
+| `VITE_SUPABASE_PROJECT_ID` | L'identifiant du projet : le `XXXX` de l'adresse | Oui |
+| `SUPABASE_URL` | La même adresse que `VITE_SUPABASE_URL` | Oui |
+| `SUPABASE_PUBLISHABLE_KEY` | La même clé que `VITE_SUPABASE_PUBLISHABLE_KEY` | Oui |
+| `SUPABASE_PROJECT_ID` | Le même identifiant que `VITE_SUPABASE_PROJECT_ID` | Oui |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Project Settings → API Keys → clé **secrète** (service\_role ou `sb_secret_…`). SECRÈTE | Oui |
 | `APP_URL` | L'adresse de ton site Vercel, par exemple `https://yona-xxx.vercel.app` | Oui |
 | `PAYMENT_PROVIDER` | Écris simplement `stripe` | Pour les paiements |
 | `STRIPE_SECRET_KEY` | Étape 3. SECRÈTE | Pour les paiements |
 | `STRIPE_WEBHOOK_SECRET` | Étape 3. SECRÈTE | Pour les paiements |
 | `ANTHROPIC_API_KEY` | [console.anthropic.com](https://console.anthropic.com) → API Keys → Create Key. SECRÈTE | Pour Roi Salomon et l'Ice Breaker IA |
+
+Les valeurs Supabase se trouvent dans le projet : bouton **Connect**, ou **Project Settings →
+API Keys**. Si tu changes de projet Supabase, remplace ces 7 valeurs puis refais un déploiement.
 
 Les 6 premières valeurs sont publiques (elles sont visibles dans le navigateur de tout visiteur) : ce n'est pas grave. Les autres sont secrètes.
 
@@ -117,10 +135,11 @@ Ces réglages sont dans Supabase → **Authentication**.
    - Sujet : `Réinitialisez votre mot de passe YONA`
    - Contenu : copie tout le fichier `supabase/templates/reinitialisation-mot-de-passe.html` (il est dans le ZIP).
 3. Laisse activée la **confirmation de l'adresse e-mail** à l'inscription.
-4. Conseillé : Supabase n'envoie qu'un petit nombre d'e-mails par heure avec son service de base. Pour un vrai lancement, branche un service d'e-mail (par exemple Resend ou Brevo) dans **Authentication → SMTP Settings**.
+4. **Obligatoire avant d'ouvrir au public : brancher un service d'e-mail.** Sans lui, Supabase n'envoie les e-mails (confirmation d'inscription, mot de passe oublié) qu'aux adresses des membres de ton équipe Supabase, et seulement 2 par heure : tes vrais membres ne les recevraient pas. Crée un compte gratuit chez un service d'e-mail (par exemple Brevo ou Resend), puis copie ses réglages SMTP (serveur, port, identifiant, mot de passe, adresse d'envoi comme `no-reply@ton-domaine`) dans **Authentication → SMTP Settings** (ou **Emails → SMTP**).
 
 - [ ] Adresse du site réglée
 - [ ] E-mail « mot de passe oublié » en français
+- [ ] Service d'e-mail (SMTP) branché
 
 ## Étape 5 : te nommer administrateur
 
@@ -182,6 +201,8 @@ Quand tout est coché en mode test, passe Stripe en mode réel (étape 3, point 
 ## Mises à jour futures de la base
 
 Comme tu n'utilises plus Lovable, personne n'applique les changements de base tout seul. Si une future version du code ajoute un fichier dans `supabase/migrations/`, il faudra l'exécuter dans le **SQL Editor** de Supabase (je te le dirai à chaque fois).
+
+Pour les développeurs : un projet Supabase récent n'ouvre plus automatiquement les nouvelles tables à l'API. Toute nouvelle migration doit donc écrire ses droits (`GRANT … TO authenticated, service_role`), puis `scripts/generate-base-complete.py` doit être relancé pour mettre à jour `supabase/nouvelle-base/creer-toute-la-base.sql`.
 
 ## Plus tard : ce qui peut attendre
 

@@ -57,16 +57,17 @@ npm run dev          # ouvrir ensuite l'adresse affichée dans le terminal
 
 ## 2. Configurer Supabase
 
-**Votre propre projet Supabase** (choix actuel : projet `ahljepryelikxepfpnuq`). Les
-migrations ne s'appliquent pas toutes seules : exécutez chaque nouveau fichier de
-`supabase/migrations/` dans le SQL Editor, ou utilisez la commande ci-dessous.
+**Votre propre projet Supabase.** Les migrations ne s'appliquent pas toutes seules.
 
-1. Créez un projet sur <https://supabase.com>.
-2. Appliquez toutes les migrations (tables, sécurité, fonctions, stockage) :
-   ```sh
-   npx supabase link --project-ref <ID_DU_PROJET>
-   npx supabase db push
-   ```
+1. Créez un projet sur <https://supabase.com> (laissez la *Data API* activée).
+2. Créez toute la base d'un coup : dans le SQL Editor, collez et exécutez
+   `supabase/nouvelle-base/creer-toute-la-base.sql` (tables, fonctions, sécurité, droits,
+   stockage, temps réel, pays, profils virtuels). C'est l'état final des migrations, avec
+   des droits d'accès écrits explicitement : il marche aussi sur les projets créés depuis
+   mai 2026, qui n'ouvrent plus automatiquement les nouvelles tables à l'API.
+   Ce fichier est généré par `scripts/generate-base-complete.py` ; le régénérer après
+   chaque nouvelle migration. (`npx supabase db push` applique les migrations une à une,
+   mais sur un projet récent certaines tables resteraient fermées à l'API.)
 3. Dans Supabase → *Authentication* : activez la connexion par e-mail et mettez l'adresse
    de votre site dans *Site URL* et *Redirect URLs*.
 4. **Connexion Google** (bouton « Continuer avec Google ») : dans Supabase →
@@ -150,6 +151,7 @@ src/features/<thème>/  logique par thème : requêtes, fonctions serveur (*.fun
                        code serveur uniquement (*.server.ts)
 src/integrations/supabase/  clients Supabase et types (générés)
 supabase/migrations/   toutes les migrations SQL (la vraie source de la base)
+supabase/nouvelle-base/  toute la base en un fichier, pour un projet Supabase neuf
 drizzle/migrations/    copie des migrations au format drizzle-kit
 docs/verification/     tests automatiques et rapports
 ```

@@ -1,6 +1,6 @@
 # YONA — Suivi de progression
 
-Dernière mise à jour : 2026-10-02
+Dernière mise à jour : 2026-10-03
 
 ## État des phases
 
@@ -24,6 +24,7 @@ Dernière mise à jour : 2026-10-02
 | 26 | Validation finale + README | ✅ Terminé (types, lint, build, migrations à neuf, écrans, README) |
 | + | Nouvelle inscription fluide (captures wazz241) + Google | ✅ Terminé et testé (82/82, 2026-10-01) |
 | + | Corrections visuelles, pages légales, PWA, compte d'abord, pays/régions/villes, profils virtuels, vérification du profil | ✅ Terminé (2026-10-02) : types, lint, build, migrations rejouées sur PostgreSQL 16, écrans 320 à 1 440 px |
+| + | Base complète en un fichier pour un projet Supabase neuf (`supabase/nouvelle-base/creer-toute-la-base.sql`, généré par `scripts/generate-base-complete.py`) | ✅ Terminé et testé (2026-10-03) : identique aux 87 migrations (structure, droits de 255 objets, stockage, temps réel, données), projets « classique » et « 2026 sans droits automatiques », 29/29 parcours |
 
 ## Tâche en cours
 
