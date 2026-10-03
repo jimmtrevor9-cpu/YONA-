@@ -10,7 +10,7 @@ SERVICE_KEY="${SUPABASE_SERVICE_ROLE_KEY:-$(cd /var/tmp/yona-local 2>/dev/null &
 for pid in $(pgrep -f "^node docs/verification/outils/serveur-local.mjs" || true); do kill "$pid"; done
 # Cible « cloudflare-module » : un simple gestionnaire fetch, servi par serveur-local.mjs.
 NITRO_PRESET=cloudflare-module VITE_SUPABASE_URL="$URL" VITE_SUPABASE_PUBLISHABLE_KEY="$KEY" npx vite build > /tmp/yona-build-local.log 2>&1
-grep -q "$URL" .output/public/assets/index-*.js || { echo "Build sans l'URL Supabase locale" >&2; exit 1; }
+grep -lq "$URL" .output/public/assets/*.js || { echo "Build sans l'URL Supabase locale" >&2; exit 1; }
 # Paiement : prestataire de TEST (aucun argent réel) pour cet environnement local seulement.
 SUPABASE_URL="$URL" SUPABASE_PUBLISHABLE_KEY="$KEY" PAYMENT_PROVIDER="${PAYMENT_PROVIDER-test}" SUPABASE_SERVICE_ROLE_KEY="$SERVICE_KEY" PORT=4173 setsid node docs/verification/outils/serveur-local.mjs > /tmp/yona-serveur-local.log 2>&1 &
 for _ in $(seq 1 20); do curl -sf -o /dev/null http://127.0.0.1:4173/ && { echo "Application de test prête sur http://127.0.0.1:4173"; exit 0; }; sleep 0.5; done

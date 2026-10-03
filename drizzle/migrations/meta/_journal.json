@@ -638,6 +638,13 @@
       "when": 1790852400000,
       "tag": "0090_journal_activite",
       "breakpoints": true
+    },
+    {
+      "idx": 91,
+      "version": "7",
+      "when": 1791036000000,
+      "tag": "0091_tableau_de_bord",
+      "breakpoints": true
     }
   ]
 }

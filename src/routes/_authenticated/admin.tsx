@@ -6,9 +6,12 @@ import { toast } from "sonner";
 
 import { AppHeader } from "@/components/AppHeader";
 import { DemoProfilesTab } from "@/components/admin/DemoProfilesTab";
+import { LogsTab } from "@/components/admin/LogsTab";
+import { MembersTable } from "@/components/admin/MembersTable";
+import { StatsTab } from "@/components/admin/StatsTab";
+import { DeleteMemberSection, UserHistory } from "@/components/admin/UserHistory";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
@@ -17,12 +20,10 @@ import {
   adminPaymentsQuery,
   adminPhotosQuery,
   adminReportsQuery,
-  adminStatsQuery,
   adminSubscriptionsQuery,
   adminTicketsQuery,
   adminUnlocksQuery,
   adminUserDetailQuery,
-  adminUsersQuery,
   adminVerificationsQuery,
   formatMoney,
   moderatePhoto,
@@ -69,7 +70,7 @@ function AdminPage() {
   return (
     <div className="min-h-screen bg-background pb-12">
       <AppHeader title="Administration" />
-      <main className="mx-auto max-w-5xl space-y-5 px-4 py-6" data-testid="admin-page">
+      <main className="mx-auto max-w-6xl space-y-5 px-4 py-6" data-testid="admin-page">
         <Tabs value={tab} onValueChange={setTab}>
           <TabsList className="flex h-auto flex-wrap justify-start gap-1">
             <TabsTrigger value="dashboard">Tableau de bord</TabsTrigger>
@@ -94,15 +95,18 @@ function AdminPage() {
             <TabsTrigger value="demo" data-testid="admin-tab-demo">
               Profils de démo
             </TabsTrigger>
+            <TabsTrigger value="logs" data-testid="admin-tab-logs">
+              Journaux
+            </TabsTrigger>
           </TabsList>
           <TabsContent value="dashboard">
-            <Dashboard />
+            <StatsTab />
           </TabsContent>
           <TabsContent value="users">
             {selectedUser ? (
               <UserDetail userId={selectedUser} onBack={() => setSelectedUser(null)} />
             ) : (
-              <UsersList onSelect={setSelectedUser} />
+              <MembersTable onSelect={setSelectedUser} />
             )}
           </TabsContent>
           <TabsContent value="reports">
@@ -128,6 +132,9 @@ function AdminPage() {
           <TabsContent value="demo">
             <DemoProfilesTab />
           </TabsContent>
+          <TabsContent value="logs">
+            <LogsTab />
+          </TabsContent>
         </Tabs>
       </main>
     </div>
@@ -140,103 +147,6 @@ function Loading() {
 
 function Failed({ error }: { error: Error }) {
   return <p className="text-sm text-destructive">{error.message}</p>;
-}
-
-/** 23.3 / 23.4 — Chiffres clés. */
-function Dashboard() {
-  const { data, isLoading, error } = useQuery(adminStatsQuery());
-  if (isLoading) return <Loading />;
-  if (error) return <Failed error={error} />;
-  if (!data) return null;
-  const cards: [string, string | number][] = [
-    ["Membres", data.users_total],
-    ["Nouveaux (7 j)", data.users_new_7d],
-    ["Profils complets", data.profiles_complete],
-    ["Suspendus", data.users_suspended],
-    ["Bannis", data.users_banned],
-    ["Premium actifs", data.premium_active],
-    ["Matchs actifs", data.matches_total],
-    ["Messages (7 j)", data.messages_7d],
-    ["Signalements ouverts", data.reports_open],
-    ["Photos à valider", data.photos_pending],
-    ["Tickets ouverts", data.tickets_open],
-    ["Déblocages actifs", data.unlocks_active],
-    ["Revenus (30 j)", formatMoney(data.revenue_30d_cents)],
-    ["Revenus (total)", formatMoney(data.revenue_cents)],
-  ];
-  return (
-    <ul className="grid grid-cols-2 gap-3 sm:grid-cols-4" data-testid="admin-stats">
-      {cards.map(([label, value]) => (
-        <li key={label} className="panel p-4">
-          <p className="text-[11px] text-muted-foreground">{label}</p>
-          <p className="font-display text-2xl font-semibold text-foreground">{value}</p>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-/** 23.5 — Liste des membres avec recherche et filtre. */
-function UsersList({ onSelect }: { onSelect: (id: string) => void }) {
-  const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("");
-  const { data, isLoading, error } = useQuery(adminUsersQuery(search, status));
-  return (
-    <div className="space-y-3">
-      <div className="flex flex-col gap-2 sm:flex-row">
-        <Input
-          placeholder="Rechercher un e-mail ou un prénom"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          data-testid="admin-user-search"
-        />
-        <select
-          className="h-10 rounded-md border border-border bg-background px-3 text-sm"
-          value={status}
-          onChange={(e) => setStatus(e.target.value)}
-          aria-label="Filtrer par statut"
-        >
-          <option value="">Tous les statuts</option>
-          <option value="active">Actifs</option>
-          <option value="suspended">Suspendus</option>
-          <option value="disabled">Bannis</option>
-        </select>
-      </div>
-      {isLoading ? <Loading /> : error ? <Failed error={error} /> : null}
-      <ul className="space-y-2">
-        {data?.map((u) => (
-          <li key={u.id}>
-            <button
-              type="button"
-              onClick={() => onSelect(u.id)}
-              className="panel flex w-full items-center justify-between gap-3 p-3 text-left hover:bg-foreground/5"
-              data-testid="admin-user-row"
-            >
-              <span className="min-w-0">
-                <span className="block truncate text-sm font-medium text-foreground">
-                  {u.first_name ?? "Sans prénom"}
-                  {u.is_admin ? " · admin" : ""}
-                  {u.premium ? " · Premium" : ""}
-                </span>
-                <span className="block truncate text-xs text-muted-foreground">{u.email}</span>
-              </span>
-              <span className="flex shrink-0 items-center gap-2">
-                {u.reports_count > 0 ? (
-                  <Badge variant="subtle">{u.reports_count} signalement(s)</Badge>
-                ) : null}
-                <Badge variant={u.status === "active" ? "subtle" : "gold"}>
-                  {STATUS_LABEL[u.status] ?? u.status}
-                </Badge>
-              </span>
-            </button>
-          </li>
-        ))}
-        {data && !data.length ? (
-          <p className="text-sm text-muted-foreground">Aucun membre trouvé.</p>
-        ) : null}
-      </ul>
-    </div>
-  );
 }
 
 /** 23.6 à 23.9 — Fiche d'un membre et actions de modération. */
@@ -364,6 +274,10 @@ function UserDetail({ userId, onBack }: { userId: string; onBack: () => void }) 
           <p className="text-xs text-muted-foreground">Aucun paiement.</p>
         )}
       </section>
+
+      <UserHistory userId={userId} />
+
+      {!data.is_admin ? <DeleteMemberSection userId={userId} onDeleted={onBack} /> : null}
     </div>
   );
 }

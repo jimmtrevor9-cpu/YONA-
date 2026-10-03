@@ -55,37 +55,8 @@ export const deleteMyAccount = createServerFn({ method: "POST" })
     if (isAdmin === true) throw new Error(ACCOUNT_ERRORS.admin_account);
 
     // Fichiers du membre (un échec ici n'empêche pas la suppression du compte).
-    try {
-      const { data: photos } = await supabaseAdmin.storage
-        .from("photos")
-        .list(context.userId, { limit: 100 });
-      if (photos?.length) {
-        await supabaseAdmin.storage
-          .from("photos")
-          .remove(photos.map((f) => `${context.userId}/${f.name}`));
-      }
-      const { data: checks } = await supabaseAdmin.storage
-        .from("verifications")
-        .list(context.userId, { limit: 100 });
-      if (checks?.length) {
-        await supabaseAdmin.storage
-          .from("verifications")
-          .remove(checks.map((f) => `${context.userId}/${f.name}`));
-      }
-      const { data: voices } = await supabaseAdmin
-        .from("messages")
-        .select("audio_path")
-        .eq("sender_id", context.userId)
-        .not("audio_path", "is", null);
-      const paths = (voices ?? []).map((v) => v.audio_path).filter((p): p is string => !!p);
-      if (paths.length) await supabaseAdmin.storage.from("voice-messages").remove(paths);
-    } catch (error) {
-      const { logServerError } = await import("@/features/journal/server-errors.server");
-      await logServerError("compte", error, {
-        userId: context.userId,
-        details: { étape: "nettoyage des fichiers" },
-      });
-    }
+    const { removeUserFiles } = await import("@/features/account/user-files.server");
+    await removeUserFiles(context.userId, "compte");
 
     const { error } = await supabaseAdmin.auth.admin.deleteUser(context.userId);
     if (error) {

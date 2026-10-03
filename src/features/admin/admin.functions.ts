@@ -15,6 +15,9 @@ export const ADMIN_ERRORS: Record<string, string> = {
   reason_required: "Indiquez la raison de cette décision.",
   user_not_found: "Ce membre n'existe plus.",
   invalid_action: "Action inconnue.",
+  demo_profile: "Les profils de démonstration se gèrent dans l'onglet « Profils de démo ».",
+  confirmation: "Écrivez SUPPRIMER pour confirmer.",
+  delete_failed: "La suppression n'a pas pu aboutir. Réessayez.",
 };
 
 /** Traduit une erreur de la base en message lisible pour l'administrateur. */
@@ -65,4 +68,62 @@ export const adminRunStorageCleanup = createServerFn({ method: "POST" })
     if (!isAdmin) throw new Error(ADMIN_ERRORS["admin_required"]);
     const { processStorageCleanup } = await import("@/features/admin/storage-cleanup.server");
     return { removed: await processStorageCleanup() };
+  });
+
+const deleteInput = z.object({
+  userId: z.string().uuid(),
+  reason: z.string().trim().min(3).max(1000),
+  confirmation: z.string().max(40),
+});
+
+/**
+ * Suppression définitive d'un compte par l'administration (RGPD, demande du membre, fraude).
+ * 1. Le rôle admin est revérifié en base, la cible ne doit être ni un admin ni un profil de démo.
+ * 2. La décision est tracée dans le journal d'audit (avec la raison) AVANT la suppression.
+ * 3. Les fichiers sont retirés, puis le compte est supprimé avec le rôle service : les données
+ *    liées disparaissent en cascade, le journal est anonymisé (déclencheur en base).
+ */
+export const adminDeleteUser = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data) => deleteInput.parse(data))
+  .handler(async ({ data, context }) => {
+    if (data.confirmation.trim().toUpperCase() !== "SUPPRIMER") {
+      throw new Error(ADMIN_ERRORS["confirmation"]);
+    }
+    const { data: isAdmin } = await context.supabase.rpc("is_admin");
+    if (!isAdmin) throw new Error(ADMIN_ERRORS["admin_required"]);
+    if (data.userId === context.userId) throw new Error(ADMIN_ERRORS["cannot_moderate_admin"]);
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: targetIsAdmin } = await supabaseAdmin.rpc("has_role", {
+      _user_id: data.userId,
+      _role: "admin",
+    });
+    if (targetIsAdmin === true) throw new Error(ADMIN_ERRORS["cannot_moderate_admin"]);
+    const { data: profile } = await supabaseAdmin
+      .from("profiles")
+      .select("is_virtual")
+      .eq("user_id", data.userId)
+      .maybeSingle();
+    if (profile?.is_virtual) throw new Error(ADMIN_ERRORS["demo_profile"]);
+
+    const { error: logError } = await context.supabase.rpc("admin_log_action", {
+      _action: "delete_account",
+      _target_table: "users",
+      _target_id: data.userId,
+      _details: { reason: data.reason },
+    });
+    if (logError) throw new Error(adminErrorMessage(logError.message));
+
+    const { removeUserFiles } = await import("@/features/account/user-files.server");
+    await removeUserFiles(data.userId, "admin");
+    const { error } = await supabaseAdmin.auth.admin.deleteUser(data.userId);
+    if (error) {
+      const { logServerError } = await import("@/features/journal/server-errors.server");
+      await logServerError("admin", `Suppression impossible : ${error.message}`, {
+        details: { membre: data.userId },
+      });
+      throw new Error(ADMIN_ERRORS["delete_failed"]);
+    }
+    return { deleted: true };
   });

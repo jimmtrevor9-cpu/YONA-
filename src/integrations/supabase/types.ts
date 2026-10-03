@@ -1562,6 +1562,10 @@ export type Database = {
     }
     Functions: {
       activate_profile_boost: { Args: never; Returns: string }
+      admin_dashboard: {
+        Args: { _bucket?: string; _from: string; _to: string; _tz?: string }
+        Returns: Json
+      }
       admin_list_demo_profiles: {
         Args: never
         Returns: {
@@ -1688,9 +1692,42 @@ export type Database = {
         Args: { _action: string; _details?: Json; _target_id: string; _target_table: string }
         Returns: undefined
       }
+      admin_members: {
+        Args: {
+          _desc?: boolean
+          _kind?: string
+          _limit?: number
+          _offset?: number
+          _search?: string
+          _sort?: string
+          _status?: string
+        }
+        Returns: {
+          birth_date: string | null
+          city: string | null
+          country: string | null
+          created_at: string
+          email: string | null
+          first_name: string | null
+          gender: Database["public"]["Enums"]["gender"] | null
+          is_virtual: boolean
+          last_login_at: string | null
+          login_count: number
+          premium: boolean
+          reports_received: number
+          status: Database["public"]["Enums"]["account_status"]
+          total_count: number
+          user_id: string
+          verified: boolean
+        }[]
+      }
       admin_moderate_photo: {
         Args: { _approve: boolean; _photo_id: string; _reason?: string }
         Returns: Database["public"]["Enums"]["photo_status"]
+      }
+      admin_period_kpis: {
+        Args: { _from: string; _to: string }
+        Returns: Json
       }
       admin_reply_support_ticket: {
         Args: { _close?: boolean; _reply: string; _ticket_id: string }
@@ -1714,6 +1751,10 @@ export type Database = {
       }
       admin_stats: { Args: never; Returns: Json }
       admin_user_detail: { Args: { _user_id: string }; Returns: Json }
+      admin_user_history: {
+        Args: { _user_id: string }
+        Returns: Json
+      }
       ai_usage_day: { Args: never; Returns: string }
       assert_admin: { Args: never; Returns: undefined }
       block_user: { Args: { _user_id: string }; Returns: boolean }
@@ -1852,6 +1893,10 @@ export type Database = {
       has_mutual_like: { Args: { _other: string }; Returns: boolean }
       is_discoverable_profile: { Args: { _user_id: string }; Returns: boolean }
       is_premium: { Args: { _user_id: string }; Returns: boolean }
+      is_real_member: {
+        Args: { _user_id: string }
+        Returns: boolean
+      }
       list_blocked_users: {
         Args: never
         Returns: {
